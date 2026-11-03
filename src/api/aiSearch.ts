@@ -1,6 +1,5 @@
 /** Hooks to start an AI research batch and follow it, by stream or by poll. */
 import { apiFetch, ApiError } from "./client";
-import { aiSearchBatchSchema } from "../../shared/aiSearchContract";
 import { invalidateContactViews } from "./contactCache";
 import type { ResearchDepth } from "../../shared/researchDepth";
 
@@ -9,6 +8,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AISearchBatch } from "../types";
 
 const API_BASE = "/api";
+
+/** The batch schema, loaded with the first batch: zod is not on the first page load. */
+const batchSchema = () =>
+  import("../../shared/aiSearchContract").then((m) => m.aiSearchBatchSchema);
 
 export const useStartAISearch = () => {
   return useMutation({
@@ -54,7 +57,7 @@ export const useAISearchStatusPoll = (batchId: string | null) => {
         `/ai-search/status?batchId=${encodeURIComponent(batchId!)}`,
         { signal },
       );
-      const batch = aiSearchBatchSchema.parse(await res.json());
+      const batch = (await batchSchema()).parse(await res.json());
       if (batch.id !== batchId)
         throw new Error("The server returned a different research batch");
       return batch;
@@ -106,25 +109,36 @@ export const useAISearchStream = (
   }, [batchId, poll.data, queryClient]);
   useEffect(() => {
     if (!batchId) return;
-    const source = new EventSource(
-      `${API_BASE}/ai-search/stream?batchId=${encodeURIComponent(batchId)}`,
-    );
-    source.onmessage = (event) => {
-      const parsed = aiSearchBatchSchema.safeParse(safeJson(event.data));
-      if (!parsed.success || parsed.data.id !== batchId) {
-        source.close();
-        return;
-      }
-      queryClient.setQueryData(["ai-search-status", batchId], parsed.data);
-      if (parsed.data.status !== "processing") source.close();
+    // The stream opens once the schema is here, so each event is checked as
+    // it lands. The poll covers the wait.
+    let source: EventSource | undefined;
+    let stopped = false;
+    void batchSchema().then((schema) => {
+      if (stopped) return;
+      const stream = new EventSource(
+        `${API_BASE}/ai-search/stream?batchId=${encodeURIComponent(batchId)}`,
+      );
+      source = stream;
+      stream.onmessage = (event) => {
+        const parsed = schema.safeParse(safeJson(event.data));
+        if (!parsed.success || parsed.data.id !== batchId) {
+          stream.close();
+          return;
+        }
+        queryClient.setQueryData(["ai-search-status", batchId], parsed.data);
+        if (parsed.data.status !== "processing") stream.close();
+      };
+      stream.onerror = () => {
+        stream.close();
+        void queryClient.invalidateQueries({
+          queryKey: ["ai-search-status", batchId],
+        });
+      };
+    });
+    return () => {
+      stopped = true;
+      source?.close();
     };
-    source.onerror = () => {
-      source.close();
-      void queryClient.invalidateQueries({
-        queryKey: ["ai-search-status", batchId],
-      });
-    };
-    return () => source.close();
   }, [batchId, queryClient]);
   return { error: poll.error };
 };
@@ -145,7 +159,7 @@ export const useCancelAISearch = () => {
         `/ai-search/${encodeURIComponent(batchId)}/cancel`,
         { method: "POST" },
       );
-      return aiSearchBatchSchema.parse(await response.json());
+      return (await batchSchema()).parse(await response.json());
     },
     onSuccess: (batch) =>
       client.setQueryData(["ai-search-status", batch.id], batch),

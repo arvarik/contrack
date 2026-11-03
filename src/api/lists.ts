@@ -5,7 +5,7 @@ import {
   refreshContact,
 } from "./contactCache";
 import { apiJson, jsonBody } from "./client";
-import { listRoutes, type ListMember } from "../../shared/contracts/lists";
+import type { listRoutes, ListMember } from "../../shared/contracts/lists";
 import {
   useQuery,
   useMutation,
@@ -21,7 +21,7 @@ export const useLists = () => {
   return useQuery({
     queryKey: ["lists"],
     queryFn: ({ signal }): Promise<ContactList[]> =>
-      apiJson(listRoutes.all, `/lists`, { signal }),
+      apiJson<typeof listRoutes.all>("GET", `/lists`, { signal }),
     staleTime: STALE_TIMES.lists,
   });
 };
@@ -30,7 +30,7 @@ export const useCreateList = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { name: string; icon: string }): Promise<ContactList> =>
-      apiJson(listRoutes.create, `/lists`, jsonBody(data)),
+      apiJson<typeof listRoutes.create>("POST", `/lists`, jsonBody(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
@@ -41,7 +41,8 @@ export const useCreateList = () => {
 export const useDeleteList = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiJson(listRoutes.delete, `/lists/${id}`),
+    mutationFn: (id: string) =>
+      apiJson<typeof listRoutes.delete>("DELETE", `/lists/${id}`),
     onSuccess: () => {
       invalidateContactViews(queryClient);
     },
@@ -58,7 +59,11 @@ export const useUpdateList = () => {
       id: string;
       data: { name?: string; icon?: string };
     }): Promise<ContactList> =>
-      apiJson(listRoutes.update, `/lists/${id}`, jsonBody(data)),
+      apiJson<typeof listRoutes.update>(
+        "PATCH",
+        `/lists/${id}`,
+        jsonBody(data),
+      ),
     onSuccess: () => {
       invalidateContactViews(queryClient);
     },
@@ -69,7 +74,9 @@ export const useListContacts = (listId: string | null) => {
   return useQuery({
     queryKey: ["list-contacts", listId],
     queryFn: ({ signal }): Promise<ListMember[]> =>
-      apiJson(listRoutes.contacts, `/lists/${listId}/contacts`, { signal }),
+      apiJson<typeof listRoutes.contacts>("GET", `/lists/${listId}/contacts`, {
+        signal,
+      }),
     enabled: !!listId,
     staleTime: STALE_TIMES.listContacts,
   });
@@ -80,7 +87,11 @@ export const useReorderLists = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (orderedIds: string[]) =>
-      apiJson(listRoutes.reorder, `/lists/reorder`, jsonBody({ orderedIds })),
+      apiJson<typeof listRoutes.reorder>(
+        "PUT",
+        `/lists/reorder`,
+        jsonBody({ orderedIds }),
+      ),
     onMutate: async (orderedIds) => {
       await queryClient.cancelQueries({ queryKey: ["lists"] });
       const before = queryClient.getQueryData<ContactList[]>(["lists"]);
@@ -125,13 +136,13 @@ function useListMembership(add: boolean) {
       contactId: string;
     }) =>
       add
-        ? apiJson(
-            listRoutes.addMember,
+        ? apiJson<typeof listRoutes.addMember>(
+            "POST",
             `/lists/${listId}/members`,
             jsonBody({ contactId }),
           )
-        : apiJson(
-            listRoutes.removeMember,
+        : apiJson<typeof listRoutes.removeMember>(
+            "DELETE",
             `/lists/${listId}/members/${contactId}`,
           ),
     onMutate: async ({ listId, contactId }) => {
@@ -174,8 +185,8 @@ export const useBulkAddToList = () => {
       listId: string;
       contactIds: string[];
     }) =>
-      apiJson(
-        listRoutes.addMembers,
+      apiJson<typeof listRoutes.addMembers>(
+        "POST",
         `/lists/${listId}/members/bulk`,
         jsonBody({ contactIds }),
       ),

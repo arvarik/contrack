@@ -11,14 +11,13 @@
 //
 // The web searches are most of the cost: Google bills Gemini 3 per search
 // query, and a pass's tokens cost a fraction of that.
+//
+// No zod here: the browser loads this on the first page. The schema is in
+// `contracts/common.ts`.
 
-import { z } from "zod";
+export const RESEARCH_DEPTHS = ["standard", "deep"] as const;
 
-const RESEARCH_DEPTHS = ["standard", "deep"] as const;
-
-export const researchDepthSchema = z.enum(RESEARCH_DEPTHS);
-
-export type ResearchDepth = z.infer<typeof researchDepthSchema>;
+export type ResearchDepth = (typeof RESEARCH_DEPTHS)[number];
 
 /** The depth a start gets when it names none. */
 export const DEFAULT_RESEARCH_DEPTH: ResearchDepth = "standard";

@@ -1,5 +1,4 @@
 /** Search hooks validate streamed results and cancel obsolete requests. */
-import { z } from "zod";
 import { readNdjson } from "./ndjson";
 import type { FacetFilter } from "../../shared/searchFacets";
 import { apiFetch } from "./client";
@@ -76,6 +75,8 @@ export const useSemanticSearch = () => {
       setPhase("idle");
       setData(null);
       let complete = false;
+      // zod loads with the first question, beside the request.
+      const schemas = import("./streamSchemas");
       try {
         const response = await apiFetch("/search/semantic", {
           method: "POST",
@@ -86,6 +87,7 @@ export const useSemanticSearch = () => {
           body: JSON.stringify(filters.length ? { query, filters } : { query }),
           signal: controller.signal,
         });
+        const { searchChunkSchema } = await schemas;
         await readNdjson(
           response,
           (value) => {
@@ -160,37 +162,6 @@ export const useSemanticSearch = () => {
     reset,
   };
 };
-
-const searchChunkSchema = z.discriminatedUnion("phase", [
-  z.object({
-    phase: z.enum(["instant", "enriched", "complete"]),
-    matches: z
-      .array(
-        z
-          .object({
-            id: z.string(),
-            name: z.string(),
-            verified: z.boolean().optional(),
-          })
-          .passthrough(),
-      )
-      .max(30),
-    fallback: z.boolean(),
-    total: z.number().int().nonnegative().optional(),
-    facets: z.string().optional(),
-    refine: z
-      .array(
-        z.object({
-          facet: z.string(),
-          label: z.string(),
-          count: z.number().int().nonnegative(),
-        }),
-      )
-      .max(10)
-      .optional(),
-  }),
-  z.object({ phase: z.literal("error"), error: z.string() }),
-]);
 
 export interface FailedIndexItem {
   contactId: string;

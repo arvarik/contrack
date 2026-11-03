@@ -1,7 +1,7 @@
 import { apiJson, jsonBody } from "./client";
 import { invalidateContactViews, refreshContact } from "./contactCache";
 import { zoneQuery } from "./dashboard";
-import { actionItemRoutes } from "../../shared/contracts/actionItems";
+import type { actionItemRoutes } from "../../shared/contracts/actionItems";
 import type { BodyOf } from "../../shared/contracts/route";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -12,9 +12,13 @@ export const useCompletedActionItems = () => {
   return useQuery({
     queryKey: ["actionItems", "completed"],
     queryFn: ({ signal }): Promise<ActionItem[]> =>
-      apiJson(actionItemRoutes.completed, `/action-items/completed`, {
-        signal,
-      }),
+      apiJson<typeof actionItemRoutes.completed>(
+        "GET",
+        `/action-items/completed`,
+        {
+          signal,
+        },
+      ),
   });
 };
 
@@ -22,9 +26,13 @@ export const useUrgentActionItemCount = () => {
   return useQuery({
     queryKey: ["actionItems", "urgentCount"],
     queryFn: ({ signal }) =>
-      apiJson(actionItemRoutes.count, `/action-items/count${zoneQuery()}`, {
-        signal,
-      }),
+      apiJson<typeof actionItemRoutes.count>(
+        "GET",
+        `/action-items/count${zoneQuery()}`,
+        {
+          signal,
+        },
+      ),
     // We poll this occasionally or rely on invalidation from mutations
     staleTime: 1000 * 60 * 5, // 5 mins
   });
@@ -35,8 +43,8 @@ export const useBulkCreateActionItems = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: BodyOf<typeof actionItemRoutes.bulkCreate>) =>
-      apiJson(
-        actionItemRoutes.bulkCreate,
+      apiJson<typeof actionItemRoutes.bulkCreate>(
+        "POST",
         "/action-items/bulk",
         jsonBody(body),
       ),
@@ -54,7 +62,11 @@ export const useUpdateActionItem = () => {
       id: string;
       data: { title?: string; dueAt?: string };
     }): Promise<ActionItem> =>
-      apiJson(actionItemRoutes.update, `/action-items/${id}`, jsonBody(data)),
+      apiJson<typeof actionItemRoutes.update>(
+        "PATCH",
+        `/action-items/${id}`,
+        jsonBody(data),
+      ),
     // A trigger keeps the contact's next follow-up date in step.
     onSuccess: (item) => void refreshContact(queryClient, item.contactId),
     onError: (err: unknown) => {
@@ -67,7 +79,10 @@ export const useCompleteActionItem = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string): Promise<ActionItem> =>
-      apiJson(actionItemRoutes.complete, `/action-items/${id}/complete`),
+      apiJson<typeof actionItemRoutes.complete>(
+        "PATCH",
+        `/action-items/${id}/complete`,
+      ),
     onSuccess: (item) => {
       void refreshContact(queryClient, item.contactId);
       // The note it came with shows it on the timeline.
@@ -91,8 +106,8 @@ export const useCreateActionItem = () => {
     }: { contactId: string } & BodyOf<
       typeof actionItemRoutes.create
     >): Promise<ActionItem> =>
-      apiJson(
-        actionItemRoutes.create,
+      apiJson<typeof actionItemRoutes.create>(
+        "POST",
         `/contacts/${contactId}/action-items`,
         jsonBody(body),
       ),
@@ -106,8 +121,8 @@ export const useContactActionItems = (contactId: string) =>
   useQuery({
     queryKey: ["actionItems", "contact", contactId],
     queryFn: ({ signal }): Promise<ActionItem[]> =>
-      apiJson(
-        actionItemRoutes.forContact,
+      apiJson<typeof actionItemRoutes.forContact>(
+        "GET",
         `/contacts/${contactId}/action-items`,
         { signal },
       ),

@@ -1,10 +1,7 @@
 import { sqlite } from "../db.ts";
 import { ACTIVE_CONTACT_SQL } from "../services/search/ftsIndex.ts";
 import { withTimeout } from "../ai/resilience.ts";
-import {
-  facetFiltersSchema,
-  type FacetFilter,
-} from "../../shared/searchFacets.ts";
+import type { FacetFilter } from "../../shared/searchFacets.ts";
 import { z } from "zod";
 import { ValidationError } from "../utils/AppError.ts";
 import { Router } from "express";
@@ -34,11 +31,12 @@ import { starterQuestions } from "../services/search/starterQuestions.ts";
 import type { StarterQuestionsResponse } from "../../shared/starterQuestions.ts";
 import { aiAllowedFor } from "../middleware/aiAllowed.ts";
 import {
+  facetFiltersSchema,
   recordHistorySchema,
   patchHistorySchema,
   listHistoryQuerySchema,
   historyModeSchema,
-} from "../../shared/searchHistory.ts";
+} from "../../shared/searchSchemas.ts";
 
 const router = Router();
 

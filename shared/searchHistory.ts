@@ -1,61 +1,9 @@
-import { z } from "zod";
+// Search history: the values the browser needs. No zod here: the browser
+// loads this on the first page. The routes' schemas are in `searchSchemas.ts`.
 
-const HISTORY_MODES = ["people", "notes", "palette"] as const;
-export const historyModeSchema = z.enum(HISTORY_MODES);
-export type HistoryMode = z.infer<typeof historyModeSchema>;
-
-const historyEntrySchema = z.object({
-  id: z.string(),
-  ownerId: z.string(),
-  mode: historyModeSchema,
-  query: z.string(),
-  normalizedQuery: z.string(),
-  resultCount: z.number().int().nullable(),
-  resultIds: z.array(z.string()),
-  fallback: z.boolean(),
-  pinned: z.boolean(),
-  runCount: z.number().int(),
-  createdAt: z.string(),
-  lastRunAt: z.string(),
-});
-
-export type HistoryEntry = z.infer<typeof historyEntrySchema>;
-
-/** POST /api/search/history body schema */
-export const recordHistorySchema = z.object({
-  query: z
-    .string()
-    .trim()
-    .min(1, "query cannot be empty")
-    .max(500, "query must be ≤ 500 characters"),
-  mode: historyModeSchema,
-  resultCount: z.number().int().min(0).nullable().optional(),
-  resultIds: z.array(z.string()).optional(),
-  fallback: z.boolean().optional(),
-});
-
-export type RecordHistoryInput = z.infer<typeof recordHistorySchema>;
-
-/** PATCH /api/search/history/:id body schema */
-export const patchHistorySchema = z
-  .object({
-    pinned: z.boolean(),
-  })
-  .strict();
-
-/** GET /api/search/history query parameters schema */
-export const listHistoryQuerySchema = z.object({
-  mode: historyModeSchema.optional(),
-  q: z.string().optional(),
-  pinned: z.preprocess((val) => {
-    if (val === "1" || val === "true" || val === 1 || val === true) return true;
-    if (val === "0" || val === "false" || val === 0 || val === false)
-      return false;
-    return undefined;
-  }, z.boolean().optional()),
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-});
+export const HISTORY_MODES = ["people", "notes", "palette"] as const;
+export type HistoryMode = (typeof HISTORY_MODES)[number];
+export type { HistoryEntry, RecordHistoryInput } from "./searchSchemas.ts";
 
 /**
  * A query for indexing and history deduplication: lower case, trimmed, runs

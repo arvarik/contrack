@@ -1,8 +1,19 @@
 // Contract pieces more than one area uses: dates, ID lists, a contact's child
-// records, and query string readers. Request schemas may transform. Response
-// schemas never do.
+// records, query string readers, and the enums of shared modules the browser
+// loads without zod. Request schemas may transform. Response schemas never do.
 
 import { z } from "zod";
+import { RESEARCH_DEPTHS } from "../researchDepth.ts";
+import { ENGINE_CHOICES, WEB_SEARCH_ENGINES } from "../webSearchEngine.ts";
+
+/** A research depth (`shared/researchDepth.ts`). */
+export const researchDepthSchema = z.enum(RESEARCH_DEPTHS);
+
+/** A web search engine (`shared/webSearchEngine.ts`). */
+export const webSearchEngineSchema = z.enum(WEB_SEARCH_ENGINES);
+
+/** An account's web search engine: "default" or an engine. */
+export const engineChoiceSchema = z.enum(ENGINE_CHOICES);
 
 /** A boolean, or the words a CSV or a form sends for one. */
 export const stringToBool = z

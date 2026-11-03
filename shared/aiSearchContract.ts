@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { researchDepthSchema } from "./researchDepth.ts";
+import { researchDepthSchema } from "./contracts/common.ts";
 
 /** Shared status contract for batch polling, live updates, and cancellation. */
 export const aiSearchBatchSchema = z.object({

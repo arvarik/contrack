@@ -223,26 +223,28 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 /**
  * `apiFetch` and a JSON body in one call. Given a route's contract from
- * `shared/contracts/`, it sends the contract's method and types the answer by
- * its response. The answer is not parsed at runtime: the integration suite
- * checks that the server sends that shape. A route with no contract takes the
- * type it is given.
+ * `shared/contracts/` as its type, `apiJson<typeof contactRoutes.get>("GET",
+ * path)`, it sends the method, which must be the contract's, and types the
+ * answer by its response. The contract is a type-only import: its zod schemas
+ * stay off the first page load. The answer is not parsed at runtime: the
+ * integration suite checks that the server sends that shape. A route with no
+ * contract takes the type it is given.
  */
 export async function apiJson<C extends RouteContract>(
-  contract: C,
+  method: C["method"],
   path: string,
   init?: Omit<RequestInit, "method">,
 ): Promise<ResponseOf<C>>;
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T>;
 export async function apiJson(
-  pathOrContract: string | RouteContract,
+  pathOrMethod: string,
   pathOrInit?: string | RequestInit,
   init?: Omit<RequestInit, "method">,
 ): Promise<unknown> {
   const [path, request] =
-    typeof pathOrContract === "string"
-      ? [pathOrContract, pathOrInit as RequestInit | undefined]
-      : [pathOrInit as string, { ...init, method: pathOrContract.method }];
+    typeof pathOrInit === "string"
+      ? [pathOrInit, { ...init, method: pathOrMethod }]
+      : [pathOrMethod, pathOrInit];
   // Counted to the end of the body, where a list's bytes are, so idle
   // warm-ups wait for it (`lib/idle.ts`).
   return noteRequest(apiFetch(path, request).then(handleResponse));

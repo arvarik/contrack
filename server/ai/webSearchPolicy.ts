@@ -13,9 +13,9 @@ import {
 } from "../services/settingsService.ts";
 import {
   DEFAULT_WEB_SEARCH_ENGINE,
-  webSearchEngineSchema,
   type WebSearchEngine,
 } from "../../shared/webSearchEngine.ts";
+import { webSearchEngineSchema } from "../../shared/contracts/common.ts";
 import { log } from "../utils/logger.ts";
 
 /** The stored policy. Absent fields take their defaults. */

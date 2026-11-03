@@ -21,7 +21,7 @@ import { getPreferences } from "../services/userPreferencesService.ts";
 import { enrichmentContact } from "../services/aiSearch/contactSnapshot.ts";
 import { AppError, RateLimitedError } from "../utils/AppError.ts";
 import { scopeOf } from "../tenancy/scope.ts";
-import { researchDepthSchema } from "../../shared/researchDepth.ts";
+import { researchDepthSchema } from "../../shared/contracts/common.ts";
 
 export const aiSearchRouter = Router();
 

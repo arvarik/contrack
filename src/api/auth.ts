@@ -13,12 +13,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SessionMethod } from "../../shared/devices";
 import type { MapStyleUrls } from "../../shared/geo";
-import { authRoutes } from "../../shared/contracts/auth";
+import type { authRoutes } from "../../shared/contracts/auth";
 import type { ResponseOf } from "../../shared/contracts/route";
-import {
+import type {
   tokenRoutes,
-  type ApiToken,
-  type CreatedApiToken,
+  ApiToken,
+  CreatedApiToken,
 } from "../../shared/contracts/tokens";
 import {
   ApiError,
@@ -90,26 +90,26 @@ export type LinkedIdentity = ResponseOf<
 >["identities"][number];
 
 export const listIdentities = () =>
-  apiJson(authRoutes.identities, "/auth/identities");
+  apiJson<typeof authRoutes.identities>("GET", "/auth/identities");
 
 /** Linking and unlinking ask for the current password, as OWASP advises. */
 export const unlinkIdentity = (id: string, currentPassword: string) =>
-  apiJson(
-    authRoutes.unlinkIdentity,
+  apiJson<typeof authRoutes.unlinkIdentity>(
+    "DELETE",
     `/auth/identities/${encodeURIComponent(id)}`,
     jsonBody({ currentPassword }),
   );
 
 export const startOidcLink = (currentPassword: string) =>
-  apiJson(
-    authRoutes.oidcLink,
+  apiJson<typeof authRoutes.oidcLink>(
+    "POST",
     "/auth/oidc/link",
     jsonBody({ currentPassword }),
   );
 
 /** Stop a pending email change, so its mailed link no longer works. */
 export const cancelEmailChange = () =>
-  apiJson(authRoutes.cancelEmailChange, "/auth/email-change");
+  apiJson<typeof authRoutes.cancelEmailChange>("DELETE", "/auth/email-change");
 
 /** One personal API token, as the account's own token list shows it. */
 export type ApiTokenSummary = ApiToken;
@@ -305,7 +305,7 @@ export function revokeOtherSessions(): Promise<{ revoked: number }> {
 
 /** The account's tokens, newest first, revoked and expired ones included. */
 export function fetchApiTokens(): Promise<{ tokens: ApiTokenSummary[] }> {
-  return apiJson(tokenRoutes.list, "/auth/tokens");
+  return apiJson<typeof tokenRoutes.list>("GET", "/auth/tokens");
 }
 
 /**
@@ -317,12 +317,19 @@ export function createApiToken(input: {
   expiresInDays?: number | null;
   readOnly?: boolean;
 }): Promise<CreatedApiToken> {
-  return apiJson(tokenRoutes.create, "/auth/tokens", jsonBody(input));
+  return apiJson<typeof tokenRoutes.create>(
+    "POST",
+    "/auth/tokens",
+    jsonBody(input),
+  );
 }
 
 /** Stop a token working. The row stays, so its owner can see what happened. */
 export function revokeApiToken(id: string): Promise<{ revoked: true }> {
-  return apiJson(tokenRoutes.revoke, `/auth/tokens/${encodeURIComponent(id)}`);
+  return apiJson<typeof tokenRoutes.revoke>(
+    "DELETE",
+    `/auth/tokens/${encodeURIComponent(id)}`,
+  );
 }
 
 // Account profile pictures

@@ -13,7 +13,7 @@
 //                 runs leave out
 
 import { z } from "zod";
-import { researchDepthSchema } from "./researchDepth.ts";
+import { researchDepthSchema } from "./contracts/common.ts";
 
 /** Runs kept per contact. Older runs drop off the front. */
 export const MAX_RESEARCH_RUNS = 12;
