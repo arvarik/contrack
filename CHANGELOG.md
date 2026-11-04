@@ -31,7 +31,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A Calendar or Mailbox connector counts each person once for each meeting or
   mail. A calendar counted the people of every past meeting again on each
-  sync, so someone met once became a suggested person by the third sync.
+  sync, so someone met once became a suggested person by the third sync. The
+  first calendar sync after this update counts each of them once more.
 - The Calendar connector has **Also treat these addresses as mine**, for a
   calendar that invites you at another address than your sign-in email. You
   were a stranger in each of your meetings before.

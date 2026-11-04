@@ -126,7 +126,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     .map((s) => s.trim())
     .filter(Boolean);
   const parsedAliases = aliases
-    .split(",")
+    .split(/[\s,;]+/)
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 

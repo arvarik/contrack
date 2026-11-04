@@ -158,7 +158,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       includeDescription,
       ghostThreshold,
       aliases: aliases
-        .split(",")
+        .split(/[\s,;]+/)
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean),
     };

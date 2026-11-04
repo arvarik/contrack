@@ -193,7 +193,8 @@ with a contact becomes an email on that contact's timeline.
    the mail you send counts too. **Test connection** names the folders it
    finds.
 4. In **Also treat these addresses as mine**, list your other addresses and
-   aliases. Mail from them counts as sent by you.
+   aliases, separated by commas or spaces. Mail from them counts as sent by
+   you.
 
 Common hosts are `imap.gmail.com`, `imap.mail.me.com` (iCloud), and
 `imap.fastmail.com`, each on port 993.

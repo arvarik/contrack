@@ -662,8 +662,9 @@ export async function ingestStream(
       // A link with no interaction is a mail or a meeting that matched no
       // contact: its strangers were counted when it came. It is logged once
       // a contact matches, and its strangers never count again.
-      const counted = existingLink?.localId === null;
-      if (counted) {
+      const countedHere = existingLink?.localId === null;
+      let counted = countedHere;
+      if (countedHere) {
         sqlite
           .prepare(
             `DELETE FROM connector_links
@@ -698,17 +699,22 @@ export async function ingestStream(
       // The same mail or invite reached through another of the owner's
       // connectors of this kind, such as two Google accounts on one thread,
       // is that interaction: it is linked here too, and not logged twice.
+      // A sibling that saw it with no contact counted its strangers already.
       let shared: { localId: string } | undefined;
       for (const siblingId of siblingConnectorIds) {
-        shared = sqlite
+        const row = sqlite
           .prepare(
             `SELECT localId FROM connector_links
              WHERE connectorId = ? AND kind = 'interaction' AND externalId = ?
-               AND ownerId = ? AND localId IS NOT NULL`,
+               AND ownerId = ?`,
           )
           .get(siblingId, event.externalId, scope.ownerId) as
-          { localId: string } | undefined;
-        if (shared) break;
+          { localId: string | null } | undefined;
+        if (row && row.localId === null) counted = true;
+        if (row?.localId) {
+          shared = { localId: row.localId };
+          break;
+        }
       }
       if (shared) {
         sqlite

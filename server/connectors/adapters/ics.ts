@@ -15,10 +15,7 @@ import ical, {
   type VEvent,
 } from "node-ical";
 import { safeFetch } from "../../utils/urlSafety.ts";
-import {
-  canonicalEmailAddress,
-  organizerIsPerson,
-} from "../email/normalize.ts";
+import { canonicalEmailAddress } from "../email/normalize.ts";
 import { ConnectorConfigError } from "../errors.ts";
 import type {
   ConnectorAdapter,
@@ -265,7 +262,10 @@ function parseParticipants(
 
   if (event.organizer) {
     const { email, name } = person(event.organizer);
-    if (organizerIsPerson(email, name)) add(email, name);
+    // A shared or room calendar is not a person. A robot-looking organizer
+    // may be a saved contact (info@ a law firm), and ingest never counts a
+    // robot as a stranger, so it stays.
+    if (!email || !/calendar\.google\.com$/i.test(email)) add(email, name);
   }
 
   const attendees = event.attendee

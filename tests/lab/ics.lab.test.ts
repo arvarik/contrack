@@ -8,7 +8,15 @@ import { sqlite } from "../../server/db.ts";
 import { icsAdapter } from "../../server/connectors/adapters/ics.ts";
 import { createConnector, runNow } from "../../server/connectors/service.ts";
 import { contactService } from "../../server/services/contactService.ts";
-import { calendar, DAY_MS, icsFeed, icsTime, labOwner } from "./helpers.ts";
+import {
+  calendar,
+  DAY_MS,
+  icsFeed,
+  icsTime,
+  labOwner,
+  RADICALE,
+  radicaleBook,
+} from "./helpers.ts";
 
 const feeds: Array<{ close(): Promise<void> }> = [];
 afterAll(() => Promise.all(feeds.map((f) => f.close())));
@@ -275,6 +283,75 @@ describe("ICS against a served feed", () => {
       "Planning 1",
       "Planning 2",
     ]);
+  });
+
+  it("counts a stranger once across two calendars, logs a meeting a robot-looking contact organized, and takes no CardDAV username for the owner", async () => {
+    const { ownerId, scope, email: me } = labOwner();
+    const sam = contactService.createContact(scope, {
+      name: "Sam Lee",
+      emails: [{ email: "sam@family.example", label: "personal" }],
+    })!;
+    const firm = contactService.createContact(scope, {
+      name: "Acme Law",
+      emails: [{ email: "info@acmelaw.example", label: "work" }],
+    })!;
+    // A family address book that signs in as Sam (a +tag keeps the lab user
+    // new each run, and is the same mailbox): Sam stays a contact.
+    const samLogin = `sam+${ownerId.slice(0, 8)}@family.example`;
+    await radicaleBook(samLogin);
+    await createConnector(scope, {
+      kind: "carddav",
+      name: "Family book",
+      config: {
+        url: `${RADICALE}/`,
+        username: samLogin,
+        syncDirection: "pull_only",
+      },
+      secret: { password: "lab" },
+    });
+    const body = calendar(
+      vevent(
+        "dinner@lab",
+        at9(-3),
+        "SUMMARY:Dinner",
+        `ORGANIZER:mailto:${me}`,
+        "ATTENDEE:mailto:sam@family.example",
+      ),
+      vevent(
+        "closing@lab",
+        at9(-2),
+        "SUMMARY:Closing",
+        "ORGANIZER;CN=Acme Law:mailto:info@acmelaw.example",
+        `ATTENDEE:mailto:${me}`,
+      ),
+      vevent(
+        "intro@lab",
+        at9(-1),
+        "SUMMARY:Intro",
+        `ORGANIZER:mailto:${me}`,
+        "ATTENDEE:mailto:zed@ext.test",
+      ),
+    );
+    // Two calendars with the same meetings, as two shared feeds can have.
+    for (const feed of [await labFeed(body), await labFeed(body)]) {
+      const { id } = await createConnector(scope, {
+        kind: "ics",
+        name: "Lab calendar",
+        config: { url: feed.url },
+      });
+      expect((await runNow(scope, id)).status).toBe("ok");
+    }
+
+    expect(meetingTitles(sam.id)).toEqual(["Dinner"]);
+    expect(meetingTitles(firm.id)).toEqual(["Closing"]);
+    expect(
+      sqlite
+        .prepare(
+          `SELECT SUM(seenCount) AS n FROM connector_links
+            WHERE ownerId = ? AND kind = 'correspondent' AND externalId = 'zed@ext.test'`,
+        )
+        .get(ownerId),
+    ).toEqual({ n: 1 });
   });
 
   it("fails a run, and the test, when the address returns a page that is not a calendar", async () => {
