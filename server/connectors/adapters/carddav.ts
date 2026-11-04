@@ -1656,8 +1656,9 @@ ${hrefElements}
           }
           if (getRes.status === 404 || getRes.status === 410) {
             // Gone on the server since the pull: written again in full,
-            // only where nothing is.
-            delete etags[targetHref];
+            // only where nothing is. The pull's ETag stays until the PUT
+            // makes the card: a false 404 must not look like a server edit
+            // on the next push.
             vcardBody = serializeVCard({
               ...contact.vcardInput,
               uid: contact.id,
