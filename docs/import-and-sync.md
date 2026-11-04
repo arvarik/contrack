@@ -168,7 +168,15 @@ Find the private address:
   calendars** > **Publish a calendar**. Copy the ICS link.
 
 Paste it into **Private ICS calendar URL**. Contrack reads only `http://` and
-`https://` addresses, and a feed of up to 5 MB.
+`https://` addresses, and a feed of up to 5 MB. If the address returns a web
+page, such as a sign-in page, the sync fails and Coming up keeps its meetings.
+
+If the calendar invites you at an address other than your sign-in email, enter
+it in **Also treat these addresses as mine**. Otherwise you count as a person
+in your own meetings.
+
+A meeting you declined is left out. An upcoming event with no one but you, such
+as a reminder, does not appear in Coming up.
 
 ### Mailbox (IMAP)
 
@@ -185,14 +193,16 @@ with a contact becomes an email on that contact's timeline.
    the mail you send counts too. **Test connection** names the folders it
    finds.
 4. In **Also treat these addresses as mine**, list your other addresses and
-   aliases. Mail from them counts as sent by you.
+   aliases, separated by commas or spaces. Mail from them counts as sent by
+   you.
 
 Common hosts are `imap.gmail.com`, `imap.mail.me.com` (iCloud), and
 `imap.fastmail.com`, each on port 993.
 
 A message that sits in two of the folders, such as a mail you sent to
 yourself, counts once. A folder you add later is read back over the same
-**First sync goes back** window as the first one.
+**First sync goes back** window as the first one. A folder that cannot be
+opened shows as an error in the run history, and the other folders still sync.
 
 ### Google Workspace
 
@@ -340,8 +350,9 @@ server.
 | **Generate AI summaries** (Google: **AI message summaries**)                     | Mailbox, Google           | Off          |
 
 A sender such as `no-reply@` or `notifications@` is never suggested, and
-neither is anyone on a message or a meeting with more than 25 people you do
-not know. Gmail's spam, trash and drafts are skipped.
+neither is anyone on bulk mail (a newsletter or a mailing list) or on a message
+or a meeting with more than 25 people you do not know. Gmail's spam, trash and
+drafts are skipped.
 
 An AI summary is one or two sentences about a message with one of your
 contacts. The [Fast model](ai.md#models) writes it into the message's timeline
@@ -359,9 +370,9 @@ and sends nothing to a provider. A sync writes at most 50 summaries.
   address of the connected mailbox or Google account, and the addresses you
   list as yours.
 - A meeting or message with none of your contacts in it goes on no timeline.
-  Contrack counts the people in it. After the number of times set in
-  **Suggest a new person after**, the person becomes a ghost, see
-  [Ghosts](contacts.md#ghosts).
+  Contrack counts the people in it, once for each meeting or message however
+  often a sync reads it. After the number of times set in **Suggest a new
+  person after**, the person becomes a ghost, see [Ghosts](contacts.md#ghosts).
 - Meetings and email from a connector carry a badge on the timeline, such as
   "via Calendar", "via Email", or "via Google".
 
