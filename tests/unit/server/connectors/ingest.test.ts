@@ -743,6 +743,31 @@ describe("connectors ingestStream", () => {
     ).toEqual(["robert@builder.example"]);
   });
 
+  it("makes a suggested person a contact when a Google card names them, so later edits apply", async () => {
+    const stranger = { email: "sam@stranger.example", name: "sam" };
+    await ingest([mail("m-1", [stranger]), mail("m-2", [stranger])], {
+      ghostThreshold: 2,
+    });
+    const [ghostId] = column(
+      "SELECT id FROM contacts WHERE ownerId = ? AND isGhost = 1",
+      ownerId,
+    );
+
+    await ingest([card("people/sam", "Sam Stranger", "sam@stranger.example")]);
+    expect(
+      sqlite
+        .prepare("SELECT name, isGhost FROM contacts WHERE id = ?")
+        .get(ghostId),
+    ).toEqual({ name: "Sam Stranger", isGhost: 0 });
+
+    await ingest([
+      card("people/sam", "Samuel Stranger", "sam@stranger.example"),
+    ]);
+    expect(column("SELECT name FROM contacts WHERE id = ?", ghostId)).toEqual([
+      "Samuel Stranger",
+    ]);
+  });
+
   it("puts the drawn avatar back over a saved copy of Google's letter tile, and keeps any other photo", async () => {
     const tile = "https://lh3.googleusercontent.com/cm/ABC123=s100";
     const ana = card("people/ana", "Ana Lee", "ana@example.com");

@@ -6,9 +6,10 @@
  * 4. Counts unknown participants as correspondents, one per mailbox, and
  *    promotes them to ghost contacts past ghostThreshold. Bulk mail, a robot
  *    or relay sender and a broadcast to many strangers count nobody.
- * 5. Writes a synced person over the contact the sync made for it, and only
- *    fills in a contact the sync linked by a shared address. Trashes the
- *    former when its source deletes it, and unlinks the latter.
+ * 5. Writes a synced person over the contact the sync made for it, or over a
+ *    suggested person it names, and only fills in a contact the sync linked
+ *    by a shared address. Trashes the former when its source deletes it, and
+ *    unlinks the latter.
  * 6. Refreshes upcoming_events, replacing stale rows.
  * 7. Commits in transactions of 100 events.
  * 8. Copies each contact photo to the owner's uploads before the event is
@@ -453,9 +454,11 @@ export async function ingestStream(
 
   /**
    * A synced person the connector already links. A contact the sync made is
-   * the source's to write, emails and phones included. One the sync only
-   * linked, because it shared an address, is the owner's: the sync fills what
-   * is empty and adds the addresses it has, and changes nothing else.
+   * the source's to write, emails and phones included. A suggested person
+   * (ghost) the card matches becomes such a contact: the owner saved them in
+   * their address book. Any other contact the sync only linked, because it
+   * shared an address, is the owner's: the sync fills what is empty and adds
+   * the addresses it has, and changes nothing else.
    */
   function syncLinkedContact(
     contactId: string,
@@ -470,6 +473,27 @@ export async function ingestStream(
         return;
       }
       const local = contactService.getContactById(scope, contactId);
+      if (local?.isGhost) {
+        contactService.updateContact(scope, contactId, {
+          ...remote,
+          isGhost: false,
+        });
+        // The source row that madeBySync reads, so later edits to the card
+        // apply.
+        sqlite
+          .prepare(
+            `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(
+            crypto.randomUUID(),
+            contactId,
+            connector.kind,
+            externalId,
+            new Date().toISOString(),
+          );
+        return;
+      }
       const fill = local ? fillFromRemote(local, remote) : null;
       if (fill) contactService.updateContact(scope, contactId, fill);
     } catch {
