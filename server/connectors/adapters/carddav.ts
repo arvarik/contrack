@@ -67,6 +67,10 @@ export interface CarddavCursor {
   deletedHrefs?: string[];
   /** Cards the last pull could not read, read again on the next. */
   retryHrefs?: string[];
+  /** Cards too large to read, by their ETag: read again when it changes. */
+  tooLargeEtags?: Record<string, string>;
+  /** Contacts the server refused, by the field hashes it refused. */
+  failedHashes?: Record<string, string>;
   lastSyncAt?: string;
 }
 
@@ -997,8 +1001,21 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
     );
     /** Cards that could not be read, with why, for the next run. */
     const failedHrefs = new Map<string, string>();
+    /**
+     * Cards over the size cap, by their ETag. Reported once and not read
+     * again until the ETag changes: the next read would fail the same way.
+     */
+    const tooLarge: Record<string, string> = sameBook
+      ? { ...(prevCursor.tooLargeEtags ?? {}) }
+      : {};
+    const markTooLarge = (href: string, why: string) => {
+      failedHrefs.set(href, why);
+      const etag = pendingEtags.get(href);
+      if (etag) tooLarge[href] = etag;
+    };
     /** A card the server no longer has. Its hash goes after the fetch. */
     const markDeleted = (href: string) => {
+      delete tooLarge[href];
       deletedHrefs.add(href);
       toFetchHrefs.delete(href);
       pendingEtags.delete(href);
@@ -1008,6 +1025,8 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
     const noteEtag = (href: string, raw: string | null) => {
       deletedHrefs.delete(href);
       const etag = cleanEtag(raw);
+      if (etag && tooLarge[href] === etag) return;
+      delete tooLarge[href];
       if (etag && prevEtags[href] === etag) {
         nextEtags[href] = etag;
         return;
@@ -1170,6 +1189,9 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
         for (const oldHref of Object.keys(prevEtags)) {
           if (!seenHrefs.has(oldHref)) markDeleted(oldHref);
         }
+        for (const href of Object.keys(tooLarge)) {
+          if (!seenHrefs.has(href)) delete tooLarge[href];
+        }
       }
     }
 
@@ -1219,7 +1241,7 @@ ${hrefElements}
             const right = await fetchMultigetBatch(batch.slice(mid));
             return [...left, ...right];
           }
-          failedHrefs.set(batch[0]!, "larger than 5 MB");
+          markTooLarge(batch[0]!, "larger than 5 MB");
           return [];
         }
         throw err;
@@ -1238,7 +1260,7 @@ ${hrefElements}
           const right = await fetchMultigetBatch(batch.slice(mid));
           return [...left, ...right];
         }
-        failedHrefs.set(batch[0]!, `HTTP ${mgRes.status}`);
+        markTooLarge(batch[0]!, `HTTP ${mgRes.status}`);
         return [];
       }
 
@@ -1324,6 +1346,7 @@ ${hrefElements}
           }
         } else {
           failedHrefs.delete(href);
+          delete tooLarge[href];
         }
       }
 
@@ -1360,9 +1383,10 @@ ${hrefElements}
       const [href, why] = failedHrefs.entries().next().value!;
       yield {
         kind: "stage_failed",
-        message: `${failedHrefs.size} CardDAV card(s) could not be read and are tried again on the next sync (${href}: ${why})`,
+        message: `${failedHrefs.size} CardDAV card(s) could not be read (${href}: ${why}). A card too large to read is read again when it changes, any other on the next sync`,
       };
     }
+    const retry = [...failedHrefs.keys()].filter((href) => !tooLarge[href]);
 
     return {
       addressBookUrl,
@@ -1373,9 +1397,10 @@ ${hrefElements}
       etags: nextEtags,
       cardHashes: nextCardHashes,
       pushedHashes: { ...(prevCursor.pushedHashes ?? {}) },
+      failedHashes: prevCursor.failedHashes,
       deletedHrefs: Array.from(deletedHrefs),
-      retryHrefs:
-        failedHrefs.size > 0 ? Array.from(failedHrefs.keys()) : undefined,
+      retryHrefs: retry.length > 0 ? retry : undefined,
+      tooLargeEtags: Object.keys(tooLarge).length > 0 ? tooLarge : undefined,
       lastSyncAt: new Date().toISOString(),
     };
   },
@@ -1396,6 +1421,9 @@ ${hrefElements}
       ...(prevCursor.pushedUpdatedAt ?? {}),
     };
     const pushedHashes: Record<string, string> = {};
+    const prevFailed = prevCursor.failedHashes ?? {};
+    /** Contacts the server refused, kept while their fields stay the same. */
+    const failedHashes: Record<string, string> = {};
     const removedExternalIds = [...(prevCursor.deletedHrefs ?? [])];
     const removedSet = new Set(removedExternalIds);
 
@@ -1453,8 +1481,10 @@ ${hrefElements}
           etags,
           cardHashes,
           pushedHashes,
+          failedHashes: prevCursor.failedHashes,
           deletedHrefs: [],
           retryHrefs: prevCursor.retryHrefs,
+          tooLargeEtags: prevCursor.tooLargeEtags,
           lastSyncAt: prevCursor.lastSyncAt,
         },
         newLinks: [],
@@ -1520,6 +1550,12 @@ ${hrefElements}
         pushedHashes[contact.id] = current;
         continue;
       }
+      if (prevFailed[contact.id] === current) {
+        // Refused for good with these fields, and reported then: tried again
+        // after the next edit.
+        failedHashes[contact.id] = current;
+        continue;
+      }
 
       const linkedHrefs = targetHrefs(contact.id);
       const lastHash = pushedHashes[contact.id];
@@ -1529,8 +1565,10 @@ ${hrefElements}
 
       if (lastHash) {
         if (lastHash === current) continue;
-        if (lastHash === vcardContentHash(contact.vcardInput)) {
-          // A baseline of an earlier version, and nothing changed since.
+        if (!lastHash.includes(".")) {
+          // A whole-card hash of an earlier version: it cannot tell which
+          // field changed, and the writer that made it is gone. These fields
+          // become the baseline, and nothing is written by surprise.
           pushedHashes[contact.id] = current;
           continue;
         }
@@ -1586,12 +1624,17 @@ ${hrefElements}
       const putCard = async (
         targetHref: string,
         linked: boolean,
-      ): Promise<true | string> => {
+      ): Promise<true | { why: string; permanent: boolean }> => {
+        /** A refusal that the same request would get again. */
+        const refused = (status: number) =>
+          status >= 400 && status < 500 && ![408, 412, 429].includes(status);
         const targetUrl = resolveUrl(addressBookUrl, targetHref);
         let vcardBody: string;
         // A new card goes only where nothing is, and a card read first only
         // over the version read. A weak ETag cannot guard a PUT.
         let condition: Record<string, string> = { "If-None-Match": "*" };
+        /** The server changed the card after the pull listed it. */
+        let changedSincePull = false;
         if (linked) {
           let getRes: DavResponse;
           try {
@@ -1601,7 +1644,10 @@ ${hrefElements}
               signal,
             });
           } catch (err: unknown) {
-            return (err as Error).message;
+            return {
+              why: (err as Error).message,
+              permanent: err instanceof DavResponseTooLargeError,
+            };
           }
           if (getRes.status === 401) {
             throw new ConnectorAuthError(
@@ -1624,12 +1670,15 @@ ${hrefElements}
             vcardBody = patchVCard(getRes.body, contact.vcardInput, fields);
             // The ETag of the card just read, not the pull's: the patch is
             // made on this card.
-            const etag = formatEtagHeader(
-              cleanEtag(getRes.headers.get("etag")),
-            );
+            const readEtag = cleanEtag(getRes.headers.get("etag"));
+            const etag = formatEtagHeader(readEtag);
             condition = etag ? { "If-Match": etag } : {};
+            changedSincePull = readEtag !== (etags[targetHref] ?? "");
           } else {
-            return `reading the card answered HTTP ${getRes.status}`;
+            return {
+              why: `reading the card answered HTTP ${getRes.status}`,
+              permanent: refused(getRes.status),
+            };
           }
         } else {
           vcardBody = serializeVCard({
@@ -1650,7 +1699,7 @@ ${hrefElements}
           });
         } catch (err: unknown) {
           if (err instanceof ConnectorAuthError) throw err;
-          return (err as Error).message;
+          return { why: (err as Error).message, permanent: false };
         }
         if (putRes.status === 401) {
           throw new ConnectorAuthError(
@@ -1658,7 +1707,17 @@ ${hrefElements}
           );
         }
         if (putRes.status < 200 || putRes.status >= 300) {
-          return `HTTP ${putRes.status}`;
+          return {
+            why: `HTTP ${putRes.status}`,
+            permanent: refused(putRes.status),
+          };
+        }
+        if (changedSincePull) {
+          // The PUT carried a server edit the pull has not read: no ETag or
+          // hash is kept, so the next pull reads the card and takes it.
+          delete etags[targetHref];
+          delete cardHashes[targetHref];
+          return true;
         }
         const { contacts: pushedParsed } = extractVCardContacts(vcardBody);
         cardHashes[targetHref] = pushedParsed[0]
@@ -1674,6 +1733,7 @@ ${hrefElements}
       };
 
       let wroteAll = true;
+      let allRefused = true;
       for (const targetHref of targets) {
         const result = await putCard(targetHref, linkedHrefs.length > 0);
         if (result === true) {
@@ -1682,12 +1742,15 @@ ${hrefElements}
           }
         } else {
           wroteAll = false;
-          failed.push(`${contact.vcardInput.name}: ${result}`);
+          allRefused &&= result.permanent;
+          failed.push(`${contact.vcardInput.name}: ${result.why}`);
         }
       }
       if (wroteAll) {
         pushed++;
         pushedHashes[contact.id] = current;
+      } else if (allRefused) {
+        failedHashes[contact.id] = current;
       }
     }
 
@@ -1696,7 +1759,7 @@ ${hrefElements}
       errors:
         failed.length > 0
           ? [
-              `${failed.length} contact(s) could not be written to the CardDAV server and are tried again on the next sync (${failed[0]})`,
+              `${failed.length} contact(s) could not be written to the CardDAV server (${failed[0]}). A contact the server refused is tried again after its next edit, any other on the next sync`,
             ]
           : undefined,
       cursor: {
@@ -1707,8 +1770,11 @@ ${hrefElements}
         etags,
         cardHashes,
         pushedHashes,
+        failedHashes:
+          Object.keys(failedHashes).length > 0 ? failedHashes : undefined,
         deletedHrefs: [],
         retryHrefs: prevCursor.retryHrefs,
+        tooLargeEtags: prevCursor.tooLargeEtags,
         lastSyncAt: prevCursor.lastSyncAt,
       },
       newLinks,

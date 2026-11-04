@@ -1017,6 +1017,29 @@ describe("connectors ingestStream", () => {
     ).toEqual(["Name Only"]);
   });
 
+  it("links a card whose UID names a merged-away contact to the one it was merged into", async () => {
+    const dupId = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, ownerId, name, canonicalId, addedAt, updatedAt)
+         VALUES (?, ?, 'Old Alice', ?, datetime('now'), datetime('now'))`,
+      )
+      .run(dupId, ownerId, contactId);
+    await ingest([
+      {
+        kind: "contact",
+        externalId: `book/${dupId}.vcf`,
+        contact: { uid: dupId, name: "Alice Card", emails: [], phones: [] },
+      },
+    ]);
+    expect(
+      column(
+        "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact'",
+        connectorId,
+      ),
+    ).toEqual([contactId]);
+  });
+
   it("records contact.created for a promoted ghost, and gives it a phonetic hash", async () => {
     const stranger = { email: "sam@stranger.example", name: "Sam Stranger" };
     await ingest([mail("m-1", [stranger]), mail("m-2", [stranger])], {

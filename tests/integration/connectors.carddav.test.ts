@@ -898,8 +898,8 @@ ${itemResponses.join("\n")}
     expect(connAfter403?.status).toBe("active");
     forceStatusOnPutHref = null;
 
-    // Run 5: the refused edit is tried again, on a card whose ETag is weak
-    // now -> PUT omits If-Match so strong comparison does not 412
+    // Run 5: the refused edit waits for the next edit, made on a card whose
+    // ETag is weak now -> PUT omits If-Match so strong comparison does not 412
     putRequests.length = 0;
     const adaCard = cards.get("/dav/addressbooks/alice/default/ada.vcf")!;
     cards.set("/dav/addressbooks/alice/default/ada.vcf", {
@@ -907,12 +907,17 @@ ${itemResponses.join("\n")}
       vcard: adaCard.vcard,
     });
     currentSyncToken = "http://sabredav.org/ns/sync/3";
+    expect((await runNow(scope, connector.id, "manual")).stats.errors).toBe(0);
+    expect(putRequests).toHaveLength(0);
+    contactService.updateContact(scope, adaRow!.id, {
+      role: "Weak ETag Architect",
+    });
     const run5 = await runNow(scope, connector.id, "manual");
     expect(run5.status).toBe("ok");
     expect(run5.stats.pushed).toBe(1);
     expect(putRequests).toHaveLength(1);
     expect(putRequests[0]!.ifMatch).toBeUndefined();
-    expect(putRequests[0]!.body).toContain("TITLE:Refused Role Change");
+    expect(putRequests[0]!.body).toContain("TITLE:Weak ETag Architect");
 
     // Run 6: Merge Ada (duplicate) into a canonical survivor contact -> link re-points to survivor,
     // updating /dav/addressbooks/alice/default/ada.vcf instead of creating a duplicate card!
@@ -1886,19 +1891,20 @@ ${itemResponses.join("\n")}
         true,
       );
 
-      // 6. Oversized > 5 MB card is not recorded in cursor.etags so it retries when shrunk
+      // 6. An oversized > 5 MB card is reported once and read again when its
+      // ETag changes
       const bigPadding = "X".repeat(5 * 1024 * 1024 + 500);
       dav.books["/dav/ab/a/"]!.set("/dav/ab/a/huge.vcf", {
         etag: '"huge-1"',
         vcard: miniVcard("Huge Card", [`NOTE:${bigPadding}`]),
       });
       dav.flags.rejectSync = true;
-      await runNow(s, conn.id, "manual");
+      expect((await runNow(s, conn.id, "manual")).stats.errors).toBe(1);
       expect(named(s, "Huge Card")).toHaveLength(0);
+      expect((await runNow(s, conn.id, "manual")).stats.errors ?? 0).toBe(0);
 
-      // Shrink card while keeping the same ETag '"huge-1"' -> next sync fetches it!
       dav.books["/dav/ab/a/"]!.set("/dav/ab/a/huge.vcf", {
-        etag: '"huge-1"',
+        etag: '"huge-2"',
         vcard: miniVcard("Huge Card", ["NOTE:Normal size"]),
       });
       await runNow(s, conn.id, "manual");
@@ -1945,23 +1951,62 @@ ${itemResponses.join("\n")}
       const [kim] = named(s, "Kim Lee");
       contactService.updateContact(s, kim!.id, { company: "Lee Labs" });
 
-      for (const status of [403, 507]) {
-        dav.flags.putStatus = status;
-        const refused = await runNow(s, conn.id, "manual");
-        expect(refused.stats.errors, `HTTP ${status}`).toBe(1);
-      }
+      const errors = async () =>
+        (await runNow(s, conn.id, "manual")).stats.errors ?? 0;
+      // A server error is tried again on every run.
+      dav.flags.putStatus = 503;
+      expect([await errors(), await errors()]).toEqual([1, 1]);
+      // A refusal is reported once, and tried again after the next edit.
+      dav.flags.putStatus = 403;
+      expect([await errors(), await errors()]).toEqual([1, 0]);
+      dav.puts.length = 0;
+      await errors();
+      expect(dav.puts).toHaveLength(0);
 
       dav.flags.putStatus = null;
       dav.flags.editOnGet = true;
-      dav.puts.length = 0;
-      const run = await runNow(s, conn.id, "manual");
-      expect(run.stats.errors ?? 0).toBe(0);
+      contactService.updateContact(s, kim!.id, { company: "Lee Labs 2" });
+      expect(await errors()).toBe(0);
       // The ETag of the card the GET read, not the pull's "k1".
       expect(dav.puts.at(-1)!.ifMatch).toMatch(/^"e-/);
-      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain("ORG:Lee Labs");
+      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain("ORG:Lee Labs 2");
       expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain(
         "NOTE:Server note",
       );
+      // The next pull reads the server's edit that the PUT carried.
+      await runNow(s, conn.id, "manual");
+      expect(contactService.getContactById(s, kim!.id)!.about).toBe(
+        "Server note",
+      );
+    });
+
+    it("takes a baseline of an earlier version as it is, without writing every field", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/leo.vcf", {
+        etag: '"l1"',
+        vcard: miniVcard("Leo Park", ["EMAIL:leo@park.example"]),
+      });
+      const conn = await connect(s, dav.url);
+      await runNow(s, conn.id, "manual");
+      const [leo] = named(s, "Leo Park");
+      // A whole-card hash the earlier version saved, which the current
+      // writer does not reproduce.
+      const row = sqlite
+        .prepare("SELECT cursor FROM connectors WHERE id = ?")
+        .get(conn.id) as { cursor: string };
+      const cursor = JSON.parse(row.cursor);
+      cursor.pushedHashes[leo!.id] = "0123456789abcdef";
+      sqlite
+        .prepare("UPDATE connectors SET cursor = ? WHERE id = ?")
+        .run(JSON.stringify(cursor), conn.id);
+
+      dav.puts.length = 0;
+      await runNow(s, conn.id, "manual");
+      expect(dav.puts).toHaveLength(0);
+      contactService.updateContact(s, leo!.id, { role: "Chef" });
+      await runNow(s, conn.id, "manual");
+      expect(dav.puts).toHaveLength(1);
     });
 
     it("unlinks a card deleted on the server when the push of that run failed", async () => {

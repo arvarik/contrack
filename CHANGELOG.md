@@ -42,8 +42,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A CardDAV address book of more than about 15,000 cards syncs. Every sync of
   one failed.
 - A CardDAV card that cannot be read, or a contact that the server refuses,
-  shows as a sync error and is tried again on the next sync. The run passed
-  before, and the change could be lost.
+  shows as a sync error. The run passed before, and the change could be lost.
+  It is tried again on the next sync, a card too large to read once it
+  changes, and a refused contact once you edit it again.
 - A CardDAV card deleted on the server is unlinked even when the upload of
   that sync failed.
 - Removing a Google or CardDAV connector and adding it back links its

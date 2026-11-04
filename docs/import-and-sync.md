@@ -315,12 +315,16 @@ wins. A contact that existed in Contrack before you connected keeps its name
 and its details: the card only fills in what is empty. A contact that two
 cards share, such as a family's email address, is written to the card that
 made it. A card that Contrack cannot read, or a contact that the server
-refuses to save, shows as an error on the connector and in its run history,
-and Contrack tries it again on the next sync. Deleting a contact on your
-CardDAV server unlinks it in Contrack without moving the contact to the Trash
-(editing the contact in Contrack later uploads it again as a new card), and
-moving a contact to the Trash in Contrack never deletes the contact on your
-CardDAV server.
+refuses to save, shows as an error on the connector and in its run history.
+Contrack tries it again on the next sync, a card too large to read once it
+changes on the server, and a contact the server refused once you edit it
+again. Contrack keeps at most 300 characters of a card's name, 20,000 of
+another field, and 100 items of a list, and an edit in Contrack writes the
+shortened value back to the card. Deleting a contact on your CardDAV server
+unlinks it in Contrack without moving the contact to the Trash (editing the
+contact in Contrack later uploads it again as a new card), and moving a
+contact to the Trash in Contrack never deletes the contact on your CardDAV
+server.
 
 ### Sync options
 
@@ -391,7 +395,8 @@ when each started, how long it took, what it brought in, and any error.
 too, tick "Also delete the interactions it brought in, and the people it found
 who are not contacts". The contacts that a Google or CardDAV connector brought
 in stay either way. Add the connector back, and it links them again instead
-of adding them twice, and only fills them in.
+of adding them twice. It then only fills them in, permanently, as it does a
+contact you had before you connected: it never writes over them again.
 
 ### What connectors read and store
 

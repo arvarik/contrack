@@ -401,10 +401,13 @@ export async function ingestStream(
    * pull or push made it. Not a row from before the connector: a connector
    * removed and added back finds its old contacts the owner's. Not when the
    * contact took in another one by a merge, which moves the duplicate's
-   * source row to it, and not when another card that made it also feeds it.
-   * Then the contact is the owner's, and the source only fills it in. A card
-   * that only shares an address with it does not count, and neither does a
-   * card Contrack uploaded the contact to (origin 'push'): it is a copy.
+   * source row to it. Then the contact is the owner's, and the source only
+   * fills it in. Another link also decides it:
+   * - A card the source brought in (origin NULL) stops writing only when
+   *   another card that brought the contact in feeds it. A card that only
+   *   shares an address with it, or a copy Contrack uploaded, does not count.
+   * - A card Contrack uploaded (origin 'push') writes only while no other card
+   *   feeds the contact, so two uploaded copies never write over it.
    */
   function madeBySync(contactId: string, externalId: string): boolean {
     return Boolean(
@@ -419,11 +422,12 @@ export async function ingestStream(
                WHERE m.ownerId = ? AND m.primaryId = s.contactId AND m.undoneAt IS NULL)
              AND NOT EXISTS (
                SELECT 1 FROM connector_links l
-               JOIN contact_sources o
-                 ON o.contactId = l.localId AND o.externalId = l.externalId
-                   AND o.origin IS NOT 'push'
                WHERE l.ownerId = ? AND l.kind = 'contact' AND l.localId = s.contactId
-                 AND NOT (l.connectorId = ? AND l.externalId = ?))`,
+                 AND NOT (l.connectorId = ? AND l.externalId = ?)
+                 AND (s.origin IS 'push' OR EXISTS (
+                   SELECT 1 FROM contact_sources o
+                   WHERE o.contactId = l.localId AND o.externalId = l.externalId
+                     AND o.origin IS NOT 'push')))`,
         )
         .get(
           contactId,
@@ -446,7 +450,10 @@ export async function ingestStream(
    * stopped before it saved the link. Matching them keeps the card from
    * coming in a second time.
    */
-  function knownCardContact(externalId: string, uid: unknown): string | null {
+  function knownCardContact(
+    externalId: string,
+    uid: unknown,
+  ): { id: string; byUid: boolean } | null {
     const row = sqlite
       .prepare(
         `SELECT id FROM contacts
@@ -464,15 +471,38 @@ export async function ingestStream(
         externalId,
         typeof uid === "string" ? uid : null,
       ) as { id: string } | undefined;
-    return row?.id ?? null;
+    return row ? { id: survivor(row.id), byUid: row.id === uid } : null;
+  }
+
+  /** The contact a merge kept in place of `contactId`, or the contact. */
+  function survivor(contactId: string): string {
+    let id = contactId;
+    for (let depth = 0; depth < 10; depth++) {
+      const row = sqlite
+        .prepare(
+          `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
+        )
+        .get(id, scope.ownerId) as { canonicalId: string | null } | undefined;
+      if (!row?.canonicalId || row.canonicalId === id) break;
+      id = row.canonicalId;
+    }
+    return id;
   }
 
   /**
    * A card with no photo takes back the photo an earlier sync saved from a
    * card: a copy the sync makes is named `import-` or `remote-`, and a photo
-   * the owner chose has another name.
+   * the owner chose has another name. Never for a card Contrack uploaded: it
+   * is written without the photo, which may be one the owner imported.
    */
-  function dropSavedPhoto(contactId: string) {
+  function dropSavedPhoto(contactId: string, externalId: string) {
+    const uploaded = sqlite
+      .prepare(
+        `SELECT 1 FROM contact_sources
+         WHERE contactId = ? AND platform = ? AND externalId = ? AND origin = 'push'`,
+      )
+      .get(contactId, connector.kind, externalId);
+    if (uploaded) return;
     const row = sqlite
       .prepare(
         `SELECT name, pronouns, avatarUrl FROM contacts WHERE id = ? AND ownerId = ?`,
@@ -633,7 +663,7 @@ export async function ingestStream(
           contactId,
           withLocalTagsAndLinks(contactId, remote),
         );
-        if (noPhoto) dropSavedPhoto(contactId);
+        if (noPhoto) dropSavedPhoto(contactId, externalId);
         return;
       }
       const local = contactService.getContactById(scope, contactId);
@@ -1125,18 +1155,7 @@ export async function ingestStream(
       }
 
       if (existingLink && existingLink.localId) {
-        let targetLocalId = existingLink.localId;
-        for (let depth = 0; depth < 10; depth++) {
-          const canonRow = sqlite
-            .prepare(
-              `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
-            )
-            .get(targetLocalId, scope.ownerId) as
-            { canonicalId: string | null } | undefined;
-          if (!canonRow?.canonicalId || canonRow.canonicalId === targetLocalId)
-            break;
-          targetLocalId = canonRow.canonicalId;
-        }
+        const targetLocalId = survivor(existingLink.localId);
 
         const prevAvatarRow = cPayload.avatarUrl
           ? (sqlite
@@ -1195,14 +1214,20 @@ export async function ingestStream(
             event.externalId,
           );
       } else {
-        let matchedContactId = knownCardContact(event.externalId, cPayload.uid);
-        if (matchedContactId && matchedContactId === cPayload.uid) {
-          // The card the push made: its source row, which the run that
-          // stopped did not save, so later edits on the server apply.
+        const known = knownCardContact(event.externalId, cPayload.uid);
+        let matchedContactId = known?.id ?? null;
+        if (known?.byUid) {
+          // The card this connector's push made, when the run stopped before
+          // it saved the source row: saved now, so later edits on the server
+          // apply. A card an earlier connector uploaded keeps its old row,
+          // and a connector added back only fills its contact in.
           sqlite
             .prepare(
               `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn, origin)
-               VALUES (?, ?, ?, ?, ?, 'push')`,
+               SELECT ?, ?, ?, ?, ?, 'push'
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM contact_sources s JOIN contacts c ON c.id = s.contactId
+                 WHERE c.ownerId = ? AND s.platform = ? AND s.externalId = ?)`,
             )
             .run(
               crypto.randomUUID(),
@@ -1210,6 +1235,9 @@ export async function ingestStream(
               connector.kind,
               event.externalId,
               nowIso,
+              scope.ownerId,
+              connector.kind,
+              event.externalId,
             );
         }
         for (const em of matchedContactId ? [] : cEmails) {

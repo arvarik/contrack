@@ -280,6 +280,67 @@ describe("CardDAV against Radicale", () => {
     expect(ids(ownerId, "Name Only")).toHaveLength(1);
   });
 
+  it("only fills in a contact it uploaded before it was removed and added back", async () => {
+    const { scope } = labOwner();
+    const book = await radicaleBook(`${scope.ownerId}-dav`);
+    const kai = contactService.createContact(scope, {
+      name: "Kai Ito",
+      company: "OldCo",
+      emails: [{ email: "kai@ito.example" }],
+    })!;
+    const first = await connect(scope, book, { pushExistingContacts: true });
+    await runNow(scope, first.id);
+    expect((await book.cards()).size).toBe(1);
+    await deleteConnector(scope, first.id);
+    contactService.updateContact(scope, kai.id, {
+      name: "Kai Ito-Sato",
+      company: "NewCo",
+    });
+
+    const again = await connect(scope, book);
+    await runNow(scope, again.id);
+    const after = contactService.getContactById(scope, kai.id)!;
+    expect([after.name, after.company]).toEqual(["Kai Ito-Sato", "NewCo"]);
+    expect(
+      sqlite
+        .prepare(
+          "SELECT COUNT(*) AS n FROM contact_sources WHERE contactId = ?",
+        )
+        .get(kai.id),
+    ).toEqual({ n: 1 });
+  });
+
+  it("writes a card's edits to a contact it uploaded, but not its own missing photo, and not when two books have it", async () => {
+    const { ownerId, scope } = labOwner();
+    const one = await radicaleBook(`${ownerId}-1`);
+    const two = await radicaleBook(`${ownerId}-2`);
+    const pia = contactService.createContact(scope, {
+      name: "Pia Lund",
+      emails: [{ email: "pia@lund.example" }],
+    })!;
+    const photo = `/uploads/u/${ownerId}/avatars/import-0123456789abcdef.jpg`;
+    sqlite
+      .prepare("UPDATE contacts SET avatarUrl = ? WHERE id = ?")
+      .run(photo, pia.id);
+    const card = (...lines: string[]) =>
+      vcard(`UID:${pia.id}`, "EMAIL:pia@lund.example", ...lines);
+    const c1 = await connect(scope, one, { pushExistingContacts: true });
+    await runNow(scope, c1.id);
+
+    // Contrack's card has no PHOTO: the owner's photo stays.
+    await one.put(pia.id, card("FN:Pia Lund", "TITLE:Edited on phone"));
+    await runNow(scope, c1.id);
+    const edited = contactService.getContactById(scope, pia.id)!;
+    expect([edited.role, edited.avatarUrl]).toEqual(["Edited on phone", photo]);
+
+    // Uploaded to a second book too: neither copy writes over the contact.
+    const c2 = await connect(scope, two, { pushExistingContacts: true });
+    await runNow(scope, c2.id);
+    await one.put(pia.id, card("FN:Pia From Book One"));
+    await runNow(scope, c1.id);
+    expect(contactService.getContactById(scope, pia.id)!.name).toBe("Pia Lund");
+  });
+
   it("links a card an interrupted push uploaded instead of importing it twice", async () => {
     const { ownerId, scope } = labOwner();
     const book = await radicaleBook(`${ownerId}-dav`);
