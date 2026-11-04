@@ -17,6 +17,7 @@
  * Jordan, Taylor and Kim are not given a gender by coin toss.
  */
 
+import { trimChars } from "./helpers.ts";
 import { foldName, lookupGivenName } from "./nlp/givenNames.ts";
 
 /** The three pools avatarService keys off. */
@@ -207,7 +208,7 @@ function nameWords(fullName: string): string[] {
 
 /** The look a first name implies, trying the whole word, then its first half. */
 function lookFromGivenName(word: string): AvatarLook | null {
-  const bare = word.replace(/^['’.]+|['’.]+$/g, "");
+  const bare = trimChars(word, /['’.]/);
   if (bare.length < 2) return null;
 
   const candidates = [bare];

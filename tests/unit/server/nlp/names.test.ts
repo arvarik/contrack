@@ -15,6 +15,14 @@ describe("NLP Names & Nicknames", () => {
       expect(tokenizeName("Dr. Sarah Chen III")).toEqual(["sarah", "chen"]);
       expect(tokenizeName("Mr. John Doe")).toEqual(["john", "doe"]);
     });
+
+    it("trims a hostile run of dashes in linear time", () => {
+      // The old [.-]+$ regex took 47 seconds on this.
+      const dashes = "-".repeat(400_000);
+      expect(tokenizeName(`${dashes}a${dashes}b${dashes}`)).toEqual([
+        `a${dashes}b`,
+      ]);
+    });
   });
 
   describe("nameSimilarity", () => {
