@@ -1285,6 +1285,32 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       ]);
     });
 
+    it("sends Google's letter tile as the card's placeholder, not as its photo", async () => {
+      const tile = "https://lh3.googleusercontent.com/cm/ABC123=s100";
+      vi.spyOn(google, "people").mockReturnValue({
+        people: {
+          connections: {
+            list: vi.fn().mockResolvedValue({
+              data: {
+                connections: [
+                  {
+                    resourceName: "people/c1",
+                    names: [{ displayName: "Ana Lee" }],
+                    photos: [{ url: tile, default: true }],
+                  },
+                ],
+              },
+            }),
+          },
+        },
+      } as unknown as ReturnType<typeof google.people>);
+
+      const { events } = await run({ syncContacts: true });
+
+      expect(events[0]).toMatchObject({ defaultPhotoUrl: tile });
+      expect(events[0]).not.toHaveProperty("photoUrl", tile);
+    });
+
     it("drops rooms and attendees who declined, and treats a meeting the owner declined as cancelled", async () => {
       const hour = 3600_000;
       const at = (offsetMs: number) =>

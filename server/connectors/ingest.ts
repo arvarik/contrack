@@ -29,7 +29,7 @@ import { dispatchEvents, recordEvent } from "../events/index.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage, newContactId } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
-import { isDefaultAvatarFor } from "../utils/avatarUrl.ts";
+import { defaultAvatarUrl, isDefaultAvatarFor } from "../utils/avatarUrl.ts";
 import {
   isBase64DataUri,
   processBase64Avatar,
@@ -207,6 +207,11 @@ function createLimiter(limit: number) {
   };
 }
 
+/** The file a remote photo is saved as: the digest of its URL. */
+function photoFileName(remoteUrl: string): string {
+  return `remote-${urlDigest(remoteUrl)}.jpg`;
+}
+
 /**
  * Copy a connector's contact photo into the owner's avatars folder and return
  * the local URL. A browser that loads a googleusercontent.com URL tells Google
@@ -222,7 +227,7 @@ export async function saveContactPhoto(
   remoteUrl: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const filename = `remote-${urlDigest(remoteUrl)}.jpg`;
+  const filename = photoFileName(remoteUrl);
   const outPath = path.join(ownerUploadDir(scope.ownerId, "avatars"), filename);
   await ensureLocalImage(
     remoteUrl,
@@ -424,6 +429,29 @@ export async function ingestStream(
   }
 
   /**
+   * Puts the drawn avatar back on a contact whose photo is the saved copy of
+   * this card's placeholder. Before the adapter could tell Google's letter
+   * tile from a photo, a sync saved the tile like one. The copy's file name is
+   * the digest of the URL it came from, so a match proves the photo is that
+   * tile. The owner's own photos have other names and never match.
+   */
+  function restoreDrawnAvatar(contactId: string, placeholderUrl: string) {
+    const row = sqlite
+      .prepare(
+        `SELECT name, pronouns, avatarUrl FROM contacts WHERE id = ? AND ownerId = ?`,
+      )
+      .get(contactId, scope.ownerId) as
+      | { name: string; pronouns: string | null; avatarUrl: string | null }
+      | undefined;
+    const copy = `/uploads/u/${scope.ownerId}/avatars/${photoFileName(placeholderUrl)}`;
+    if (row && row.avatarUrl === copy) {
+      contactService.updateContact(scope, contactId, {
+        avatarUrl: defaultAvatarUrl(row.name, row.pronouns),
+      });
+    }
+  }
+
+  /**
    * A synced person the connector already links. A contact the sync made is
    * the source's to write, emails and phones included. One the sync only
    * linked, because it shared an address, is the owner's: the sync fills what
@@ -433,8 +461,10 @@ export async function ingestStream(
     contactId: string,
     remote: ContactPayload,
     externalId: string,
+    placeholderUrl?: string,
   ): void {
     try {
+      if (placeholderUrl) restoreDrawnAvatar(contactId, placeholderUrl);
       if (madeBySync(contactId, externalId)) {
         contactService.updateContact(scope, contactId, remote);
         return;
@@ -901,7 +931,12 @@ export async function ingestStream(
           : undefined;
         const prevAvatarUrl = prevAvatarRow?.avatarUrl ?? null;
 
-        syncLinkedContact(targetLocalId, cPayload, event.externalId);
+        syncLinkedContact(
+          targetLocalId,
+          cPayload,
+          event.externalId,
+          event.defaultPhotoUrl,
+        );
 
         if (
           prevAvatarUrl &&
@@ -958,7 +993,12 @@ export async function ingestStream(
         // A first match fills in at once: a source sends an unchanged person
         // only once, so a fill left for a later sync never came.
         if (contactId) {
-          syncLinkedContact(contactId, cPayload, event.externalId);
+          syncLinkedContact(
+            contactId,
+            cPayload,
+            event.externalId,
+            event.defaultPhotoUrl,
+          );
         } else {
           cPayload.name ||= cEmails[0] || cPhones[0] || "Unknown";
           cPayload.sources = [

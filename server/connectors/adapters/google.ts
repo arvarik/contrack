@@ -80,6 +80,13 @@ export interface GmailBackfill {
 const PERSON_FIELDS =
   "metadata,names,emailAddresses,phoneNumbers,organizations,photos";
 
+/** The first entry Google marks primary, else the first entry. */
+function primary<T extends { metadata?: { primary?: boolean } }>(
+  list: T[] | undefined,
+): T | undefined {
+  return list?.find((item) => item.metadata?.primary) ?? list?.[0];
+}
+
 export interface GoogleCursor {
   contactsSyncToken?: string;
   /** The `personFields` that `contactsSyncToken` was made with. */
@@ -426,9 +433,11 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const org =
               person.organizations?.find((o) => o.metadata?.primary) ||
               person.organizations?.[0];
-            const photoUrl =
-              person.photos?.find((p) => p.metadata?.primary)?.url ||
-              person.photos?.[0]?.url;
+            const photo = primary(person.photos);
+            // Google's letter tile for a card with no photo is marked
+            // `default`. The URL test is a fallback for a tile without it.
+            const placeholder =
+              photo?.default || photo?.url?.includes("/default-user");
             // A card with an address and no name is still a person: ingest
             // names it by the address, or keeps the linked contact's name.
             if (!primaryName && emails.length === 0 && phones.length === 0) {
@@ -445,10 +454,9 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                 company: org?.name || undefined,
                 role: org?.title || undefined,
               },
-              photoUrl:
-                photoUrl && !photoUrl.includes("/default-user")
-                  ? photoUrl
-                  : undefined,
+              photoUrl: photo?.url && !placeholder ? photo.url : undefined,
+              defaultPhotoUrl:
+                photo?.url && placeholder ? photo.url : undefined,
             };
 
             totalFetched++;

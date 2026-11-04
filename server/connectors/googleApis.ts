@@ -66,7 +66,8 @@ interface Person {
   emailAddresses?: (Primary & { value?: string; type?: string })[];
   phoneNumbers?: (Primary & { value?: string; type?: string })[];
   organizations?: (Primary & { name?: string; title?: string })[];
-  photos?: (Primary & { url?: string })[];
+  /** `default` marks Google's letter tile for a card with no photo. */
+  photos?: (Primary & { url?: string; default?: boolean })[];
 }
 
 export interface PeopleConnectionsQuery {

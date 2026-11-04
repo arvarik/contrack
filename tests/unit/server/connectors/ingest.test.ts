@@ -21,6 +21,7 @@ import {
 } from "../../../../server/connectors/ingest.ts";
 import { mergeContacts } from "../../../../server/services/dedupe/merging.ts";
 import { defaultAvatarUrl } from "../../../../server/utils/avatarUrl.ts";
+import { urlDigest } from "../../../../server/utils/remoteImage.ts";
 import type { HydratedContact } from "../../../../server/repositories/types.ts";
 import { listCorrespondents } from "../../../../server/connectors/service.ts";
 import type { SyncEvent } from "../../../../server/connectors/types.ts";
@@ -740,6 +741,39 @@ describe("connectors ingestStream", () => {
     expect(
       column("SELECT email FROM contact_emails WHERE contactId = ?", bobId),
     ).toEqual(["robert@builder.example"]);
+  });
+
+  it("puts the drawn avatar back over a saved copy of Google's letter tile, and keeps any other photo", async () => {
+    const tile = "https://lh3.googleusercontent.com/cm/ABC123=s100";
+    const ana = card("people/ana", "Ana Lee", "ana@example.com");
+    const bo = card("people/bo", "Bo Ray", "bo@example.com");
+    await ingest([ana, bo]);
+    const idOf = (externalId: string) =>
+      column(
+        "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = ?",
+        connectorId,
+        externalId,
+      )[0];
+    const avatarOf = (externalId: string) =>
+      column("SELECT avatarUrl FROM contacts WHERE id = ?", idOf(externalId));
+    const setAvatar = sqlite.prepare(
+      "UPDATE contacts SET avatarUrl = ? WHERE id = ?",
+    );
+    // An earlier sync saved the tile, under the digest of its URL.
+    setAvatar.run(
+      `/uploads/u/${ownerId}/avatars/remote-${urlDigest(tile)}.jpg`,
+      idOf("people/ana"),
+    );
+    const uploaded = `/uploads/u/${ownerId}/avatars/avatar-1-2.jpg`;
+    setAvatar.run(uploaded, idOf("people/bo"));
+
+    await ingest([
+      { ...ana, defaultPhotoUrl: tile },
+      { ...bo, defaultPhotoUrl: tile },
+    ] as SyncEvent[]);
+
+    expect(avatarOf("people/ana")).toEqual([defaultAvatarUrl("Ana Lee")]);
+    expect(avatarOf("people/bo")).toEqual([uploaded]);
   });
 
   it("trashes a contact the sync created when Google deletes it, and only unlinks one it matched", async () => {
