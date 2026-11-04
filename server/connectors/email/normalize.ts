@@ -150,9 +150,19 @@ const ROLE_WORDS = new Set([
 /** Mailboxes of devices and relays, never of a person: Send to Kindle. */
 const DEVICE_DOMAINS = new Set(["kindle.com", "free.kindle.com"]);
 
-/** Hosts that send bulk mail for a company: email.example.com and the like. */
+/**
+ * Hosts that send bulk mail for a company: email.example.com and the like. One
+ * with only a top-level domain after the label is a mail provider (mail.ru,
+ * email.cz), and "mail." alone is often a school's or a company's own mail
+ * (mail.utoronto.ca), so neither counts.
+ * ponytail: no public suffix list, so a provider under a two-part suffix, such
+ * as email.com.br, still counts. Add one if that turns up.
+ */
 const BULK_HOST =
-  /^(e|em|email|emails|mail|mailer|mailing|news|newsletters?|notifications?|notify|marketing|bounces?|reply|updates?)\./;
+  /^(e|em|email|emails|mailer|mailing|news|newsletters?|notifications?|notify|marketing|bounces?|reply|updates?)\.[^.]+\.[^.]/;
+
+/** A university's domain, whose student mail looks like a bulk host. */
+const ACADEMIC_DOMAIN = /\.(edu|ac)(\.[a-z]{2})?$/;
 
 /** Apple's Hide My Email domains. */
 const APPLE_RELAY_DOMAIN = /^(icloud\.com|privaterelay\.appleid\.com)$/;
@@ -188,8 +198,59 @@ export function isAutomatedSender(
     local.split(/[._-]/).some((word) => ROLE_WORDS.has(word)) ||
     ROLE_WORDS.has(local) ||
     DEVICE_DOMAINS.has(domain) ||
-    BULK_HOST.test(domain)
+    (BULK_HOST.test(domain) && !ACADEMIC_DOMAIN.test(domain))
   );
+}
+
+/**
+ * Whether a calendar organizer is a person: not a shared, room, holiday or
+ * imported calendar (an address at calendar.google.com, such as
+ * c_abc@group.calendar.google.com or Google's
+ * unknownorganizer@calendar.google.com), and not a robot sender.
+ */
+export function organizerIsPerson(
+  email: string | undefined,
+  name?: string,
+): boolean {
+  return (
+    !email ||
+    !(/calendar\.google\.com$/i.test(email) || isAutomatedSender(email, name))
+  );
+}
+
+/** The headers that mark bulk mail, read with each message's metadata. */
+export const BULK_HEADERS = [
+  "List-Unsubscribe",
+  "List-Id",
+  "Precedence",
+  "Auto-Submitted",
+];
+
+/** Gmail's tabs for mail no person wrote to the owner. */
+const BULK_LABELS = new Set([
+  "CATEGORY_PROMOTIONS",
+  "CATEGORY_UPDATES",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_FORUMS",
+]);
+
+/**
+ * Whether a message is bulk mail: Gmail sorted it into Promotions, Updates,
+ * Social or Forums, or it carries a list header, a bulk Precedence or an
+ * Auto-Submitted other than "no" (RFC 2369, 2919 and 3834). `header` gives a
+ * header's value by name.
+ */
+export function isBulkMail(
+  labelIds: string[] | undefined,
+  header: (name: string) => string | undefined,
+): boolean {
+  if (labelIds?.some((l) => BULK_LABELS.has(l))) return true;
+  if (header("List-Unsubscribe") || header("List-Id")) return true;
+  if (/^(bulk|list|junk)$/i.test(header("Precedence")?.trim() ?? "")) {
+    return true;
+  }
+  const auto = header("Auto-Submitted")?.trim().toLowerCase();
+  return Boolean(auto && auto !== "no");
 }
 
 /**
@@ -276,9 +337,11 @@ export function determineDirection(
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * When a mail was sent: its Date header, unless that is more than a day from
+ * When a mail was sent: its Date header, unless that is more than a day after
  * the time the mailbox received it, or missing or unreadable. The header is
  * what the sender wrote, and spam dated 2099 would top a timeline for years.
+ * A header far before it is kept: a mail moved from another mailbox arrived
+ * on the day it was moved.
  *
  * @param header - The Date header, as a Date or a string.
  * @param received - The mailbox's own time: IMAP INTERNALDATE as a Date, or
@@ -300,7 +363,7 @@ export function mailDate(
   const sentOk = sent && !isNaN(sent.getTime());
   const gotOk = got && !isNaN(got.getTime());
   if (!sentOk) return gotOk ? got : undefined;
-  if (gotOk && Math.abs(sent.getTime() - got.getTime()) > DAY_MS) return got;
+  if (gotOk && sent.getTime() - got.getTime() > DAY_MS) return got;
   return sent;
 }
 

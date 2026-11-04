@@ -231,6 +231,7 @@ describe("Frontend Connectors Components", () => {
             maxAttendees: 25,
             includeDescription: false,
             ghostThreshold: 3,
+            aliases: [],
           },
           intervalMinutes: 30,
         });
@@ -258,6 +259,7 @@ describe("Frontend Connectors Components", () => {
           maxAttendees: 50,
           includeDescription: true,
           ghostThreshold: 5,
+          aliases: ["me@work.example.com"],
         },
       });
 
@@ -287,6 +289,7 @@ describe("Frontend Connectors Components", () => {
             maxAttendees: 50,
             includeDescription: true,
             ghostThreshold: 5,
+            aliases: ["me@work.example.com"],
           },
           intervalMinutes: 60,
         });
@@ -391,6 +394,12 @@ describe("Frontend Connectors Components", () => {
         "Suggest a new person after",
       );
       fireEvent.change(ghostThresholdInput, { target: { value: "7" } });
+      fireEvent.change(
+        screen.getByLabelText("Also treat these addresses as mine"),
+        {
+          target: { value: "Me@Work.example; me@home.example other@x.example" },
+        },
+      );
 
       // Toggle switch
       const switchBtn = screen.getByRole("switch", {
@@ -411,6 +420,7 @@ describe("Frontend Connectors Components", () => {
             maxAttendees: 50,
             includeDescription: true,
             ghostThreshold: 7,
+            aliases: ["me@work.example", "me@home.example", "other@x.example"],
           },
           intervalMinutes: 60,
         });

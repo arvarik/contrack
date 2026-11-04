@@ -15,7 +15,12 @@ import { appendMail, DAY_MS, IMAP_PORT, imap, labOwner } from "./helpers.ts";
 
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY_MS);
 
-function mailConnector(scope: Scope, user: string, folders?: string[]) {
+function mailConnector(
+  scope: Scope,
+  user: string,
+  folders?: string[],
+  ghostThreshold = 3,
+) {
   return createConnector(scope, {
     kind: "imap",
     name: "Lab mail",
@@ -25,6 +30,7 @@ function mailConnector(scope: Scope, user: string, folders?: string[]) {
       secure: false,
       username: user,
       rollup: false,
+      ghostThreshold,
       ...(folders ? { folders } : {}),
     },
     secret: { password: "lab" },
@@ -164,5 +170,66 @@ describe("IMAP against GreenMail", () => {
     const run = await runNow(scope, connector.id);
     expect(run.status).toBe("ok");
     expect(interactionsOf(ana.id)).toBe(2);
+  });
+
+  it("counts a stranger once per mail, and never the mailbox or bulk mail", async () => {
+    const { ownerId, scope } = labOwner();
+    // A mailbox that is not the owner's login address.
+    const box = `box-${ownerId}@lab.test`;
+    const dan = {
+      from: "Dan Park <dan@park.example>",
+      to: box,
+      subject: "Hello",
+      date: daysAgo(3),
+      messageId: `<dan-${box}>`,
+    };
+    await appendMail(box, "INBOX", [
+      dan,
+      ...[4, 5, 6].map((n) => ({
+        from: "Shop <deals@shop.example>",
+        to: box,
+        subject: `Sale ${n}`,
+        date: daysAgo(n),
+        headers: { "List-Unsubscribe": "<mailto:unsubscribe@shop.example>" },
+      })),
+    ]);
+    await appendMail(box, "Archive", []);
+
+    // No ghosts, so each count shows.
+    const connector = await mailConnector(scope, box, ["INBOX", "Archive"], 10);
+    await runNow(scope, connector.id);
+    // Dan's mail is archived: the next run reads it again from Archive.
+    await appendMail(box, "Archive", [dan]);
+    await runNow(scope, connector.id);
+
+    expect(
+      sqlite
+        .prepare(
+          `SELECT externalId, seenCount FROM connector_links
+            WHERE connectorId = ? AND kind = 'correspondent'`,
+        )
+        .all(connector.id),
+    ).toEqual([{ externalId: "dan@park.example", seenCount: 1 }]);
+  });
+
+  it("takes no folder named like Sent for the Sent folder, and reports a folder it cannot open", async () => {
+    const { scope, email: me } = labOwner();
+    const ana = contactService.createContact(scope, {
+      name: "Ana Lee",
+      emails: [{ email: "ana@lee.example", label: "work" }],
+    })!;
+    // No Sent folder: "Presentations" holds "sent" in its name.
+    await appendMail(me, "Presentations", [
+      { from: me, to: "ana@lee.example", subject: "Slides", date: daysAgo(1) },
+    ]);
+
+    const auto = await mailConnector(scope, me);
+    expect((await runNow(scope, auto.id)).status).toBe("ok");
+    expect(interactionsOf(ana.id)).toBe(0);
+
+    const missing = await mailConnector(scope, me, ["INBOX", "Missing"]);
+    const run = await runNow(scope, missing.id);
+    expect(run.status).toBe("ok");
+    expect(run.stats.errors).toBe(1);
   });
 });

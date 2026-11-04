@@ -22,9 +22,11 @@ import {
 import { z } from "zod";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
 import {
-  isAutomatedSender,
+  BULK_HEADERS,
+  isBulkMail,
   mailDate,
   normalizeEmail,
+  organizerIsPerson,
 } from "../email/normalize.ts";
 import {
   summarizeEmail,
@@ -187,18 +189,6 @@ const UPCOMING_DAYS = 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * An organizer who is a person: not a shared, room, holiday or imported
- * calendar (an address at calendar.google.com, such as Google's
- * unknownorganizer@calendar.google.com), and not a robot sender.
- */
-function organizerIsPerson(email: string | undefined, name?: string): boolean {
-  return (
-    !email ||
-    !(/calendar\.google\.com$/i.test(email) || isAutomatedSender(email, name))
-  );
-}
-
-/**
  * Contrack's label for a Google email type. Google's "home" is Contrack's
  * "personal". The repository reads `label`: sent as `type`, every synced
  * address was "personal".
@@ -215,40 +205,6 @@ function phoneLabel(type: string | undefined): string | undefined {
   if (!t) return undefined;
   if (t === "mobile" || t === "home") return t;
   return t.startsWith("work") ? "work" : "other";
-}
-
-/** The headers that mark bulk mail, read with each message's metadata. */
-const BULK_HEADERS = [
-  "List-Unsubscribe",
-  "List-Id",
-  "Precedence",
-  "Auto-Submitted",
-];
-
-/** Gmail's tabs for mail no person wrote to the owner. */
-const BULK_LABELS = new Set([
-  "CATEGORY_PROMOTIONS",
-  "CATEGORY_UPDATES",
-  "CATEGORY_SOCIAL",
-  "CATEGORY_FORUMS",
-]);
-
-/**
- * Whether a message is bulk mail: Gmail sorted it into Promotions, Updates,
- * Social or Forums, or it carries a list header, a bulk Precedence or an
- * Auto-Submitted other than "no" (RFC 2369, 2919 and 3834).
- */
-export function isBulkMail(
-  labelIds: string[] | undefined,
-  header: (name: string) => string | undefined,
-): boolean {
-  if (labelIds?.some((l) => BULK_LABELS.has(l))) return true;
-  if (header("List-Unsubscribe") || header("List-Id")) return true;
-  if (/^(bulk|list|junk)$/i.test(header("Precedence")?.trim() ?? "")) {
-    return true;
-  }
-  const auto = header("Auto-Submitted")?.trim().toLowerCase();
-  return Boolean(auto && auto !== "no");
 }
 
 /**

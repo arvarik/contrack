@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalEmailAddress,
   isAutomatedSender,
+  isBulkMail,
+  mailDate,
   normalizeEmail,
   normalizeEmailAddress,
   parseAddressList,
@@ -187,7 +189,42 @@ describe("isAutomatedSender", () => {
     ["john.smith@icloud.com", "John Smith", false],
     ["information.officer@gov.org", null, false],
     ["helena@acme.io", "Helena", false],
+    ["deals@e.shop.com", null, true],
+    ["team@news.example.co.uk", null, true],
+    // Mail providers and universities, whose names look like bulk hosts.
+    ["ana@mail.com", null, false],
+    ["ivan@mail.ru", null, false],
+    ["jan@email.cz", null, false],
+    ["lena@mail.de", null, false],
+    ["sam@mail.utoronto.ca", null, false],
+    ["kim@email.arizona.edu", null, false],
+    ["tan@e.ntu.edu.sg", null, false],
   ])("%s is automated: %s", (email, name, automated) => {
     expect(isAutomatedSender(email, name)).toBe(automated);
+  });
+});
+
+describe("isBulkMail", () => {
+  it.each([
+    [["CATEGORY_PROMOTIONS", "INBOX"], {}, true],
+    [["CATEGORY_UPDATES"], {}, true],
+    [["INBOX"], { "List-Unsubscribe": "<mailto:u@x.com>" }, true],
+    [["INBOX"], { Precedence: "bulk" }, true],
+    [["INBOX"], { "Auto-Submitted": "auto-generated" }, true],
+    [["INBOX"], { "Auto-Submitted": "no" }, false],
+    [["INBOX", "CATEGORY_PERSONAL"], {}, false],
+  ])(
+    "isBulkMail(%j, %j) is %s",
+    (labels, headers: Record<string, string>, bulk) => {
+      expect(isBulkMail(labels, (name) => headers[name])).toBe(bulk);
+    },
+  );
+});
+
+describe("mailDate", () => {
+  it("keeps a Date header from before the mail arrived, as in migrated mail", () => {
+    const received = new Date("2026-03-01T10:00:00Z");
+    const sent = new Date("2020-03-01T10:00:00Z");
+    expect(mailDate(sent, received)).toEqual(sent);
   });
 });
