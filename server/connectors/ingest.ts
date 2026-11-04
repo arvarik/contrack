@@ -430,6 +430,46 @@ export async function ingestStream(
   }
 
   /**
+   * Google's labels and links added to the ones a contact has. Google is
+   * pull-only, so the tags the owner gives a contact and the links research
+   * finds never reach the card, and a change to the card must not drop them.
+   * CardDAV can push them to the card, and its card still replaces them.
+   */
+  function withLocalTagsAndLinks(
+    contactId: string,
+    remote: ContactPayload,
+  ): ContactPayload {
+    if (connector.kind !== "google") return remote;
+    const out = { ...remote };
+    if (remote.tags) {
+      const tags = sqlite
+        .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+        .pluck()
+        .all(contactId) as string[];
+      out.tags = [...tags, ...remote.tags];
+    }
+    if (remote.socialLinks) {
+      const links = sqlite
+        .prepare(
+          "SELECT platform, url, handle FROM contact_social_links WHERE contactId = ?",
+        )
+        .all(contactId) as Array<{
+        platform: string;
+        url: string;
+        handle: string | null;
+      }>;
+      const known = new Set(links.map((l) => l.url.toLowerCase()));
+      out.socialLinks = [
+        ...links.map((l) => ({ ...l, handle: l.handle ?? undefined })),
+        ...remote.socialLinks.filter(
+          (l) => !known.has((typeof l === "string" ? l : l.url).toLowerCase()),
+        ),
+      ];
+    }
+    return out;
+  }
+
+  /**
    * Puts the drawn avatar back on a contact whose photo is the saved copy of
    * this card's placeholder. Before the adapter could tell Google's letter
    * tile from a photo, a sync saved the tile like one. The copy's file name is
@@ -469,13 +509,17 @@ export async function ingestStream(
     try {
       if (placeholderUrl) restoreDrawnAvatar(contactId, placeholderUrl);
       if (madeBySync(contactId, externalId)) {
-        contactService.updateContact(scope, contactId, remote);
+        contactService.updateContact(
+          scope,
+          contactId,
+          withLocalTagsAndLinks(contactId, remote),
+        );
         return;
       }
       const local = contactService.getContactById(scope, contactId);
       if (local?.isGhost) {
         contactService.updateContact(scope, contactId, {
-          ...remote,
+          ...withLocalTagsAndLinks(contactId, remote),
           isGhost: false,
         });
         // The source row that madeBySync reads, so later edits to the card

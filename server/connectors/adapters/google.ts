@@ -78,13 +78,30 @@ export interface GmailBackfill {
  * them, and a token made with other fields is dropped for one full pull.
  */
 const PERSON_FIELDS =
-  "metadata,names,emailAddresses,phoneNumbers,organizations,photos";
+  "metadata,names,emailAddresses,phoneNumbers,organizations,photos,birthdays,addresses,biographies,urls,memberships";
 
 /** The first entry Google marks primary, else the first entry. */
 function primary<T extends { metadata?: { primary?: boolean } }>(
   list: T[] | undefined,
 ): T | undefined {
   return list?.find((item) => item.metadata?.primary) ?? list?.[0];
+}
+
+/**
+ * A People birthday as Contrack stores one: "1990-05-14", or "--05-14" when
+ * the card has no year. Google's free text when the date has no day.
+ */
+function birthdayText(birthday?: {
+  date?: { year?: number; month?: number; day?: number };
+  text?: string;
+}): string | undefined {
+  const date = birthday?.date;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (date?.month && date.day) {
+    const year = date.year ? String(date.year).padStart(4, "0") : "-";
+    return `${year}-${pad(date.month)}-${pad(date.day)}`;
+  }
+  return birthday?.text?.trim() || undefined;
 }
 
 export interface GoogleCursor {
@@ -360,6 +377,32 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       const people = google.people(auth);
       let pageToken: string | undefined;
       let nextSyncToken: string | undefined;
+      let labels: Map<string, string> | undefined;
+      /**
+       * The owner's labels by resource name, read once a card has one. System
+       * groups such as myContacts and starred are not labels.
+       */
+      const labelNames = async () => {
+        if (!labels) {
+          // ponytail: one page of 1,000 labels. Follow nextPageToken if an
+          // owner ever has more.
+          const res = await people.contactGroups.list(
+            { pageSize: 1000, groupFields: "name,groupType" },
+            callOptions(signal),
+          );
+          labels = new Map();
+          for (const group of res.data.contactGroups ?? []) {
+            if (
+              group.groupType === "USER_CONTACT_GROUP" &&
+              group.resourceName &&
+              group.name
+            ) {
+              labels.set(group.resourceName, group.name);
+            }
+          }
+        }
+        return labels;
+      };
 
       try {
         do {
@@ -444,6 +487,27 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               continue;
             }
 
+            const addresses = (person.addresses ?? [])
+              .map((a) => ({
+                address: (a.formattedValue ?? "")
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .join(", "),
+                label: a.type || "home",
+                isPrimary: a.metadata?.primary ?? false,
+              }))
+              .filter((a) => a.address);
+            const urls = (person.urls ?? []).flatMap((u) => {
+              const url = u.value?.trim();
+              return url ? [{ url, type: u.type }] : [];
+            });
+            const groups = (person.memberships ?? []).flatMap(
+              (m) => m.contactGroupMembership?.contactGroupResourceName ?? [],
+            );
+            const names = groups.length ? await labelNames() : undefined;
+            const tags = groups.flatMap((g) => names?.get(g) ?? []);
+
             yield {
               kind: "contact",
               externalId: person.resourceName,
@@ -453,6 +517,18 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                 phones,
                 company: org?.name || undefined,
                 role: org?.title || undefined,
+                birthday: birthdayText(primary(person.birthdays)),
+                about: primary(person.biographies)?.value?.trim() || undefined,
+                // The first link labeled as a home page or with no label.
+                website: urls.find((u) => !u.type || u.type === "homePage")
+                  ?.url,
+                // Left out when the card has none, so a card without them
+                // does not clear the contact's.
+                ...(addresses.length ? { addresses } : {}),
+                ...(urls.length
+                  ? { socialLinks: urls.map(({ url }) => ({ url })) }
+                  : {}),
+                ...(tags.length ? { tags } : {}),
               },
               photoUrl: photo?.url && !placeholder ? photo.url : undefined,
               defaultPhotoUrl:

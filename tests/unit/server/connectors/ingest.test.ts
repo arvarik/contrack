@@ -743,6 +743,48 @@ describe("connectors ingestStream", () => {
     ).toEqual(["robert@builder.example"]);
   });
 
+  it("adds Google's labels and links to a contact the sync made, and keeps the owner's", async () => {
+    await ingest([card("people/bob", "Bob Builder", "bob@builder.example")]);
+    const [bobId] = column(
+      "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = 'people/bob'",
+      connectorId,
+    );
+    sqlite
+      .prepare(
+        "INSERT INTO contact_tags (id, contactId, tag) VALUES (?, ?, 'VIP')",
+      )
+      .run(crypto.randomUUID(), bobId);
+    sqlite
+      .prepare(
+        `INSERT INTO contact_social_links (id, contactId, platform, url)
+         VALUES (?, ?, 'github', 'https://github.com/bob')`,
+      )
+      .run(crypto.randomUUID(), bobId);
+
+    await ingest([
+      card("people/bob", "Bob Builder", "bob@builder.example", {
+        tags: ["Friends"],
+        socialLinks: [
+          { url: "https://github.com/bob" },
+          { url: "https://bob.example" },
+        ],
+      }),
+    ]);
+
+    expect(
+      column(
+        "SELECT tag FROM contact_tags WHERE contactId = ? ORDER BY tag",
+        bobId,
+      ),
+    ).toEqual(["Friends", "VIP"]);
+    expect(
+      column(
+        "SELECT url FROM contact_social_links WHERE contactId = ? ORDER BY url",
+        bobId,
+      ),
+    ).toEqual(["https://bob.example", "https://github.com/bob"]);
+  });
+
   it("makes a suggested person a contact when a Google card names them, so later edits apply", async () => {
     const stranger = { email: "sam@stranger.example", name: "sam" };
     await ingest([mail("m-1", [stranger]), mail("m-2", [stranger])], {
