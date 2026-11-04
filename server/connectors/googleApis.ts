@@ -95,17 +95,18 @@ interface GmailMessage {
 interface CalendarPerson {
   email?: string;
   displayName?: string;
+  self?: boolean;
 }
 
-interface CalendarEvent {
+export interface CalendarEvent {
   id?: string;
   status?: string;
+  eventType?: string;
   summary?: string;
   iCalUID?: string;
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   attendees?: (CalendarPerson & {
-    self?: boolean;
     resource?: boolean;
     responseStatus?: string;
   })[];
@@ -119,6 +120,7 @@ export interface CalendarEventsQuery {
   pageToken?: string;
   syncToken?: string;
   timeMin?: string;
+  timeMax?: string;
 }
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users";

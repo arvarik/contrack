@@ -4,8 +4,9 @@
  *   2. Email through the Gmail API (messages.list / history.list, metadata
  *      headers by default, full bodies only for matched contacts when
  *      summaries are on)
- *   3. Events through the Calendar API (events.list with syncToken: past ones
- *      as meetings, future ones as upcoming_events)
+ *   3. Events through the Calendar API (events.list with syncToken for past
+ *      meetings, and a window listed in full for upcoming_events and the
+ *      meetings that ended since the last run)
  * invalid_grant and 401s become ConnectorAuthError, which sets needs_reauth.
  *
  * @module server/connectors/adapters/google
@@ -13,13 +14,18 @@
 
 import {
   google,
+  type CalendarEvent,
   type CalendarEventsQuery,
   type GmailMessagePart,
   type PeopleConnectionsQuery,
 } from "../googleApis.ts";
 import { z } from "zod";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
-import { mailDate, normalizeEmail } from "../email/normalize.ts";
+import {
+  isAutomatedSender,
+  mailDate,
+  normalizeEmail,
+} from "../email/normalize.ts";
 import {
   summarizeEmail,
   summariesAllowed,
@@ -95,6 +101,8 @@ export interface GoogleCursor {
   /** The `personFields` that `contactsSyncToken` was made with. */
   contactsFields?: string;
   calendarSyncToken?: string;
+  /** When the calendar window was last listed in full. */
+  calendarListedAt?: string;
   gmailHistoryId?: string;
   gmailBackfill?: GmailBackfill;
   lastSyncAt?: string;
@@ -147,6 +155,22 @@ export function syncTokenExpired(err: unknown): boolean {
   const said = `${e?.message ?? ""} ${JSON.stringify(e?.response?.data ?? "")}`;
   return (
     status === 400 && /EXPIRED_SYNC_TOKEN|sync token is expired/i.test(said)
+  );
+}
+
+/** How far ahead the calendar keeps upcoming events. Pulse shows a week. */
+const UPCOMING_DAYS = 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * An organizer who is a person: not a shared, room, holiday or imported
+ * calendar (an address at calendar.google.com, such as Google's
+ * unknownorganizer@calendar.google.com), and not a robot sender.
+ */
+function organizerIsPerson(email: string | undefined, name?: string): boolean {
+  return (
+    !email ||
+    !(/calendar\.google\.com$/i.test(email) || isAutomatedSender(email, name))
   );
 }
 
@@ -344,12 +368,18 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         ? (ctx.cursor as GoogleCursor)
         : {};
 
+    // A stage that is off forgets its place, so turning it on again is a
+    // first sync from the lookback date.
     let contactsSyncToken =
-      cursor.contactsFields === PERSON_FIELDS
+      config.syncContacts !== false && cursor.contactsFields === PERSON_FIELDS
         ? cursor.contactsSyncToken
         : undefined;
-    let calendarSyncToken = cursor.calendarSyncToken;
-    let gmailHistoryId = cursor.gmailHistoryId;
+    const calendarOn = config.syncCalendar !== false;
+    let calendarSyncToken = calendarOn ? cursor.calendarSyncToken : undefined;
+    let calendarListedAt = calendarOn ? cursor.calendarListedAt : undefined;
+    let gmailHistoryId =
+      config.syncEmail !== false ? cursor.gmailHistoryId : undefined;
+    const firstSince = ctx.firstSince ?? ctx.since;
 
     const selfEmails = [
       secret.email || "",
@@ -498,7 +528,8 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     }
 
     // 2. Email (Gmail API)
-    let gmailBackfill = cursor.gmailBackfill;
+    let gmailBackfill =
+      config.syncEmail !== false ? cursor.gmailBackfill : undefined;
     if (config.syncEmail !== false) {
       const gmail = google.gmail(auth);
       const maxMessages = config.maxMessagesPerRun ?? 5000;
@@ -607,7 +638,11 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           // before the oldest it fetched, until the window is done. Jumping
           // to the history id at once lost the older mail for good.
           const start: GmailBackfill = gmailBackfill ?? {
-            since: Math.floor(new Date(ctx.since).getTime() / 1000),
+            since: Math.floor(
+              new Date(
+                cursor.gmailHistoryId ? ctx.since : firstSince,
+              ).getTime() / 1000,
+            ),
             historyId: await profileHistoryId(),
           };
           /** One page, by `q` until Google refuses it, then without. */
@@ -838,13 +873,126 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       }
     }
 
-    // 3. Calendar (Google Calendar API)
-    if (config.syncCalendar !== false) {
+    // 3. Calendar (Google Calendar API), in two listings. A sync token returns
+    // only the events that changed, so an upcoming event that ended unchanged
+    // never came back and was never logged, and Google refuses timeMin and
+    // timeMax with a token.
+    //   a. The token: the changes since the last run, or a full pull that
+    //      makes a token. It logs the meetings that ended by `from`, such as
+    //      one added after it took place.
+    //   b. The window: the events that end after `from` and start in the next
+    //      UPCOMING_DAYS, listed in full on every run. It logs the meetings
+    //      that ended after `from`, and yields the others as upcoming events,
+    //      which replace the connector's rows (`upcoming_listed`). So an event
+    //      shows when it enters the window and is logged when it ends, and a
+    //      cancelled event, a whole cancelled series or a 410 leaves no row.
+    // `from` is when the last window was listed, so each meeting is logged
+    // once, by one of the two.
+    if (calendarOn) {
       const calendar = google.calendar(auth);
+      const now = new Date();
+      const from = new Date(
+        calendarListedAt ?? (calendarSyncToken ? ctx.since : firstSince),
+      );
+      const selfSet = new Set(selfEmails.map((e) => e.toLowerCase()));
+
+      /** The meeting or upcoming event a Google event is, and when it ends. */
+      const calendarItem = (
+        event: CalendarEvent,
+      ): { end: Date; sync: SyncEvent } | undefined => {
+        // Only meetings: not a birthday, an out of office, a focus time, a
+        // working location or an event from Gmail.
+        if (!event.id || event.status === "cancelled") return undefined;
+        if ((event.eventType ?? "default") !== "default") return undefined;
+
+        const startStr = event.start?.dateTime || event.start?.date;
+        const endStr = event.end?.dateTime || event.end?.date;
+        if (!startStr) return undefined;
+
+        const startDate = new Date(startStr);
+        const endDate = endStr
+          ? new Date(endStr)
+          : new Date(startDate.getTime() + 60 * 60 * 1000);
+        // An all-day event has a day and no time, and is kept as the day
+        // (`2026-10-09`), which every reader's calendar reads as that day.
+        // Midnight UTC would be the evening before west of UTC.
+        const allDay = !event.start?.dateTime;
+        const startsAt = allDay ? startStr : startDate.toISOString();
+        const endsAt =
+          allDay && event.end?.date ? event.end.date : endDate.toISOString();
+
+        // The owner declined: no meeting, and nothing upcoming. A room is no
+        // person, and someone who declined was not there.
+        if (
+          event.attendees?.some(
+            (a) => a.self && a.responseStatus === "declined",
+          )
+        ) {
+          return undefined;
+        }
+        const people = (event.attendees || []).filter(
+          (a) => !a.resource && a.responseStatus !== "declined",
+        );
+        const organizer = event.organizer;
+        if (
+          organizer &&
+          (organizer.email || organizer.displayName) &&
+          organizerIsPerson(organizer.email, organizer.displayName) &&
+          !people.some((a) => a.email === organizer.email)
+        ) {
+          people.push(organizer);
+        }
+        const participants: Participant[] = people
+          .map((a) => ({
+            email: a.email || undefined,
+            name: a.displayName || undefined,
+          }))
+          .filter((a) => a.email || a.name);
+
+        const externalId = `google:calendar:${event.id}`;
+        const title = event.summary?.trim() || "(No title)";
+
+        if (endDate <= now) {
+          return {
+            end: endDate,
+            sync: {
+              kind: "interaction",
+              externalId,
+              type: "meeting",
+              title,
+              date: startsAt,
+              endsAt,
+              participants,
+              raw: { id: event.id, iCalUID: event.iCalUID },
+            },
+          };
+        }
+        // An event of the owner alone, such as a reminder, stays out of Pulse.
+        const withOthers = people.some(
+          (p) =>
+            !p.self &&
+            (p.email || p.displayName) &&
+            !(p.email && selfSet.has(p.email.toLowerCase())),
+        );
+        if (!withOthers) return undefined;
+        return {
+          end: endDate,
+          sync: {
+            kind: "upcoming",
+            externalId,
+            title,
+            startsAt,
+            endsAt,
+            participants,
+          },
+        };
+      };
+
       let pageToken: string | undefined;
       let nextSyncToken: string | undefined;
 
       try {
+        // a. The token.
         do {
           signal.throwIfAborted();
           const params: CalendarEventsQuery = {
@@ -857,7 +1005,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           if (calendarSyncToken) {
             params.syncToken = calendarSyncToken;
           } else {
-            params.timeMin = new Date(ctx.since).toISOString();
+            params.timeMin = from.toISOString();
           }
 
           let res;
@@ -869,101 +1017,17 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               calendarSyncToken = undefined;
               delete params.syncToken;
               delete params.pageToken;
-              params.timeMin = new Date(ctx.since).toISOString();
+              params.timeMin = from.toISOString();
               res = await calendar.events.list(params, callOptions(signal));
             } else {
               throw err;
             }
           }
 
-          const items = res.data.items || [];
-          const now = new Date();
-
-          for (const event of items) {
-            if (!event.id) continue;
-            if (event.status === "cancelled") {
-              yield {
-                kind: "upcoming_cancelled",
-                externalId: `google:calendar:${event.id}`,
-              };
-              continue;
-            }
-
-            const startStr = event.start?.dateTime || event.start?.date;
-            const endStr = event.end?.dateTime || event.end?.date;
-            if (!startStr) continue;
-
-            const startDate = new Date(startStr);
-            const endDate = endStr
-              ? new Date(endStr)
-              : new Date(startDate.getTime() + 60 * 60 * 1000);
-            // An all-day event has a day and no time, and is kept as the day
-            // (`2026-10-09`), which every reader's calendar reads as that day.
-            // Midnight UTC would be the evening before west of UTC.
-            const allDay = !event.start?.dateTime;
-            const startsAt = allDay ? startStr : startDate.toISOString();
-            const endsAt =
-              allDay && event.end?.date
-                ? event.end.date
-                : endDate.toISOString();
-
-            // The owner declined: a future one leaves Pulse, a past one was
-            // no meeting. A room is no person, and someone who declined was
-            // not there.
-            const self = event.attendees?.find((a) => a.self);
-            if (self?.responseStatus === "declined") {
-              if (endDate >= now) {
-                yield {
-                  kind: "upcoming_cancelled",
-                  externalId: `google:calendar:${event.id}`,
-                };
-              }
-              continue;
-            }
-            const attendees: Participant[] = (event.attendees || [])
-              .filter((a) => !a.resource && a.responseStatus !== "declined")
-              .map((a) => ({
-                email: a.email || undefined,
-                name: a.displayName || undefined,
-              }))
-              .filter((a) => a.email || a.name);
-
-            if (
-              event.organizer &&
-              (event.organizer.email || event.organizer.displayName)
-            ) {
-              if (!attendees.some((a) => a.email === event.organizer?.email)) {
-                attendees.push({
-                  email: event.organizer.email || undefined,
-                  name: event.organizer.displayName || undefined,
-                });
-              }
-            }
-
-            const title = event.summary?.trim() || "(No title)";
-
-            if (endDate < now) {
-              yield {
-                kind: "interaction",
-                externalId: `google:calendar:${event.id}`,
-                type: "meeting",
-                title,
-                date: startsAt,
-                endsAt,
-                participants: attendees,
-                raw: { id: event.id, iCalUID: event.iCalUID },
-              };
-            } else {
-              yield {
-                kind: "upcoming",
-                externalId: `google:calendar:${event.id}`,
-                title,
-                startsAt,
-                endsAt,
-                participants: attendees,
-              };
-            }
-
+          for (const event of res.data.items || []) {
+            const item = calendarItem(event);
+            if (!item || item.end > from) continue;
+            yield item.sync;
             totalFetched++;
             if (totalFetched % 50 === 0) {
               yield { kind: "progress", fetched: totalFetched };
@@ -979,6 +1043,38 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         if (nextSyncToken) {
           calendarSyncToken = nextSyncToken;
         }
+
+        // b. The window. It starts a day early, because Google can end an
+        // all-day event at midnight in the calendar's time zone, up to 14
+        // hours before the midnight UTC that `calendarItem` uses.
+        do {
+          signal.throwIfAborted();
+          const res = await calendar.events.list(
+            {
+              calendarId: "primary",
+              singleEvents: true,
+              maxResults: 250,
+              pageToken,
+              timeMin: new Date(from.getTime() - DAY_MS).toISOString(),
+              timeMax: new Date(
+                now.getTime() + UPCOMING_DAYS * DAY_MS,
+              ).toISOString(),
+            },
+            callOptions(signal),
+          );
+          for (const event of res.data.items || []) {
+            const item = calendarItem(event);
+            if (!item || item.end <= from) continue;
+            yield item.sync;
+            totalFetched++;
+            if (totalFetched % 50 === 0) {
+              yield { kind: "progress", fetched: totalFetched };
+            }
+          }
+          pageToken = res.data.nextPageToken || undefined;
+        } while (pageToken);
+        calendarListedAt = now.toISOString();
+        yield { kind: "upcoming_listed" };
         stagesSucceeded++;
       } catch (err: unknown) {
         signal.throwIfAborted();
@@ -1003,6 +1099,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       contactsSyncToken,
       contactsFields: PERSON_FIELDS,
       calendarSyncToken,
+      calendarListedAt,
       gmailHistoryId,
       gmailBackfill,
       lastSyncAt:

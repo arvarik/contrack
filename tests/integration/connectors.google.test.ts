@@ -587,6 +587,10 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       const futureEnd = new Date(
         now.getTime() + 25 * 3600 * 1000,
       ).toISOString();
+      const day = (days: number) =>
+        new Date(now.getTime() + days * 24 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 10);
 
       vi.spyOn(google, "calendar").mockReturnValue({
         events: {
@@ -614,8 +618,9 @@ describe("Google Workspace Connector & OAuth Integration", () => {
                 {
                   id: "cal-all-day-3",
                   summary: "Site Holiday",
-                  start: { date: "2099-01-05" },
-                  end: { date: "2099-01-06" },
+                  start: { date: day(3) },
+                  end: { date: day(4) },
+                  attendees: [{ email: "bob@builder.com" }],
                 },
               ],
               nextSyncToken: "calendar-sync-token-v1",
@@ -679,6 +684,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         contactsSyncToken: "contacts-sync-token-v1",
         contactsFields: PERSON_FIELDS,
         calendarSyncToken: "calendar-sync-token-v1",
+        calendarListedAt: expect.any(String),
         gmailHistoryId: "history-9999",
         lastSyncAt: expect.any(String),
       });
@@ -710,8 +716,8 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       // An all-day event is its day, not midnight UTC, so it never shows on
       // the evening before west of UTC.
       expect(upcoming[1]).toMatchObject({
-        startsAt: "2099-01-05",
-        endsAt: "2099-01-06",
+        startsAt: day(3),
+        endsAt: day(4),
       });
 
       // Every call carries a timeout and the sync's signal. With neither, a
@@ -724,7 +730,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         ...options(google.gmail(null!).users.messages.get),
         ...options(google.calendar(null!).events.list),
       ];
-      expect(sent).toHaveLength(5);
+      expect(sent).toHaveLength(6);
       for (const option of sent) {
         expect(option).toEqual({
           timeout: GOOGLE_CALL_TIMEOUT_MS,
@@ -931,6 +937,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
     async function run(
       config: Partial<Parameters<typeof googleAdapter.sync>[0]["config"]>,
       cursor: unknown = null,
+      firstSince?: string,
     ) {
       const events: SyncEvent[] = [];
       const gen = googleAdapter.sync({
@@ -949,6 +956,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         secret: { refreshToken: "good-token", email: "me@example.com" },
         cursor,
         since: "2026-02-01T00:00:00.000Z",
+        firstSince,
         selfAddresses: { emails: ["me@example.com"], phones: [] },
         signal: new AbortController().signal,
         log: () => {},
@@ -1369,7 +1377,148 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       ]);
     });
 
-    it("drops rooms and attendees who declined, and treats a meeting the owner declined as cancelled", async () => {
+    it("logs a meeting that ended since the last window once, though its token returns nothing, and lists 60 days ahead", async () => {
+      const hour = 3600_000;
+      const day = 24 * hour;
+      const at = (offsetMs: number) =>
+        new Date(Date.now() + offsetMs).toISOString();
+      const listedAt = at(-2 * hour);
+      const event = (id: string, start: number) => ({
+        id,
+        summary: id,
+        start: { dateTime: at(start) },
+        end: { dateTime: at(start + hour) },
+        attendees: [{ email: "bob@example.com" }],
+      });
+      // The token returns a meeting added after it took place, and one that
+      // changed and ended after the last window, which the window logs.
+      type Query = { syncToken?: string; timeMin?: string; timeMax?: string };
+      const list = vi.fn(async (params: Query) => ({
+        data: params.syncToken
+          ? {
+              items: [
+                event("added-late", -6 * hour),
+                event("held", -90 * 60_000),
+              ],
+              nextSyncToken: "c2",
+            }
+          : { items: [event("held", -90 * 60_000), event("next", day)] },
+      }));
+      vi.spyOn(google, "calendar").mockReturnValue({
+        events: { list },
+      } as unknown as ReturnType<typeof google.calendar>);
+
+      const { events, cursor } = await run(
+        { syncCalendar: true },
+        { calendarSyncToken: "c1", calendarListedAt: listedAt },
+      );
+      expect(
+        events.map((e) => [e.kind, "externalId" in e ? e.externalId : null]),
+      ).toEqual([
+        ["interaction", "google:calendar:added-late"],
+        ["interaction", "google:calendar:held"],
+        ["upcoming", "google:calendar:next"],
+        ["upcoming_listed", null],
+      ]);
+      const [token, window] = list.mock.calls.map(([params]) => params);
+      expect(token).toMatchObject({ syncToken: "c1" });
+      expect(token.timeMin).toBeUndefined();
+      expect(window.syncToken).toBeUndefined();
+      expect(window.timeMin).toBe(
+        new Date(Date.parse(listedAt) - day).toISOString(),
+      );
+      expect(
+        Date.parse(window.timeMax!) -
+          Date.parse(cursor.calendarListedAt as string),
+      ).toBe(60 * day);
+      expect(cursor.calendarSyncToken).toBe("c2");
+    });
+
+    it("keeps no event of another type or of the owner alone, and no organizer that is a calendar or a robot", async () => {
+      const at = (offsetMs: number) =>
+        new Date(Date.now() + offsetMs).toISOString();
+      const event = (id: string, extra: object) => ({
+        id,
+        summary: id,
+        start: { dateTime: at(24 * 3600_000) },
+        end: { dateTime: at(25 * 3600_000) },
+        ...extra,
+      });
+      const bob = { attendees: [{ email: "bob@example.com" }] };
+      vi.spyOn(google, "calendar").mockReturnValue({
+        events: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              items: [
+                event("birthday", { ...bob, eventType: "birthday" }),
+                event("focus", { ...bob, eventType: "focusTime" }),
+                event("reminder", {
+                  organizer: { email: "me@example.com", self: true },
+                }),
+                event("chore", {
+                  organizer: { email: "family@group.calendar.google.com" },
+                }),
+                event("imported", {
+                  ...bob,
+                  organizer: { email: "unknownorganizer@calendar.google.com" },
+                }),
+                event("booking", {
+                  ...bob,
+                  organizer: { email: "noreply@bookings.example.com" },
+                }),
+                event("review", {
+                  ...bob,
+                  organizer: { email: "carol@example.com" },
+                }),
+              ],
+              nextSyncToken: "c1",
+            },
+          }),
+        },
+      } as unknown as ReturnType<typeof google.calendar>);
+
+      const { events } = await run({ syncCalendar: true });
+      expect(
+        events.flatMap((e) =>
+          e.kind === "upcoming"
+            ? [[e.title, e.participants.map((p) => p.email)]]
+            : [],
+        ),
+      ).toEqual([
+        ["imported", ["bob@example.com"]],
+        ["booking", ["bob@example.com"]],
+        ["review", ["bob@example.com", "carol@example.com"]],
+      ]);
+    });
+
+    it("starts a stage with no place of its own at the lookback date, and forgets the place of a stage that is off", async () => {
+      const firstSince = "2025-11-03T00:00:00.000Z";
+      const messages = vi.fn().mockResolvedValue({ data: {} });
+      mockGmail({ messages: { list: messages } });
+      const events = vi
+        .fn()
+        .mockResolvedValue({ data: { nextSyncToken: "c1" } });
+      vi.spyOn(google, "calendar").mockReturnValue({
+        events: { list: events },
+      } as unknown as ReturnType<typeof google.calendar>);
+
+      const { cursor } = await run(
+        { syncEmail: true, syncCalendar: true },
+        {
+          lastSyncAt: "2026-02-01T00:00:00.000Z",
+          contactsSyncToken: "p1",
+          contactsFields: PERSON_FIELDS,
+        },
+        firstSince,
+      );
+      expect(messages.mock.calls[0][0].q).toBe(
+        `after:${Date.parse(firstSince) / 1000}`,
+      );
+      expect(events.mock.calls[0][0].timeMin).toBe(firstSince);
+      expect(cursor.contactsSyncToken).toBeUndefined();
+    });
+
+    it("drops rooms and attendees who declined, and any meeting the owner declined", async () => {
       const hour = 3600_000;
       const at = (offsetMs: number) =>
         new Date(Date.now() + offsetMs).toISOString();
@@ -1414,10 +1563,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
             { email: "bob@example.com", name: undefined },
           ],
         }),
-        {
-          kind: "upcoming_cancelled",
-          externalId: "google:calendar:future-declined",
-        },
+        { kind: "upcoming_listed" },
       ]);
     });
   });

@@ -447,6 +447,50 @@ describe("connectors ingestStream", () => {
     ]);
   });
 
+  it("replaces a Google connector's upcoming rows once the run listed its window", async () => {
+    const google = {
+      id: connectorId,
+      ownerId,
+      kind: "google" as const,
+      config: {},
+    };
+    const upcoming = (externalId: string): SyncEvent => ({
+      kind: "upcoming",
+      externalId,
+      title: externalId,
+      startsAt: "2099-03-01T10:00:00Z",
+      endsAt: "2099-03-01T11:00:00Z",
+      participants: [],
+    });
+    async function* stream(...events: SyncEvent[]) {
+      yield* events;
+    }
+    const ingest = (...events: SyncEvent[]) =>
+      ingestStream(
+        scope,
+        google,
+        stream(...events),
+        buildContactMatcher(scope),
+        {
+          emails: [],
+          phones: [],
+        },
+      );
+
+    // The second row is an instance of a series cancelled since.
+    await ingest(
+      upcoming("google:calendar:kept"),
+      upcoming("google:calendar:series_20990301T100000Z"),
+    );
+    await ingest(upcoming("google:calendar:kept"), { kind: "upcoming_listed" });
+
+    expect(
+      sqlite
+        .prepare("SELECT externalId FROM upcoming_events WHERE connectorId = ?")
+        .all(connectorId),
+    ).toEqual([{ externalId: "google:calendar:kept" }]);
+  });
+
   it("commits in transactions of 100 events, so a stream that fails keeps every full batch", async () => {
     const matcher = buildContactMatcher(scope);
     const selfAddresses = { emails: ["me@example.com"], phones: [] };

@@ -330,6 +330,7 @@ export async function ingestStream(
   const ingestedContactIds = new Set<string>();
   const failures: string[] = [];
   let hasUpcomingEvents = false;
+  let upcomingListed = false;
 
   /** The link of the card `externalId` to a contact, if the card has one. */
   function contactLink(externalId: string) {
@@ -486,6 +487,11 @@ export async function ingestStream(
            WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
         )
         .run(connector.id, scope.ownerId, event.externalId);
+      return;
+    }
+
+    if (event.kind === "upcoming_listed") {
+      upcomingListed = true;
       return;
     }
 
@@ -1106,9 +1112,11 @@ export async function ingestStream(
   if (batch.length > 0) await flush();
 
   // Refresh upcoming events: remove stale upcoming events for this connector.
-  // ICS feeds always return the full calendar snapshot, whereas Google Calendar
-  // uses incremental `syncToken` deltas and only yields changed/cancelled events.
-  if (connector.kind === "google") {
+  // An ICS feed is the whole calendar, and a Google run that listed its window
+  // (`upcoming_listed`) yielded all of it, so a row the run did not yield is
+  // gone. A Google run that did not list it, with Calendar off or failed,
+  // removes every row or the ended ones.
+  if (connector.kind === "google" && !upcomingListed) {
     const nowIso = new Date().toISOString();
     const todayIso = nowIso.slice(0, 10);
     sqlite.transaction(() => {
@@ -1128,7 +1136,7 @@ export async function ingestStream(
           .run(connector.id, scope.ownerId, todayIso, nowIso);
       }
     })();
-  } else if (hasUpcomingEvents || connector.kind === "ics") {
+  } else if (hasUpcomingEvents || upcomingListed || connector.kind === "ics") {
     sqlite.transaction(() => {
       if (seenUpcomingExternalIds.size === 0) {
         sqlite

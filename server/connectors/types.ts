@@ -61,6 +61,13 @@ export type SyncEvent =
       externalId: string;
     }
   | {
+      /**
+       * The adapter yielded every upcoming event in its window: ingest drops
+       * the connector's upcoming rows that this run did not yield.
+       */
+      kind: "upcoming_listed";
+    }
+  | {
       kind: "progress";
       fetched: number;
       message?: string;
@@ -79,6 +86,11 @@ export interface SyncContext<C = unknown, S = unknown> {
   secret: S | null;
   cursor: unknown | null;
   since: string; // ISO string; on first run: now minus config.lookbackDays (default 90)
+  /**
+   * Now minus config.lookbackDays on every run. A stage with no cursor of its
+   * own, such as one turned on after the first sync, starts here.
+   */
+  firstSince?: string;
   selfAddresses: { emails: string[]; phones: string[] };
   signal: AbortSignal;
   log: (msg: string) => void;
