@@ -64,6 +64,140 @@ export function normalizeEmailAddress(
   return email.trim().toLowerCase();
 }
 
+/** Brackets, quotes, list punctuation and spaces around an address. */
+const STRAY = /[<>"',;\s]/;
+
+/**
+ * The mailbox an address reaches, so that two spellings of one mailbox are one
+ * person: lower case, without stray brackets, quotes or list punctuation,
+ * without a "+tag" (sub-addressing), and for Gmail without dots, which Gmail
+ * ignores. "Ana.Lee+news@GoogleMail.com," and "analee@gmail.com" give
+ * "analee@gmail.com".
+ */
+export function canonicalEmailAddress(
+  email: string | null | undefined,
+): string {
+  // Two loops, not a regex: `[...]+$` retries a long run of tabs from each of
+  // its positions, which is quadratic on a hostile header.
+  const raw = normalizeEmailAddress(email);
+  let start = 0;
+  let end = raw.length;
+  while (start < end && STRAY.test(raw[start]!)) start++;
+  while (end > start && STRAY.test(raw[end - 1]!)) end--;
+  const address = raw.slice(start, end);
+  const at = address.lastIndexOf("@");
+  if (at <= 0) return address;
+  let local = address.slice(0, at);
+  let domain = address.slice(at + 1);
+  const plus = local.indexOf("+");
+  if (plus > 0) local = local.slice(0, plus);
+  if (domain === "googlemail.com") domain = "gmail.com";
+  if (domain === "gmail.com") local = local.replace(/\./g, "");
+  return `${local}@${domain}`;
+}
+
+/** A mailbox no one reads, by its whole local part. */
+const NO_REPLY = /^(no-?reply|do-?not-?reply)([._-]|$)/;
+
+/**
+ * Words that name a role or a robot, not a person, when one is any word of a
+ * local part: "billing", "access-support", "salesforce_customercare",
+ * "unsubscribe-<token>".
+ */
+const ROLE_WORDS = new Set([
+  "noreply",
+  "donotreply",
+  "notification",
+  "notifications",
+  "notify",
+  "alert",
+  "alerts",
+  "mailer-daemon",
+  "mailerdaemon",
+  "postmaster",
+  "bounce",
+  "bounces",
+  "billing",
+  "invoice",
+  "invoices",
+  "statement",
+  "statements",
+  "receipt",
+  "receipts",
+  "order",
+  "orders",
+  "support",
+  "helpdesk",
+  "help",
+  "info",
+  "news",
+  "newsletter",
+  "newsletters",
+  "marketing",
+  "update",
+  "updates",
+  "digest",
+  "account",
+  "accounts",
+  "unsubscribe",
+  "customercare",
+  "customerservice",
+  "events",
+  "trips",
+  "reservations",
+  "bookings",
+  "tickets",
+  "feedback",
+  "surveys",
+  "promotions",
+  "offers",
+]);
+
+/** Mailboxes of devices and relays, never of a person: Send to Kindle. */
+const DEVICE_DOMAINS = new Set(["kindle.com", "free.kindle.com"]);
+
+/** Hosts that send bulk mail for a company: email.example.com and the like. */
+const BULK_HOST =
+  /^(e|em|email|emails|mail|mailer|mailing|news|newsletters?|notifications?|notify|marketing|bounces?|reply|updates?)\./;
+
+/** Apple's Hide My Email domains. */
+const APPLE_RELAY_DOMAIN = /^(icloud\.com|privaterelay\.appleid\.com)$/;
+
+/**
+ * Whether an address is a robot or a relay rather than a person: a role
+ * mailbox such as billing@ or no-reply@, a bulk sending host, or an address of
+ * Apple's Hide My Email. Those are either a sender's relay, which spells the
+ * sender out as "info_at_shop_com_<token>_<token>@icloud.com", or one of the
+ * owner's own hidden addresses, such as "quiet.river-4a@icloud.com", which
+ * mail clients name "Hide My Email". Neither is an address of a person.
+ */
+export function isAutomatedSender(
+  email: string | null | undefined,
+  name?: string | null,
+): boolean {
+  const raw = normalizeEmailAddress(email);
+  const address = canonicalEmailAddress(raw);
+  const at = address.lastIndexOf("@");
+  if (at <= 0) return false;
+  const local = address.slice(0, at);
+  const domain = address.slice(at + 1);
+  if (
+    APPLE_RELAY_DOMAIN.test(domain) &&
+    (name?.trim().toLowerCase() === "hide my email" ||
+      /_at_.+_[a-z0-9]{8,}_[a-z0-9]{6,}@/.test(raw) ||
+      /^[a-z]+[._-][a-z]+[._-]?\d[a-z]$/.test(local))
+  ) {
+    return true;
+  }
+  return (
+    NO_REPLY.test(local) ||
+    local.split(/[._-]/).some((word) => ROLE_WORDS.has(word)) ||
+    ROLE_WORDS.has(local) ||
+    DEVICE_DOMAINS.has(domain) ||
+    BULK_HOST.test(domain)
+  );
+}
+
 /**
  * Strips reply and forward prefixes ("Re:", "Fwd:", "Fw:", "Re[2]:", etc.)
  * and normalizes whitespace to produce a consistent thread title.
@@ -138,7 +272,7 @@ export function determineDirection(
   selfEmailSet: Set<string>,
 ): "in" | "out" {
   for (const p of from) {
-    if (p.email && selfEmailSet.has(p.email)) {
+    if (p.email && selfEmailSet.has(canonicalEmailAddress(p.email))) {
       return "out";
     }
   }
@@ -184,15 +318,9 @@ export function normalizeEmail(
   options: NormalizeEmailOptions,
 ): NormalizedEmail {
   const selfSet = new Set<string>();
-  for (const email of options.selfEmails) {
-    const norm = normalizeEmailAddress(email);
+  for (const email of [...options.selfEmails, ...(options.aliases ?? [])]) {
+    const norm = canonicalEmailAddress(email);
     if (norm) selfSet.add(norm);
-  }
-  if (options.aliases) {
-    for (const email of options.aliases) {
-      const norm = normalizeEmailAddress(email);
-      if (norm) selfSet.add(norm);
-    }
   }
 
   const from = parseAddressList(raw.from);

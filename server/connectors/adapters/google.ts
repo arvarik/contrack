@@ -70,8 +70,20 @@ export interface GmailBackfill {
   historyId?: string;
 }
 
+/**
+ * The fields of every People request. `metadata` carries `deleted`, the only
+ * sign of a person removed since the last sync: without it, a deleted person
+ * came back with no fields and was skipped as an empty card. A sync token
+ * answers for the fields of the request that made it, so the cursor keeps
+ * them, and a token made with other fields is dropped for one full pull.
+ */
+const PERSON_FIELDS =
+  "metadata,names,emailAddresses,phoneNumbers,organizations,photos";
+
 export interface GoogleCursor {
   contactsSyncToken?: string;
+  /** The `personFields` that `contactsSyncToken` was made with. */
+  contactsFields?: string;
   calendarSyncToken?: string;
   gmailHistoryId?: string;
   gmailBackfill?: GmailBackfill;
@@ -126,6 +138,54 @@ export function syncTokenExpired(err: unknown): boolean {
   return (
     status === 400 && /EXPIRED_SYNC_TOKEN|sync token is expired/i.test(said)
   );
+}
+
+/** The headers that mark bulk mail, read with each message's metadata. */
+const BULK_HEADERS = [
+  "List-Unsubscribe",
+  "List-Id",
+  "Precedence",
+  "Auto-Submitted",
+];
+
+/** Gmail's tabs for mail no person wrote to the owner. */
+const BULK_LABELS = new Set([
+  "CATEGORY_PROMOTIONS",
+  "CATEGORY_UPDATES",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_FORUMS",
+]);
+
+/**
+ * Whether a message is bulk mail: Gmail sorted it into Promotions, Updates,
+ * Social or Forums, or it carries a list header, a bulk Precedence or an
+ * Auto-Submitted other than "no" (RFC 2369, 2919 and 3834).
+ */
+export function isBulkMail(
+  labelIds: string[] | undefined,
+  header: (name: string) => string | undefined,
+): boolean {
+  if (labelIds?.some((l) => BULK_LABELS.has(l))) return true;
+  if (header("List-Unsubscribe") || header("List-Id")) return true;
+  if (/^(bulk|list|junk)$/i.test(header("Precedence")?.trim() ?? "")) {
+    return true;
+  }
+  const auto = header("Auto-Submitted")?.trim().toLowerCase();
+  return Boolean(auto && auto !== "no");
+}
+
+/**
+ * Gmail's answer to `q` under the gmail.metadata scope, the one a connector
+ * holds when AI summaries were off at sign-in: 403 "Metadata scope does not
+ * support 'q' parameter". Every first sync of such a connector failed on it.
+ */
+function queryRefused(err: unknown): boolean {
+  const e = err as {
+    message?: string;
+    response?: { data?: unknown };
+  } | null;
+  const said = `${e?.message ?? ""} ${JSON.stringify(e?.response?.data ?? "")}`;
+  return /does not support 'q'/i.test(said);
 }
 
 /**
@@ -269,7 +329,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         ? (ctx.cursor as GoogleCursor)
         : {};
 
-    let contactsSyncToken = cursor.contactsSyncToken;
+    let contactsSyncToken =
+      cursor.contactsFields === PERSON_FIELDS
+        ? cursor.contactsSyncToken
+        : undefined;
     let calendarSyncToken = cursor.calendarSyncToken;
     let gmailHistoryId = cursor.gmailHistoryId;
 
@@ -296,8 +359,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           signal.throwIfAborted();
           const params: PeopleConnectionsQuery = {
             resourceName: "people/me",
-            personFields:
-              "names,emailAddresses,phoneNumbers,organizations,photos",
+            personFields: PERSON_FIELDS,
             pageSize: 100,
             pageToken,
           };
@@ -414,7 +476,9 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         }
         stagesFailed++;
         firstStageError ??= err;
-        ctx.log(`Error syncing Google contacts: ${(err as Error).message}`);
+        const message = `Error syncing Google contacts: ${(err as Error).message}`;
+        ctx.log(message);
+        yield { kind: "stage_failed", message };
       }
     }
 
@@ -440,10 +504,27 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         }
       };
 
+      /** When Gmail took a message in, in ms, or NaN when the call fails. */
+      const internalDateMs = async (id: string): Promise<number> => {
+        try {
+          const res = await gmail.users.messages.get(
+            { userId: "me", id, format: "metadata", metadataHeaders: [] },
+            callOptions(signal),
+          );
+          return Number(res.data.internalDate);
+        } catch (err: unknown) {
+          signal.throwIfAborted();
+          if (isAuthError(err)) throw err;
+          return NaN;
+        }
+      };
+
       try {
         const messageIds: string[] = [];
         let newHistoryId: string | undefined;
         let nextBackfill: GmailBackfill | undefined;
+        /** The listing's bounds in seconds, kept here when `q` cannot be. */
+        let dateWindow: { since: number; before?: number } | undefined;
 
         if (gmailHistoryId) {
           try {
@@ -514,25 +595,60 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             since: Math.floor(new Date(ctx.since).getTime() / 1000),
             historyId: await profileHistoryId(),
           };
+          /** One page, by `q` until Google refuses it, then without. */
+          const listPage = async (pageToken: string | undefined) => {
+            const maxResults = Math.min(100, maxMessages - messageIds.length);
+            if (!dateWindow) {
+              try {
+                return await gmail.users.messages.list(
+                  {
+                    userId: "me",
+                    q: `after:${start.since}${start.before ? ` before:${start.before}` : ""}`,
+                    maxResults,
+                    pageToken,
+                  },
+                  callOptions(signal),
+                );
+              } catch (err: unknown) {
+                if (!queryRefused(err)) throw err;
+                dateWindow = { since: start.since, before: start.before };
+              }
+            }
+            return gmail.users.messages.list(
+              { userId: "me", maxResults, pageToken },
+              callOptions(signal),
+            );
+          };
+
           let pageToken: string | undefined;
           let done = false;
           do {
             signal.throwIfAborted();
-            const res = await gmail.users.messages.list(
-              {
-                userId: "me",
-                q: `after:${start.since}${start.before ? ` before:${start.before}` : ""}`,
-                maxResults: Math.min(100, maxMessages - messageIds.length),
-                pageToken,
-              },
-              callOptions(signal),
-            );
-
-            const msgs = res.data.messages || [];
-            for (const m of msgs) {
-              if (m.id) messageIds.push(m.id);
-            }
+            const res = await listPage(pageToken);
             pageToken = res.data.nextPageToken || undefined;
+
+            let ids = (res.data.messages || []).flatMap((m) =>
+              m.id ? [m.id] : [],
+            );
+            if (dateWindow && ids.length > 0) {
+              // Without `q` the list is the whole mailbox, newest first, and
+              // the last mail on a page dates it: a page newer than the window
+              // is passed over, and the page that reaches past its start is
+              // the last. The loop below drops the mail outside it. A backfill
+              // bound is the second after the oldest mail already taken, so a
+              // page that ends in that second was taken too: counting it
+              // filled the cap with known mail, and every other run was lost.
+              const last = await internalDateMs(ids[ids.length - 1]);
+              if (
+                dateWindow.before !== undefined &&
+                last >= (dateWindow.before - 1) * 1000
+              ) {
+                ids = [];
+              } else if (last < dateWindow.since * 1000) {
+                pageToken = undefined;
+              }
+            }
+            messageIds.push(...ids);
             done = !pageToken;
           } while (pageToken && messageIds.length < maxMessages);
 
@@ -559,6 +675,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                   "Date",
                   "Message-ID",
                   "In-Reply-To",
+                  ...BULK_HEADERS,
                 ],
               },
               callOptions(signal),
@@ -577,6 +694,16 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           if (!meta.data) continue;
           if (meta.data.internalDate) {
             oldestMs = Math.min(oldestMs, Number(meta.data.internalDate));
+          }
+          if (dateWindow) {
+            const ms = Number(meta.data.internalDate);
+            if (
+              ms < dateWindow.since * 1000 ||
+              (dateWindow.before !== undefined &&
+                ms >= dateWindow.before * 1000)
+            ) {
+              continue;
+            }
           }
           if (meta.data.labelIds?.some((l) => SKIPPED_GMAIL_LABELS.has(l))) {
             continue;
@@ -652,6 +779,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             date: norm.date,
             direction: norm.direction,
             participants: norm.participants,
+            automated: isBulkMail(meta.data.labelIds, getHeader),
             raw: { messageId: msgId, threadId: meta.data.threadId },
           };
 
@@ -687,7 +815,9 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         }
         stagesFailed++;
         firstStageError ??= err;
-        ctx.log(`Error syncing Gmail: ${(err as Error).message}`);
+        const message = `Error syncing Gmail: ${(err as Error).message}`;
+        ctx.log(message);
+        yield { kind: "stage_failed", message };
       }
     }
 
@@ -842,7 +972,9 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         }
         stagesFailed++;
         firstStageError ??= err;
-        ctx.log(`Error syncing Google Calendar: ${(err as Error).message}`);
+        const message = `Error syncing Google Calendar: ${(err as Error).message}`;
+        ctx.log(message);
+        yield { kind: "stage_failed", message };
       }
     }
 
@@ -852,6 +984,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
     return {
       contactsSyncToken,
+      contactsFields: PERSON_FIELDS,
       calendarSyncToken,
       gmailHistoryId,
       gmailBackfill,

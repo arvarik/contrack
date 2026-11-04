@@ -32,6 +32,7 @@ import { sqlite } from "../../server/db.ts";
 import {
   GOOGLE_CALL_TIMEOUT_MS,
   googleAdapter,
+  isBulkMail,
 } from "../../server/connectors/adapters/google.ts";
 import {
   setGoogleOAuthCredentials,
@@ -45,6 +46,10 @@ import { ConnectorAuthError } from "../../server/connectors/errors.ts";
 import * as secretBox from "../../server/utils/secretBox.ts";
 import * as gateway from "../../server/ai/gateway.ts";
 import type { SyncEvent } from "../../server/connectors/types.ts";
+
+/** The People fields the adapter asks for. `metadata` carries `deleted`. */
+const PERSON_FIELDS =
+  "metadata,names,emailAddresses,phoneNumbers,organizations,photos";
 
 describe("Google Workspace Connector & OAuth Integration", () => {
   let server: http.Server;
@@ -588,6 +593,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       };
       expect(cursor).toEqual({
         contactsSyncToken: "contacts-sync-token-v1",
+        contactsFields: PERSON_FIELDS,
         calendarSyncToken: "calendar-sync-token-v1",
         gmailHistoryId: "history-9999",
         lastSyncAt: expect.any(String),
@@ -724,7 +730,10 @@ describe("Google Workspace Connector & OAuth Integration", () => {
           aliases: [],
         },
         secret: { refreshToken: "good-token" },
-        cursor: { contactsSyncToken: "week-old-token" },
+        cursor: {
+          contactsSyncToken: "week-old-token",
+          contactsFields: PERSON_FIELDS,
+        },
         since: "2026-01-01T00:00:00.000Z",
         selfAddresses: { emails: [], phones: [] },
         signal: new AbortController().signal,
@@ -961,6 +970,124 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       expect(second.cursor.gmailBackfill).toBeUndefined();
     });
 
+    it("lists without q when the token has only the metadata scope, and keeps the window by date", async () => {
+      // A connector signed in with AI summaries off holds gmail.metadata, and
+      // Google refuses `q` under it, so every first sync failed.
+      const refused = Object.assign(
+        new Error("Metadata scope does not support 'q' parameter"),
+        { status: 403 },
+      );
+      const day = 86_400_000;
+      const since = 1769904000 * 1000;
+      const dates: Record<string, number> = {
+        m1: since + 14 * day,
+        m2: since + 10 * day,
+        m3: since + 1 * day,
+        m4: since - 1 * day,
+      };
+      const pages: Record<string, { ids: string[]; next?: string }> = {
+        first: { ids: ["m1", "m2"], next: "p2" },
+        p2: { ids: ["m3", "m4"], next: "p3" },
+        p3: { ids: ["m5"] },
+      };
+      const list = vi.fn(async (params: { q?: string; pageToken?: string }) => {
+        if (params.q) throw refused;
+        const page = pages[params.pageToken ?? "first"];
+        return {
+          data: {
+            messages: page.ids.map((id) => ({ id })),
+            nextPageToken: page.next,
+          },
+        };
+      });
+      const get = mockGmail({ messages: { list } });
+      get.mockImplementation(({ id }: { id: string }) =>
+        Promise.resolve(meta(id, { internalDate: String(dates[id]) })),
+      );
+
+      // The second page reaches past the window's start, so it is the last,
+      // and the mail before the start is dropped.
+      const first = await run({ syncEmail: true });
+      expect(emailIds(first.events)).toEqual([
+        "m1@example.com",
+        "m2@example.com",
+        "m3@example.com",
+      ]);
+      expect(list.mock.calls.map(([params]) => params.pageToken)).toEqual([
+        undefined,
+        undefined,
+        "p2",
+      ]);
+      expect(first.cursor.gmailHistoryId).toBe("H-now");
+
+      // A backfill after a run that took m1 and m2 starts from the second
+      // after m2. It passes over the page that ends with m2: counting that
+      // page again filled the cap with mail already taken.
+      list.mockClear();
+      const backfill = await run(
+        { syncEmail: true },
+        {
+          gmailBackfill: {
+            since: 1769904000,
+            before: Math.floor(dates.m2 / 1000) + 1,
+            historyId: "H0",
+          },
+        },
+      );
+      expect(emailIds(backfill.events)).toEqual(["m3@example.com"]);
+      expect(backfill.cursor.gmailHistoryId).toBe("H0");
+    });
+
+    it.each([
+      [["CATEGORY_PROMOTIONS", "INBOX"], {}, true],
+      [["CATEGORY_UPDATES"], {}, true],
+      [["INBOX"], { "List-Unsubscribe": "<mailto:u@x.com>" }, true],
+      [["INBOX"], { Precedence: "bulk" }, true],
+      [["INBOX"], { "Auto-Submitted": "auto-generated" }, true],
+      [["INBOX"], { "Auto-Submitted": "no" }, false],
+      [["INBOX", "CATEGORY_PERSONAL"], {}, false],
+    ])(
+      "isBulkMail(%j, %j) is %s",
+      (labels, headers: Record<string, string>, bulk) => {
+        expect(isBulkMail(labels, (name) => headers[name])).toBe(bulk);
+      },
+    );
+
+    it("reports a stage that failed while the others went on", async () => {
+      vi.spyOn(google, "people").mockReturnValue({
+        people: {
+          connections: {
+            list: vi.fn().mockResolvedValue({
+              data: {
+                connections: [
+                  {
+                    resourceName: "people/c1",
+                    names: [{ displayName: "Ada Lovelace" }],
+                  },
+                ],
+                nextSyncToken: "t1",
+              },
+            }),
+          },
+        },
+      } as unknown as ReturnType<typeof google.people>);
+      mockGmail({
+        messages: {
+          list: vi
+            .fn()
+            .mockRejectedValue(
+              Object.assign(new Error("Backend Error"), { status: 500 }),
+            ),
+        },
+      });
+      const { events } = await run({ syncContacts: true, syncEmail: true });
+      expect(events).toContainEqual({
+        kind: "stage_failed",
+        message: "Error syncing Gmail: Backend Error",
+      });
+      expect(events.some((e) => e.kind === "contact")).toBe(true);
+    });
+
     it("skips spam, trash and drafts, and dates a mail by the mailbox when its Date header is far off", async () => {
       const get = mockGmail({
         history: {
@@ -1106,28 +1233,40 @@ describe("Google Workspace Connector & OAuth Integration", () => {
     });
 
     it("reports a person Google deleted, and keeps a person who has an address but no name", async () => {
-      vi.spyOn(google, "people").mockReturnValue({
-        people: {
-          connections: {
-            list: vi.fn().mockResolvedValue({
-              data: {
-                connections: [
-                  { resourceName: "people/gone", metadata: { deleted: true } },
-                  {
-                    resourceName: "people/nameless",
-                    emailAddresses: [{ value: "nameless@example.com" }],
-                  },
-                ],
-                nextSyncToken: "t2",
-              },
-            }),
-          },
+      const list = vi.fn().mockResolvedValue({
+        data: {
+          connections: [
+            { resourceName: "people/gone", metadata: { deleted: true } },
+            {
+              resourceName: "people/nameless",
+              emailAddresses: [{ value: "nameless@example.com" }],
+            },
+          ],
+          nextSyncToken: "t2",
         },
+      });
+      vi.spyOn(google, "people").mockReturnValue({
+        people: { connections: { list } },
       } as unknown as ReturnType<typeof google.people>);
-      const { events } = await run(
+      const { events, cursor } = await run(
         { syncContacts: true },
-        { contactsSyncToken: "t1" },
+        { contactsSyncToken: "t1", contactsFields: PERSON_FIELDS },
       );
+      // Google flags a deleted person in `metadata`, which only comes back
+      // when the request asks for it.
+      expect(list.mock.calls[0][0]).toMatchObject({
+        personFields: PERSON_FIELDS,
+        syncToken: "t1",
+      });
+      expect(cursor).toMatchObject({
+        contactsSyncToken: "t2",
+        contactsFields: PERSON_FIELDS,
+      });
+
+      // A token made before the fields asked for `metadata` answers for the
+      // old fields: it is dropped, and the run pulls everyone again.
+      await run({ syncContacts: true }, { contactsSyncToken: "t1" });
+      expect(list.mock.calls[1][0].syncToken).toBeUndefined();
       expect(events).toEqual([
         { kind: "contact_deleted", externalId: "people/gone" },
         expect.objectContaining({

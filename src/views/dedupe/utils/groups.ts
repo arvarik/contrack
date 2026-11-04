@@ -29,6 +29,28 @@ export interface DuplicateGroup {
   level: MatchLevel;
 }
 
+const SHARED_COUNT = /^(\d+) contacts share this (.+)$/;
+
+/**
+ * One "N contacts share this name" line for each kind, with the largest N. A
+ * pair keeps the count from when it was scored, so a group whose pairs were
+ * scored as more contacts took the name said both 3 and 4.
+ */
+function latestCounts(caveats: string[]): string[] {
+  const largest = new Map<string, number>();
+  for (const caveat of caveats) {
+    const m = SHARED_COUNT.exec(caveat);
+    if (m) largest.set(m[2], Math.max(largest.get(m[2]) ?? 0, Number(m[1])));
+  }
+  return caveats.filter((caveat) => {
+    const m = SHARED_COUNT.exec(caveat);
+    if (!m) return true;
+    if (Number(m[1]) !== largest.get(m[2])) return false;
+    largest.delete(m[2]);
+    return true;
+  });
+}
+
 export function buildGroups(
   suggestions: PersistedDedupeSuggestion[],
 ): DuplicateGroup[] {
@@ -80,9 +102,9 @@ export function buildGroups(
     const ids = [
       ...new Set(pairs.flatMap((s) => [s.contactIdA, s.contactIdB])),
     ];
-    const caveats = [
+    const caveats = latestCounts([
       ...new Set(pairs.flatMap((s) => pairCaveats(s.caveat, s.reasoning))),
-    ];
+    ]);
     const confidence = bottleneck.get(root) ?? pairs[0].confidence;
     const members = ids
       .map((id) => contacts.get(id)!)

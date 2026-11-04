@@ -10,6 +10,7 @@
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { normalizePhone } from "../utils/nlp/phone.ts";
+import { canonicalEmailAddress } from "./email/normalize.ts";
 import type { Participant } from "../../shared/connectors.ts";
 
 export interface MatchResult {
@@ -106,7 +107,7 @@ export function createMatcherFromMaps(
     selfEmails: Set<string>,
     selfPhones: Set<string>,
   ): boolean {
-    if (p.email && selfEmails.has(p.email.trim().toLowerCase())) {
+    if (p.email && selfEmails.has(canonicalEmailAddress(p.email))) {
       return true;
     }
     if (p.phone && selfPhones.has(normalizePhone(p.phone))) {
@@ -122,8 +123,10 @@ export function createMatcherFromMaps(
       participants: Participant[],
       selfAddresses: { emails: string[]; phones: string[] },
     ): MatchResult {
+      // By mailbox, so the owner's "+tag" and dotted Gmail spellings are
+      // the owner too, and not strangers to suggest.
       const selfEmails = new Set(
-        selfAddresses.emails.map((e) => e.trim().toLowerCase()),
+        selfAddresses.emails.map((e) => canonicalEmailAddress(e)),
       );
       const selfPhones = new Set(
         selfAddresses.phones.map((p) => normalizePhone(p)),

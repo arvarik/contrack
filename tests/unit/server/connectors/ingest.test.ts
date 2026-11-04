@@ -170,6 +170,72 @@ describe("connectors ingestStream", () => {
     expect(links2[0].seenCount).toBe(2);
   });
 
+  it("counts a failed stage as an error and keeps its message", async () => {
+    const res = await ingestStream(
+      scope,
+      { id: connectorId, ownerId, kind: "ics", config: {} },
+      (async function* (): AsyncGenerator<SyncEvent> {
+        yield { kind: "stage_failed", message: "Error syncing Gmail: x" };
+      })(),
+      buildContactMatcher(scope),
+      { emails: [], phones: [] },
+    );
+    expect(res.stats.errors).toBe(1);
+    expect(res.failures).toEqual(["Error syncing Gmail: x"]);
+  });
+
+  it("counts a stranger once per mailbox, and no one for bulk mail, robots or the owner", async () => {
+    const mail = (
+      id: string,
+      from: { email: string; name?: string },
+      automated = false,
+    ): SyncEvent => ({
+      kind: "interaction",
+      externalId: id,
+      type: "email",
+      title: id,
+      date: "2026-02-02T10:00:00Z",
+      participants: [from],
+      automated,
+    });
+    const { stats } = await ingestStream(
+      scope,
+      { id: connectorId, ownerId, kind: "imap", config: { ghostThreshold: 9 } },
+      (async function* (): AsyncGenerator<SyncEvent> {
+        yield mail("1", { email: "Ana.Lee@gmail.com", name: "Ana Lee" });
+        yield mail("2", { email: "analee+news@gmail.com" });
+        yield mail("3", { email: "news@shop.com" }, true);
+        yield mail("4", { email: "billing@shop.com" });
+        yield mail("5", { email: "me+receipts@example.com" });
+      })(),
+      buildContactMatcher(scope),
+      { emails: ["me@example.com"], phones: [] },
+    );
+    expect(stats.correspondents).toBe(1);
+    expect(listCorrespondents(scope)).toMatchObject([
+      { email: "analee@gmail.com", name: "Ana Lee", seenCount: 2 },
+    ]);
+  });
+
+  it("lists the rows an older version kept as one person each, without robots, the owner or known contacts", () => {
+    const row = sqlite.prepare(
+      `INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt, displayName)
+       VALUES (?, ?, 'correspondent', ?, NULL, 1, '2026-02-02T10:00:00Z', ?)`,
+    );
+    for (const [email, name] of [
+      ["ana.lee@gmail.com", "Ana Lee"],
+      ["analee+news@gmail.com", null],
+      ["quiet.river-4a@icloud.com", "Hide My Email"],
+      [`${ownerId}+fedex@example.com`, null],
+      ["ALICE+promo@example.com", null],
+    ]) {
+      row.run(connectorId, ownerId, email, name);
+    }
+    expect(listCorrespondents(scope).map((c) => [c.name, c.seenCount])).toEqual(
+      [["Ana Lee", 2]],
+    );
+  });
+
   it("promotes unknown correspondents to ghost contacts when crossing ghostThreshold", async () => {
     const matcher = buildContactMatcher(scope);
     const selfAddresses = { emails: ["me@example.com"], phones: [] };

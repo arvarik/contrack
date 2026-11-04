@@ -185,6 +185,15 @@ describe("buildGroups", () => {
     expect(groups.map((g) => g.level)).toEqual(["likely", "check"]);
     expect(groups[1].caveats).toEqual(["First names differ: Ada and Ben"]);
   });
+
+  it("says how many contacts share a name once, with the latest count", () => {
+    // Each pair keeps the count from when it was scored.
+    const [group] = buildGroups([
+      pair("ab", a, b, 0.7, { caveat: "3 contacts share this name" }),
+      pair("bc", b, c, 0.7, { caveat: "4 contacts share this name" }),
+    ]);
+    expect(group.caveats).toEqual(["4 contacts share this name"]);
+  });
 });
 
 describe("mergeOutcome", () => {
