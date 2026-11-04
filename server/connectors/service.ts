@@ -942,10 +942,11 @@ export async function runNow(
             );
             // A card the push created belongs to the source like one the
             // pull created: its source row tells ingest so, and the server's
-            // later edits write over the contact.
+            // later edits write over the contact. Its origin says it is a
+            // copy, so the source that made the contact keeps writing it.
             const sourceStmt = sqlite.prepare(
-              `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn)
-               SELECT ?, ?, ?, ?, ?
+              `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn, origin)
+               SELECT ?, ?, ?, ?, ?, 'push'
                WHERE NOT EXISTS (
                  SELECT 1 FROM contact_sources
                  WHERE contactId = ? AND platform = ? AND externalId = ?)`,

@@ -51,6 +51,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   card that a stopped CardDAV upload saved is linked, not imported twice.
 - A CardDAV card keeps updating its contact when a second card shares its
   email address, and Contrack writes the contact to the card that made it.
+- A contact that Google or a CardDAV book brought in keeps taking that
+  source's edits after a CardDAV connector uploads it to another book. Both
+  sources stopped updating it.
 - A vCard 4.0 card stays 4.0 when Contrack updates it, and a `tel:` number is
   read without its `tel:` prefix.
 - A birthday written as a date-time, such as 19850514T000000Z, reads as the

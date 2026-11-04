@@ -403,7 +403,8 @@ export async function ingestStream(
    * contact took in another one by a merge, which moves the duplicate's
    * source row to it, and not when another card that made it also feeds it.
    * Then the contact is the owner's, and the source only fills it in. A card
-   * that only shares an address with it does not count.
+   * that only shares an address with it does not count, and neither does a
+   * card Contrack uploaded the contact to (origin 'push'): it is a copy.
    */
   function madeBySync(contactId: string, externalId: string): boolean {
     return Boolean(
@@ -420,6 +421,7 @@ export async function ingestStream(
                SELECT 1 FROM connector_links l
                JOIN contact_sources o
                  ON o.contactId = l.localId AND o.externalId = l.externalId
+                   AND o.origin IS NOT 'push'
                WHERE l.ownerId = ? AND l.kind = 'contact' AND l.localId = s.contactId
                  AND NOT (l.connectorId = ? AND l.externalId = ?))`,
         )
@@ -1199,8 +1201,8 @@ export async function ingestStream(
           // stopped did not save, so later edits on the server apply.
           sqlite
             .prepare(
-              `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn)
-               VALUES (?, ?, ?, ?, ?)`,
+              `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn, origin)
+               VALUES (?, ?, ?, ?, ?, 'push')`,
             )
             .run(
               crypto.randomUUID(),

@@ -92,6 +92,8 @@ const ADDED_SINCE_FIXTURE = [
   "users",
   // 0005_address_change_links: auth_links gains a column
   "auth_links",
+  // 0006_source_origin: contact_sources gains a column
+  "contact_sources",
 ];
 
 interface MasterRow {
@@ -165,6 +167,37 @@ describe("a new database", () => {
     expect(actual.filter(kept)).toEqual(fixtureRows().filter(kept));
   });
 
+  it("marks as a push only the CardDAV source rows of a card named after its contact", () => {
+    const dev = new Database(":memory:");
+    runMigrations(
+      dev,
+      MIGRATIONS.filter((m) => m.id !== "0006_source_origin"),
+    );
+    const owner = dev.prepare("SELECT id FROM users LIMIT 1").get() as {
+      id: string;
+    };
+    dev
+      .prepare(
+        "INSERT INTO contacts (id, name, ownerId) VALUES ('ada-1a2b', 'Ada', ?)",
+      )
+      .run(owner.id);
+    const source = dev.prepare(
+      "INSERT INTO contact_sources (id, contactId, platform, externalId) VALUES (?, 'ada-1a2b', ?, ?)",
+    );
+    source.run("pushed", "carddav", "/dav/ab/ada-1a2b.vcf");
+    source.run("pulled", "carddav", "/dav/ab/9f3e.vcf");
+    source.run("google", "google", "people/ada-1a2b.vcf");
+    runMigrations(dev, MIGRATIONS);
+    expect(
+      dev.prepare("SELECT id, origin FROM contact_sources ORDER BY id").all(),
+    ).toEqual([
+      { id: "google", origin: null },
+      { id: "pulled", origin: null },
+      { id: "pushed", origin: "push" },
+    ]);
+    dev.close();
+  });
+
   it("retires legacy migration rows and backfills contact_addresses from contacts.location", () => {
     const dev = new Database(":memory:");
     runMigrations(dev, MIGRATIONS);
@@ -199,6 +232,7 @@ describe("a new database", () => {
       "0003_address_trust",
       "0004_unproven_addresses",
       "0005_address_change_links",
+      "0006_source_origin",
     ]);
     const addr = dev
       .prepare(

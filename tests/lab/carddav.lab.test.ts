@@ -247,6 +247,26 @@ describe("CardDAV against Radicale", () => {
     expect(cards.get("b.vcf")).not.toContain("ORG:Clinic");
   });
 
+  it("keeps applying a card's edits after another connector uploads its contact", async () => {
+    const { ownerId, scope } = labOwner();
+    const bookA = await radicaleBook(`${ownerId}-a`);
+    const bookB = await radicaleBook(`${ownerId}-b`);
+    const sam = (fn: string) =>
+      vcard("UID:sam", `FN:${fn}`, "EMAIL:sam@stone.example");
+    await bookA.put("sam", sam("Sam Stone"));
+    const a = await connect(scope, bookA, { syncDirection: "pull_only" });
+    await runNow(scope, a.id);
+    const b = await connect(scope, bookB, { pushExistingContacts: true });
+    await runNow(scope, b.id);
+    expect([...(await bookB.cards()).values()][0]).toContain("FN:Sam Stone");
+
+    await bookA.put("sam", sam("Samuel Stone"));
+    await runNow(scope, a.id);
+    expect(ids(ownerId, "Samuel Stone")).toHaveLength(1);
+    await runNow(scope, b.id);
+    expect([...(await bookB.cards()).values()][0]).toContain("FN:Samuel Stone");
+  });
+
   it("links the same cards again when the connector is removed and added back", async () => {
     const { ownerId, scope } = labOwner();
     const book = await radicaleBook(`${ownerId}-dav`);

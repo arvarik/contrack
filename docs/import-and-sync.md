@@ -269,11 +269,13 @@ writes Google's details over a contact it created, its emails and phones
 included. Change those details in Google, not in Contrack. A contact that
 existed before and was linked keeps its name and its details: the sync only
 fills in what is empty and adds the addresses it learns. So does a
-contact you merged, and one that two connectors link. When you delete a
-contact in Google, a contact the sync created moves to the Trash, and a
-linked one stays. A new contact from Google gets the same duplicate check as
-a contact you add, when **Check new contacts automatically** is on. A
-suggested person that you save in Google Contacts becomes a contact.
+contact you merged, and one that two connectors brought in. A CardDAV
+connector that only uploaded the contact does not count, so Google's edits
+still apply. When you delete a contact in Google, a contact the sync created
+moves to the Trash, and a linked one stays. A new contact from Google gets the
+same duplicate check as a contact you add, when **Check new contacts
+automatically** is on. A suggested person that you save in Google Contacts
+becomes a contact.
 
 Google Calendar meetings with your contacts become meetings on their
 timelines after they end. The next 60 days of meetings with someone besides
