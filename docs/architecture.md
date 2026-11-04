@@ -749,13 +749,14 @@ For the settings a person sees, see [The AI page](ai.md#the-ai-page).
 | `npm test`              | The unit, integration and eval projects of Vitest. The tests use a temporary data folder, never your `curator.db`. |
 | `npm run test:e2e`      | Playwright journeys in `tests/e2e/`, including the accessibility checks.                                           |
 | `npm run test:contract` | Optional live checks against the configured AI providers. They can cost money.                                     |
+| `npm run test:lab`      | The Mailbox, Calendar and CardDAV connectors against real servers in Docker (`tests/lab/compose.yml`).             |
 | `npm run knip`          | Files, exports and types in `src/` that nothing uses.                                                              |
 | `npm run api:openapi`   | Writes `docs/openapi.json` from the route contracts. A test fails when the committed file differs.                 |
 
-CI runs the lint, the format check, the tests with coverage, a production
-build and the Playwright journeys. A push to `main` or a version tag also
-builds the image for `linux/amd64` and `linux/arm64`, signs its provenance and
-scans it. For the workflow, see the [contributing guide](../CONTRIBUTING.md).
+CI runs the lint, the format check, the tests with coverage, the connector
+lab, a production build and the Playwright journeys. A push to `main` or a
+version tag also builds the image for `linux/amd64` and `linux/arm64`, signs
+its provenance and scans it. For the workflow, see the [contributing guide](../CONTRIBUTING.md).
 
 ## Related
 
