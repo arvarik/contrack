@@ -192,7 +192,8 @@ Common hosts are `imap.gmail.com`, `imap.mail.me.com` (iCloud), and
 
 A message that sits in two of the folders, such as a mail you sent to
 yourself, counts once. A folder you add later is read back over the same
-**First sync goes back** window as the first one.
+**First sync goes back** window as the first one. A folder that cannot be
+opened shows as an error in the run history, and the other folders still sync.
 
 ### Google Workspace
 
@@ -324,8 +325,9 @@ deletes the contact on your CardDAV server.
 | **Generate AI summaries** (Google: **AI message summaries**)                     | Mailbox, Google           | Off          |
 
 A sender such as `no-reply@` or `notifications@` is never suggested, and
-neither is anyone on a message or a meeting with more than 25 people you do
-not know. Gmail's spam, trash and drafts are skipped.
+neither is anyone on bulk mail (a newsletter or a mailing list) or on a message
+or a meeting with more than 25 people you do not know. Gmail's spam, trash and
+drafts are skipped.
 
 An AI summary is one or two sentences about a message with one of your
 contacts. The [Fast model](ai.md#models) writes it into the message's timeline
@@ -343,9 +345,9 @@ and sends nothing to a provider. A sync writes at most 50 summaries.
   address of the connected mailbox or Google account, and the addresses you
   list as yours.
 - A meeting or message with none of your contacts in it goes on no timeline.
-  Contrack counts the people in it. After the number of times set in
-  **Suggest a new person after**, the person becomes a ghost, see
-  [Ghosts](contacts.md#ghosts).
+  Contrack counts the people in it, once for each meeting or message however
+  often a sync reads it. After the number of times set in **Suggest a new
+  person after**, the person becomes a ghost, see [Ghosts](contacts.md#ghosts).
 - Meetings and email from a connector carry a badge on the timeline, such as
   "via Calendar", "via Email", or "via Google".
 

@@ -1126,9 +1126,10 @@ function reauthMessage(kind: string, message: string): string {
 
 /**
  * The owner's addresses a connector knows: the mailbox it signs in to
- * (`secret.email`, Google's account), its aliases and its `selfEmails`. Ingest
- * matched only the sign-in email of the Contrack account, so the connected
- * mailbox itself counted as a stranger whenever it differed.
+ * (`secret.email`, Google's account, or a `username` that is an address, the
+ * IMAP mailbox), its aliases and its `selfEmails`. Ingest matched only the
+ * sign-in email of the Contrack account, so the connected mailbox itself
+ * counted as a stranger whenever it differed.
  */
 function connectorSelfEmails(
   config: Record<string, unknown>,
@@ -1137,6 +1138,9 @@ function connectorSelfEmails(
   const out: string[] = [];
   const email = (secret as { email?: unknown } | null)?.email;
   if (typeof email === "string") out.push(email);
+  if (typeof config.username === "string" && config.username.includes("@")) {
+    out.push(config.username);
+  }
   for (const list of [config.aliases, config.selfEmails]) {
     if (!Array.isArray(list)) continue;
     for (const em of list) if (typeof em === "string") out.push(em);

@@ -29,6 +29,19 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A Calendar or Mailbox connector counts each person once for each meeting or
+  mail. A calendar counted the people of every past meeting again on each
+  sync, so someone met once became a suggested person by the third sync.
+- The mailbox that a Mailbox connector reads counts as you, also when it is
+  not your sign-in email.
+- The Mailbox connector reads the newsletter and mailing list headers, so bulk
+  mail no longer suggests people.
+- A mailbox folder that cannot be opened shows as an error while the other
+  folders sync. The Mailbox connector no longer takes a folder such as
+  "Presentations" for the Sent folder.
+- People at a mail provider or a university, such as `mail.ru` or
+  `email.arizona.edu`, can be suggested again.
+- Mail moved in from another mailbox keeps the date it was sent.
 - A Google connector signed in with AI summaries off syncs Gmail. Every sync of
   its mail failed before, and the run still showed no error.
 - A contact deleted in Google is moved to the trash in Contrack on the next

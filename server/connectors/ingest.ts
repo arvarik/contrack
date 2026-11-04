@@ -3,9 +3,10 @@
  * 1. Matches participants to contacts (ContactMatcher).
  * 2. Deduplicates by externalId through connector_links.
  * 3. Rolls a day up by contactId:YYYY-MM-DD.
- * 4. Counts unknown participants as correspondents, one per mailbox, and
- *    promotes them to ghost contacts past ghostThreshold. Bulk mail, a robot
- *    or relay sender and a broadcast to many strangers count nobody.
+ * 4. Counts unknown participants as correspondents, one per mailbox and once
+ *    per mail or meeting, and promotes them to ghost contacts past
+ *    ghostThreshold. Bulk mail, a robot or relay sender and a broadcast to
+ *    many strangers count nobody.
  * 5. Writes a synced person over the contact the sync made for it, or over a
  *    suggested person it names, and only fills in a contact the sync linked
  *    by a shared address. Trashes the former when its source deletes it, and
@@ -658,7 +659,18 @@ export async function ingestStream(
         | { externalId: string; localId: string | null; seenCount: number }
         | undefined;
 
-      if (existingLink) {
+      // A link with no interaction is a mail or a meeting that matched no
+      // contact: its strangers were counted when it came. It is logged once
+      // a contact matches, and its strangers never count again.
+      const counted = existingLink?.localId === null;
+      if (counted) {
+        sqlite
+          .prepare(
+            `DELETE FROM connector_links
+             WHERE connectorId = ? AND ownerId = ? AND kind = 'interaction' AND externalId = ?`,
+          )
+          .run(connector.id, scope.ownerId, existingLink.externalId);
+      } else if (existingLink) {
         if (existingLink.externalId !== event.externalId) {
           sqlite
             .prepare(
@@ -893,6 +905,7 @@ export async function ingestStream(
         // No contact matched: count the strangers, unless this is bulk mail
         // or a broadcast. A robot or a relay is never one (`isAutomatedSender`).
         const strangers =
+          counted ||
           event.automated ||
           match.unknownParticipants.length > MAX_STRANGERS_PER_EVENT
             ? []
@@ -990,6 +1003,16 @@ export async function ingestStream(
             }
           }
         }
+        // Kept with no interaction, so a mail or a meeting read again counts
+        // its strangers once. An ICS feed gives every past meeting on each run.
+        sqlite
+          .prepare(
+            `INSERT INTO connector_links (
+              connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
+            ) VALUES (?, ?, 'interaction', ?, NULL, 1, ?)`,
+          )
+          .run(connector.id, scope.ownerId, event.externalId, nowIso);
+        if (counted) stats.skipped = (stats.skipped ?? 0) + 1;
       }
       return;
     }
