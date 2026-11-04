@@ -127,7 +127,7 @@ describe("IMAP Adapter Integration", () => {
                   `* 1 FETCH (UID 101 RFC822.SIZE ${rawMessageRfc822.length} BODY[HEADER] {${header.length}}\r\n${header} BODY[TEXT]<0> {${body.length}}\r\n${body})\r\n${tag} OK FETCH completed\r\n`,
                 );
               } else if (
-                line.includes("BODY.PEEK") ||
+                line.includes("BODY.PEEK[]") ||
                 line.includes("BODY[]")
               ) {
                 socket.write(`${tag} NO Whole messages are not served\r\n`);

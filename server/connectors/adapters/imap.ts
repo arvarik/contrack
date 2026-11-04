@@ -20,7 +20,12 @@ import {
   ConnectorUnavailableError,
   type ConnectorError,
 } from "../errors.ts";
-import { mailDate, normalizeEmail } from "../email/normalize.ts";
+import {
+  BULK_HEADERS,
+  isBulkMail,
+  mailDate,
+  normalizeEmail,
+} from "../email/normalize.ts";
 import {
   summarizeEmail,
   summariesAllowed,
@@ -140,6 +145,25 @@ export function createImapClient(
     log.warn("Connectors", `IMAP connection error: ${err.code ?? err.message}`);
   });
   return client;
+}
+
+/**
+ * A header's value by name from the header block a FETCH of some headers
+ * gives, with folded lines unfolded.
+ */
+function headerReader(
+  raw: Buffer | undefined,
+): (name: string) => string | undefined {
+  const lines = (raw?.toString() ?? "")
+    .replace(/\r?\n[ \t]+/g, " ")
+    .split(/\r?\n/);
+  return (name) => {
+    const prefix = `${name.toLowerCase()}:`;
+    return lines
+      .find((line) => line.toLowerCase().startsWith(prefix))
+      ?.slice(prefix.length)
+      .trim();
+  };
 }
 
 /** Messages per FETCH: one round trip each, not one per message. */
@@ -355,16 +379,14 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
       const mailboxes = await client.list();
 
       if (targetFolders.length === 0) {
-        // Auto-detect INBOX and Sent
+        // Auto-detect INBOX and Sent. ImapFlow marks the Sent folder by the
+        // server's SPECIAL-USE flag, else by its name in many languages
+        // ("Sent", "Sent Items", "Gesendet"). Any path with "sent" in it also
+        // took "Presentations" when there was none.
         const inboxBox = mailboxes.find(
           (m) => m.specialUse === "\\Inbox" || m.path.toUpperCase() === "INBOX",
         );
-        const sentBox = mailboxes.find(
-          (m) =>
-            m.specialUse === "\\Sent" ||
-            /^sent(\s*items|\s*messages)?$/i.test(m.path) ||
-            m.path.toUpperCase().includes("SENT"),
-        );
+        const sentBox = mailboxes.find((m) => m.specialUse === "\\Sent");
 
         if (inboxBox) targetFolders.push(inboxBox.path);
         else targetFolders.push("INBOX");
@@ -415,7 +437,9 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
           }
           foldersFailed++;
           firstFolderError ??= err as Error;
-          ctx.log(`Could not open folder ${folder}: ${imapErrorMessage(err)}`);
+          const message = `Could not open folder ${folder}: ${imapErrorMessage(err)}`;
+          ctx.log(message);
+          yield { kind: "stage_failed", message };
           continue;
         }
 
@@ -482,6 +506,7 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
                   internalDate: true,
                   uid: true,
                   bodyStructure: true,
+                  headers: BULK_HEADERS,
                 },
                 { uid: true },
               );
@@ -592,6 +617,7 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               date: norm.date,
               direction: norm.direction,
               participants: norm.participants,
+              automated: isBulkMail(undefined, headerReader(message.headers)),
               raw: { folder, uid, messageId: norm.messageId },
             };
 

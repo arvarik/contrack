@@ -733,20 +733,22 @@ export async function runNow(
   if (userRow?.email) {
     selfEmails.push(userRow.email);
   }
-  selfEmails.push(...connectorSelfEmails(config, secret));
+  selfEmails.push(...connectorSelfEmails(connector.kind, config, secret));
   // The addresses the owner's other connectors sign in to are the owner too:
   // with two Google accounts, each one's mail to the other was a stranger.
   for (const other of sqlite
     .prepare(
-      `SELECT config, secret FROM connectors WHERE ownerId = ? AND id != ?`,
+      `SELECT kind, config, secret FROM connectors WHERE ownerId = ? AND id != ?`,
     )
     .all(scope.ownerId, connector.id) as Array<{
+    kind: string;
     config: string | null;
     secret: string | null;
   }>) {
     try {
       selfEmails.push(
         ...connectorSelfEmails(
+          other.kind,
           other.config ? JSON.parse(other.config) : {},
           other.secret ? JSON.parse(secretBox.open(other.secret)) : null,
         ),
@@ -1142,17 +1144,28 @@ function reauthMessage(kind: string, message: string): string {
 
 /**
  * The owner's addresses a connector knows: the mailbox it signs in to
- * (`secret.email`, Google's account), its aliases and its `selfEmails`. Ingest
- * matched only the sign-in email of the Contrack account, so the connected
- * mailbox itself counted as a stranger whenever it differed.
+ * (`secret.email`, Google's account, or a `username` that is an address, the
+ * IMAP mailbox), its aliases and its `selfEmails`. Ingest matched only the
+ * sign-in email of the Contrack account, so the connected mailbox itself
+ * counted as a stranger whenever it differed.
  */
 function connectorSelfEmails(
+  kind: string,
   config: Record<string, unknown>,
   secret: unknown,
 ): string[] {
   const out: string[] = [];
   const email = (secret as { email?: unknown } | null)?.email;
   if (typeof email === "string") out.push(email);
+  // Only a mailbox's sign-in is the owner. A CardDAV username can be a family
+  // member's account, who is a contact.
+  if (
+    kind === "imap" &&
+    typeof config.username === "string" &&
+    config.username.includes("@")
+  ) {
+    out.push(config.username);
+  }
   for (const list of [config.aliases, config.selfEmails]) {
     if (!Array.isArray(list)) continue;
     for (const em of list) if (typeof em === "string") out.push(em);
@@ -1187,6 +1200,7 @@ export function listCorrespondents(
       `SELECT
          cl.connectorId,
          c.name AS connectorName,
+         c.kind AS connectorKind,
          c.config AS connectorConfig,
          c.secret AS connectorSecret,
          cl.kind,
@@ -1203,6 +1217,7 @@ export function listCorrespondents(
     .all(scope.ownerId) as Array<{
     connectorId: string;
     connectorName: string;
+    connectorKind: string;
     connectorConfig: string | null;
     connectorSecret: string | null;
     kind: string;
@@ -1244,7 +1259,11 @@ export function listCorrespondents(
     } catch {
       // A secret the key no longer opens names no address.
     }
-    for (const email of connectorSelfEmails(config, secret)) {
+    for (const email of connectorSelfEmails(
+      row.connectorKind,
+      config,
+      secret,
+    )) {
       self.add(canonicalEmailAddress(email));
     }
   }

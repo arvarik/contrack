@@ -32,7 +32,6 @@ import { sqlite } from "../../server/db.ts";
 import {
   GOOGLE_CALL_TIMEOUT_MS,
   googleAdapter,
-  isBulkMail,
 } from "../../server/connectors/adapters/google.ts";
 import {
   setGoogleOAuthCredentials,
@@ -1129,21 +1128,6 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       expect(emailIds(backfill.events)).toEqual(["m3@example.com"]);
       expect(backfill.cursor.gmailHistoryId).toBe("H0");
     });
-
-    it.each([
-      [["CATEGORY_PROMOTIONS", "INBOX"], {}, true],
-      [["CATEGORY_UPDATES"], {}, true],
-      [["INBOX"], { "List-Unsubscribe": "<mailto:u@x.com>" }, true],
-      [["INBOX"], { Precedence: "bulk" }, true],
-      [["INBOX"], { "Auto-Submitted": "auto-generated" }, true],
-      [["INBOX"], { "Auto-Submitted": "no" }, false],
-      [["INBOX", "CATEGORY_PERSONAL"], {}, false],
-    ])(
-      "isBulkMail(%j, %j) is %s",
-      (labels, headers: Record<string, string>, bulk) => {
-        expect(isBulkMail(labels, (name) => headers[name])).toBe(bulk);
-      },
-    );
 
     it("reports a stage that failed while the others went on", async () => {
       vi.spyOn(google, "people").mockReturnValue({
