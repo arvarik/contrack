@@ -5,18 +5,30 @@ import {
 } from "@tanstack/react-query";
 import type { Contact } from "../types";
 import { STALE_TIMES } from "../lib/queryConfig";
-import { contactRoutes } from "../../shared/contracts/contacts";
+import type { contactRoutes } from "../../shared/contracts/contacts";
 import { apiJson } from "./client";
 import { GEO_STATUS_KEY } from "./geo";
+import { loadTimeZones } from "../components/LocalTimeWeather";
 
-/** One contact, as the contact page reads it. */
+/**
+ * One contact, as the contact page reads it. The first contact with a place
+ * also waits for the zone borders (`loadTimeZones`), so the header draws its
+ * local time with the rest of it, not a moment later.
+ */
 export const contactQuery = (id: string) =>
   queryOptions({
     queryKey: ["contacts", id],
-    queryFn: async ({ signal }): Promise<Contact> =>
-      (await apiJson(contactRoutes.get, `/contacts/${id}`, {
-        signal,
-      })) as Contact,
+    queryFn: async ({ signal }): Promise<Contact> => {
+      const contact = (await apiJson<typeof contactRoutes.get>(
+        "GET",
+        `/contacts/${id}`,
+        {
+          signal,
+        },
+      )) as Contact;
+      if (contact.lat !== null && contact.lng !== null) await loadTimeZones();
+      return contact;
+    },
     staleTime: STALE_TIMES.contactDetail,
   });
 

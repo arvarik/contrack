@@ -8,7 +8,7 @@ import {
   GENERAL_QUESTIONS,
   generalQuestionFor,
 } from "../../../shared/generalQuestions";
-import { facetFiltersSchema } from "../../../shared/searchFacets";
+import { facetFiltersSchema } from "../../../shared/searchSchemas";
 
 describe("GENERAL_QUESTIONS", () => {
   it("writes each row as a question, with facets the search request accepts", () => {

@@ -1,6 +1,5 @@
 import { apiFetch } from "../../api/client";
 import { readNdjson } from "../../api/ndjson";
-import { z } from "zod";
 /**
  * An opt-in brief over three or more AI results, in the palette and on Ask.
  * Streams NDJSON from POST /api/search/synthesize:
@@ -44,20 +43,6 @@ interface SynthesisBarProps {
 type SynthesisPhase = "idle" | "loading" | "streaming" | "complete" | "error";
 
 const MIN_RESULTS_FOR_SYNTHESIS = 3;
-
-/** The longest summary, whole or as the sum of its deltas. */
-const MAX_SUMMARY_LENGTH = 20_000;
-
-/** One line of the stream. A delta carries the next piece, not the whole text. */
-const synthesisChunkSchema = z.discriminatedUnion("phase", [
-  z.object({ phase: z.literal("start") }),
-  z.object({ phase: z.literal("delta"), text: z.string() }),
-  z.object({
-    phase: z.literal("complete"),
-    text: z.string().trim().min(1).max(MAX_SUMMARY_LENGTH),
-  }),
-  z.object({ phase: z.literal("error"), error: z.string() }),
-]);
 
 export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   query,
@@ -109,6 +94,11 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
     setSynthesisText("");
     setErrorMessage("");
 
+    // zod loads with the first brief, beside the request.
+    const schemas = import("../../api/streamSchemas");
+    // The try awaits it. This stops an unhandled rejection when the request
+    // fails before that and the download fails too.
+    schemas.catch(() => {});
     try {
       const payload = {
         query,
@@ -125,6 +115,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         signal: controller.signal,
       });
 
+      const { synthesisChunkSchema, MAX_SUMMARY_LENGTH } = await schemas;
       let complete = false;
       let streamed = "";
       await readNdjson(

@@ -32,7 +32,7 @@ import {
   TONE_TEXT,
 } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { sanitizeNote } from "../../../lib/sanitize";
+import { useSanitizedNote } from "../../../lib/sanitize";
 import { formatDue, formatWhen } from "../../../lib/datetime";
 import { isPastDay } from "../../../../shared/dates";
 import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
@@ -95,10 +95,7 @@ export const InteractionDetailModal = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, id, initialEditing]);
 
-  const sanitizedContent = React.useMemo(
-    () => (interaction?.content ? sanitizeNote(interaction.content) : ""),
-    [interaction?.content],
-  );
+  const sanitizedContent = useSanitizedNote(interaction?.content ?? "") ?? "";
 
   if (!interaction) return null;
 

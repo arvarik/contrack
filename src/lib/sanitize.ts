@@ -1,4 +1,29 @@
-import DOMPurify from "dompurify";
+import { useEffect, useMemo, useState } from "react";
+import type { DOMPurify } from "dompurify";
+
+/**
+ * DOMPurify, loaded with the first timeline rather than with the app. The
+ * timeline query waits for it (`timelineQuery`), so the notes draw with
+ * their entries.
+ */
+let purify: DOMPurify | null = null;
+let purifyLoad: Promise<void> | null = null;
+
+/**
+ * Loads DOMPurify, once. A failed download resolves too, with no sanitizer,
+ * and the next call tries again.
+ */
+export function loadSanitizer(): Promise<void> {
+  purifyLoad ??= import("dompurify").then(
+    (module) => {
+      purify = module.default;
+    },
+    () => {
+      purifyLoad = null;
+    },
+  );
+  return purifyLoad;
+}
 
 /**
  * The DOMPurify settings for a note's rich text: the tags and attributes the
@@ -61,7 +86,23 @@ function flattenLinkPreviews(html: string): string {
   return doc.body.innerHTML;
 }
 
-/** A saved note's HTML, safe to show on the page. */
-export function sanitizeNote(html: string): string {
-  return DOMPurify.sanitize(flattenLinkPreviews(html), TIPTAP_SANITIZE_CONFIG);
+/**
+ * A saved note's HTML, safe to show on the page. Null until DOMPurify is
+ * here: the HTML is never shown unsanitized.
+ */
+export function sanitizeNote(html: string): string | null {
+  if (!purify) return null;
+  return purify.sanitize(flattenLinkPreviews(html), TIPTAP_SANITIZE_CONFIG);
+}
+
+/**
+ * `sanitizeNote` for a component: it loads DOMPurify if no timeline has, and
+ * draws again when it lands. Runs again only when the HTML changes.
+ */
+export function useSanitizedNote(html: string): string | null {
+  const [ready, setReady] = useState(purify !== null);
+  useEffect(() => {
+    if (!ready) void loadSanitizer().then(() => setReady(true));
+  }, [ready]);
+  return useMemo(() => (ready ? sanitizeNote(html) : null), [ready, html]);
 }

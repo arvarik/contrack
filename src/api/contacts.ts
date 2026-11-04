@@ -25,8 +25,8 @@ import {
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
 import { dayInZone } from "../../shared/dates";
-import { contactRoutes } from "../../shared/contracts/contacts";
-import { trashRoutes } from "../../shared/contracts/trash";
+import type { contactRoutes } from "../../shared/contracts/contacts";
+import type { trashRoutes } from "../../shared/contracts/trash";
 import type { BodyOf } from "../../shared/contracts/route";
 import { apiFetch, apiJson, jsonBody } from "./client";
 import { GEO_STATUS_KEY } from "./geo";
@@ -42,7 +42,7 @@ const fetchContactsSlim = async (context?: {
 }): Promise<Contact[]> =>
   // The slim view sends `SlimContact` rows, with bare emails and phones and
   // empty child arrays. The views read them as Contacts.
-  (await apiJson(contactRoutes.list, "/contacts?view=slim", {
+  (await apiJson<typeof contactRoutes.list>("GET", "/contacts?view=slim", {
     signal: context?.signal,
   })) as Contact[];
 
@@ -210,9 +210,13 @@ export const useArchivedContacts = () => {
   return useQuery({
     queryKey: ["contacts", "archived"],
     queryFn: async ({ signal }): Promise<Contact[]> =>
-      (await apiJson(contactRoutes.archived, "/contacts/archived", {
-        signal,
-      })) as Contact[],
+      (await apiJson<typeof contactRoutes.archived>(
+        "GET",
+        "/contacts/archived",
+        {
+          signal,
+        },
+      )) as Contact[],
     staleTime: STALE_TIMES.archived,
   });
 };
@@ -221,8 +225,8 @@ export const useCreateContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: ContactUpdateData): Promise<Contact> =>
-      (await apiJson(
-        contactRoutes.create,
+      (await apiJson<typeof contactRoutes.create>(
+        "POST",
         "/contacts",
         jsonBody(data),
       )) as Contact,
@@ -265,8 +269,8 @@ export const useUpdateContact = () => {
       writeContactInOrder(
         id,
         async () =>
-          (await apiJson(
-            contactRoutes.replace,
+          (await apiJson<typeof contactRoutes.replace>(
+            "PUT",
             `/contacts/${encodeURIComponent(id)}`,
             jsonBody(data),
           )) as Contact,
@@ -307,8 +311,8 @@ export const useSetContactLocation = () => {
       writeContactInOrder(
         id,
         async () =>
-          (await apiJson(
-            contactRoutes.location,
+          (await apiJson<typeof contactRoutes.location>(
+            "PATCH",
             `/contacts/${encodeURIComponent(id)}/location`,
             jsonBody(data),
           )) as Contact,
@@ -336,8 +340,8 @@ export const useRejectResearchRun = () => {
       writeContactInOrder(
         id,
         async () =>
-          (await apiJson(
-            contactRoutes.rejectResearchRun,
+          (await apiJson<typeof contactRoutes.rejectResearchRun>(
+            "POST",
             `/contacts/${encodeURIComponent(id)}/research/reject`,
             jsonBody({ runAt }),
           )) as { removed: number; contact: Contact },
@@ -375,8 +379,8 @@ export const useSetTracked = () => {
       writeContactInOrder(
         id,
         async () =>
-          (await apiJson(
-            contactRoutes.patch,
+          (await apiJson<typeof contactRoutes.patch>(
+            "PATCH",
             `/contacts/${encodeURIComponent(id)}`,
             jsonBody(
               cadenceDays === undefined
@@ -418,8 +422,8 @@ export const useSetCadence = () => {
       writeContactInOrder(
         id,
         async () =>
-          (await apiJson(
-            contactRoutes.patch,
+          (await apiJson<typeof contactRoutes.patch>(
+            "PATCH",
             `/contacts/${encodeURIComponent(id)}`,
             jsonBody({ cadenceDays }),
           )) as Contact,
@@ -474,7 +478,7 @@ export const usePurgeTrashedContact = () => {
 export const useEmptyTrash = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiJson(trashRoutes.empty, "/trash"),
+    mutationFn: () => apiJson<typeof trashRoutes.empty>("DELETE", "/trash"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
@@ -519,7 +523,7 @@ export const useDeleteContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiJson(contactRoutes.delete, `/contacts/${id}`),
+      apiJson<typeof contactRoutes.delete>("DELETE", `/contacts/${id}`),
     onSettled: (_data, error, id) => {
       if (!error) {
         queryClient.removeQueries({ queryKey: ["contacts", id] });
@@ -534,8 +538,8 @@ export const useArchiveContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiJson(
-        contactRoutes.replace,
+      apiJson<typeof contactRoutes.replace>(
+        "PUT",
         `/contacts/${id}`,
         jsonBody({ isArchived: true }),
       ),
@@ -547,8 +551,8 @@ export const useUnarchiveContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiJson(
-        contactRoutes.replace,
+      apiJson<typeof contactRoutes.replace>(
+        "PUT",
         `/contacts/${id}`,
         jsonBody({ isArchived: false }),
       ),
@@ -560,8 +564,8 @@ export const useBulkDeleteContacts = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ids: string[]) =>
-      apiJson(
-        contactRoutes.bulkDelete,
+      apiJson<typeof contactRoutes.bulkDelete>(
+        "POST",
         "/contacts/bulk-delete",
         jsonBody({ ids }),
       ),
@@ -575,8 +579,8 @@ export const useBulkUpdateContacts = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ ids, data }: { ids: string[]; data: ContactUpdateData }) =>
-      apiJson(
-        contactRoutes.bulkUpdate,
+      apiJson<typeof contactRoutes.bulkUpdate>(
+        "PUT",
         "/contacts/bulk-update",
         jsonBody({ ids, data }),
       ),
@@ -598,8 +602,8 @@ export const useUploadAvatar = () => {
     }): Promise<Contact> => {
       const formData = new FormData();
       formData.append("avatar", file);
-      return (await apiJson(
-        contactRoutes.avatar,
+      return (await apiJson<typeof contactRoutes.avatar>(
+        "POST",
         `/contacts/${contactId}/avatar`,
         {
           body: formData,
@@ -620,8 +624,8 @@ export const useSetDicebearAvatar = () => {
       contactId: string;
       avatarUrl: string;
     }): Promise<Contact> =>
-      (await apiJson(
-        contactRoutes.replace,
+      (await apiJson<typeof contactRoutes.replace>(
+        "PUT",
         `/contacts/${contactId}`,
         jsonBody({ avatarUrl }),
       )) as Contact,

@@ -3,7 +3,7 @@
  * answers with its merge-log ids, so the message after it can offer Undo.
  */
 import { ApiError, apiFetch, apiJson, jsonBody } from "./client";
-import { contactRoutes } from "../../shared/contracts/contacts";
+import type { contactRoutes } from "../../shared/contracts/contacts";
 import { fetchAuthStatus } from "./auth";
 import { emitAuthExpired } from "../lib/appEvents";
 import { corvidReact } from "../lib/corvid";
@@ -253,8 +253,8 @@ export const useMergeCluster = () => {
       primaryId: string;
       duplicateIds: string[];
     }) =>
-      apiJson(
-        contactRoutes.mergeCluster,
+      apiJson<typeof contactRoutes.mergeCluster>(
+        "POST",
         `/contacts/merge-cluster`,
         jsonBody({ primaryId, duplicateIds }),
       ),
@@ -267,8 +267,8 @@ export const useMergeClusters = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (clusters: { primaryId: string; duplicateIds: string[] }[]) =>
-      apiJson(
-        contactRoutes.mergeClusters,
+      apiJson<typeof contactRoutes.mergeClusters>(
+        "POST",
         `/contacts/merge-clusters`,
         jsonBody({ clusters }),
       ),

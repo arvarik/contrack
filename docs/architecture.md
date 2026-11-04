@@ -206,9 +206,11 @@ contract, so they cannot disagree.
   It never parses its own answer: the tests check the answers.
 - **The app** takes its types from the contracts. `src/types.ts` re-exports
   `Contact`, `Interaction`, `ActionItem`, `ContactList` and their parts under
-  the names the views use. `apiJson(contract, path, init)` in
-  `src/api/client.ts` sends the contract's method and types the answer by its
-  `response`. `apiJson<T>(path, init)` serves a route with no contract.
+  the names the views use. `apiJson<typeof contract>(method, path, init)` in
+  `src/api/client.ts` sends the method, which must be the contract's, and
+  types the answer by its `response`. The app imports a contract as a type
+  only, so zod stays off the first page load. `apiJson<T>(path, init)` serves
+  a route with no contract.
 - **The MCP tools** build their inputs from the same field schemas, plus
   fields of their own such as `allowDuplicate` and `mentionContactIds`. A tool
   checks a name, a date or an id list exactly as the REST route that does the

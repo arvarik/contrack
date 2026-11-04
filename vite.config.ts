@@ -80,7 +80,10 @@ export default defineConfig({
          *
          * A Rolldown group also captures the dependencies of what it matches,
          * and the first group to capture a module keeps it. The React group
-         * ranks highest, so no other group captures React. The map's group
+         * ranks highest, so no other group captures React. Groups of equal
+         * priority rank in list order, so `app-shared`, last at the default 0,
+         * ranks lowest. Rolldown reads a priority as an unsigned 32-bit
+         * number, so a negative one ranks above every group. The map's group
          * captures no dependencies: through Vite's lazy-import helper, used
          * by every page, it would put the map on every page. It names the one
          * dependency it wants, the compression library PMTiles reads with.
@@ -131,7 +134,6 @@ export default defineConfig({
               name: "app-shared",
               tags: ["$initial"],
               minShareCount: 2,
-              priority: -10,
               includeDependenciesRecursively: false,
             },
           ],

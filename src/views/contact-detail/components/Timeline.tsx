@@ -42,7 +42,7 @@ import {
   TIMELINE_CARD,
   TONE_WASH,
 } from "../../../lib/styles";
-import { sanitizeNote } from "../../../lib/sanitize";
+import { useSanitizedNote } from "../../../lib/sanitize";
 import { formatDay, parseServerTime } from "../../../lib/datetime";
 import {
   startPendingDelete,
@@ -235,7 +235,7 @@ const titleButton = (id: string) =>
 
 /** Memoized so the sanitizer runs only when the entry's HTML changes. */
 const InteractionContent = React.memo(({ html }: { html: string }) => {
-  const sanitized = useMemo(() => sanitizeNote(html), [html]);
+  const sanitized = useSanitizedNote(html) ?? "";
   return (
     <div
       className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface line-clamp-3 pointer-events-none"

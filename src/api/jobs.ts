@@ -4,7 +4,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { apiJson } from "./client";
-import { jobRoutes } from "../../shared/contracts/jobs";
+import type { jobRoutes } from "../../shared/contracts/jobs";
 
 export type { JobStatus, RecurringJob } from "../../shared/contracts/jobs";
 
@@ -16,7 +16,7 @@ export const useBackgroundJobs = () =>
   useQuery({
     queryKey: ["admin", "jobs"] as const,
     queryFn: ({ signal }) =>
-      apiJson(jobRoutes.overview, "/admin/jobs", { signal }),
+      apiJson<typeof jobRoutes.overview>("GET", "/admin/jobs", { signal }),
     staleTime: 5_000,
     refetchInterval: 15_000,
   });

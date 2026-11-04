@@ -29,7 +29,8 @@ import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
 import { IconButton } from "../../components/ui/IconButton";
 import {
   describeLocalTime,
-  timeZoneAt,
+  loadTimeZones,
+  useTimeZoneAt,
 } from "../../components/LocalTimeWeather";
 import { telHref } from "../../lib/contactLinks";
 import { formatRelative } from "../../lib/datetime";
@@ -38,6 +39,10 @@ import { DURATION, EASE } from "../../lib/motion";
 import { TAG_PILL, TONE_TEXT, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import type { ClusterFeature } from "./useClusterFeatures";
+
+// The map's stats bring tz-lookup with the map, so this lands before the
+// first card opens, and the card shows the time on its first render.
+void loadTimeZones();
 
 /** Half the 48 px pin plus a gap, so a card clears the ring. */
 export const PIN_CLEARANCE = 30;
@@ -114,7 +119,7 @@ function CardBody({
   children: ReactNode;
 }) {
   const view = scoreView(contact);
-  const zone = timeZoneAt(contact.lat, contact.lng);
+  const zone = useTimeZoneAt(contact.lat, contact.lng);
   const local = zone ? describeLocalTime(zone) : null;
   const place = [
     contact.location,

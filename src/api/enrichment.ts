@@ -1,7 +1,7 @@
 /** Hooks for one contact's AI enrichment and for grounding capacity. */
 import { apiJson } from "./client";
 import { refreshContact } from "./contactCache";
-import { contactRoutes } from "../../shared/contracts/contacts";
+import type { contactRoutes } from "../../shared/contracts/contacts";
 import { useAuth } from "../components/auth/AuthGate";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -38,7 +38,10 @@ export const useEnrichContact = () => {
   return useMutation({
     mutationFn: (contactId: string) =>
       // A refusal throws `ApiError`, and `onError` words it from the code.
-      apiJson(contactRoutes.enrich, `/contacts/${contactId}/enrich`),
+      apiJson<typeof contactRoutes.enrich>(
+        "POST",
+        `/contacts/${contactId}/enrich`,
+      ),
     onSuccess: (data, contactId) => {
       void refreshContact(qc, contactId);
       // Invalidate grounding capacity (we just used one)

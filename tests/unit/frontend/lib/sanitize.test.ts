@@ -7,12 +7,15 @@
 // saved card into a link first. The last tests save a card with the real
 // editor and check what the display keeps.
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { Editor, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import { LinkPreviewExtension } from "../../../../src/components/LinkPreviewExtension";
-import { sanitizeNote } from "../../../../src/lib/sanitize";
+import { loadSanitizer, sanitizeNote } from "../../../../src/lib/sanitize";
+
+// DOMPurify loads on demand, with the first timeline.
+beforeAll(() => loadSanitizer());
 
 const text = (
   value: string,
@@ -113,7 +116,7 @@ describe("a saved link preview card", () => {
   };
   const shown = (card: Record<string, unknown>) => {
     const box = document.createElement("div");
-    box.innerHTML = sanitizeNote(saved(card));
+    box.innerHTML = sanitizeNote(saved(card))!;
     return box;
   };
   const post = {
@@ -145,7 +148,7 @@ describe("a saved link preview card", () => {
     const box = document.createElement("div");
     box.innerHTML = sanitizeNote(
       "<p>before</p><link-preview><a>A title</a></link-preview><p>after</p>",
-    );
+    )!;
 
     expect(box.querySelector("a")).toBeNull();
     expect(box.textContent).toBe("beforeafter");

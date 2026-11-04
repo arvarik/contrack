@@ -9,10 +9,7 @@ import {
 } from "../../../../src/views/map/FollowUpModal";
 import * as client from "../../../../src/api/client";
 import { toast } from "sonner";
-import {
-  actionItemRoutes,
-  MAX_BULK_ACTION_ITEMS,
-} from "../../../../shared/contracts/actionItems";
+import { MAX_BULK_ACTION_ITEMS } from "../../../../shared/contracts/actionItems";
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -69,7 +66,7 @@ describe("FollowUpModal", () => {
     // All or none: one retry cannot add a second follow-up to anyone.
     expect(apiJsonSpy).toHaveBeenCalledTimes(1);
     expect(apiJsonSpy).toHaveBeenCalledWith(
-      actionItemRoutes.bulkCreate,
+      "POST",
       "/action-items/bulk",
       expect.objectContaining({
         body: JSON.stringify({

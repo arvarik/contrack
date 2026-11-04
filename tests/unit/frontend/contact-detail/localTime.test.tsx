@@ -8,17 +8,22 @@
 // Every case names a fixed moment, so daylight saving is pinned: January is
 // winter in the north, July is winter in the south.
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   LocalTimeWeather,
   describeLocalTime,
+  loadTimeZones,
   zoneName,
 } from "../../../../src/components/LocalTimeWeather";
 
 const JANUARY = new Date("2026-01-15T12:00:00Z");
 const JULY = new Date("2026-07-15T12:00:00Z");
+
+// The zone borders load on demand. Here they are in place before the first
+// render, as they are for a contact opened from the list.
+beforeAll(() => loadTimeZones());
 
 afterEach(() => {
   cleanup();
