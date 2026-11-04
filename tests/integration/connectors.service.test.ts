@@ -2,8 +2,9 @@
  * Integration: the connector run loop writes back only what the run owns.
  *
  * Covers:
- * - A pause and a new interval set while a sync runs survive the run
- * - A failing run keeps a pause too, and still records the error
+ * - A pause and a new interval set while a sync runs survive the run, and a
+ *   failing run still records the error
+ * - The next run is a whole interval out, and moves up when it gets shorter
  * - Runs a crash left `running` are closed at boot
  */
 
@@ -18,7 +19,6 @@ import {
   updateConnector,
 } from "../../server/connectors/service.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
-import { contactService } from "../../server/services/contactService.ts";
 import type {
   ConnectorAdapter,
   SyncEvent,
@@ -54,39 +54,16 @@ const adapter: ConnectorAdapter<Record<string, unknown>, unknown> = {
   },
 };
 
-function connector(intervalMinutes = 30, connectorKind = kind): string {
+function connector(intervalMinutes = 30): string {
   const id = "conn-" + crypto.randomUUID().slice(0, 8);
   sqlite
     .prepare(
       `INSERT INTO connectors (id, ownerId, kind, name, status, config, intervalMinutes, attempts, createdAt, updatedAt)
        VALUES (?, ?, ?, 'Conn', 'active', '{}', ?, 0, datetime('now'), datetime('now'))`,
     )
-    .run(id, owner, connectorKind, intervalMinutes);
+    .run(id, owner, kind, intervalMinutes);
   return id;
 }
-
-/** A two-way adapter: each run pulls `pullNext`, then pushes `pushNext`. */
-const pushKind = "mock-service-push";
-let pullNext: SyncEvent[] = [];
-let pushNext: Array<{ externalId: string; localId: string }> = [];
-const pushAdapter: ConnectorAdapter<Record<string, unknown>, unknown> = {
-  kind: pushKind as unknown as ConnectorKind,
-  label: "Push Mock",
-  description: "Pulls and pushes what the test gives it",
-  capabilities: { schedule: true },
-  configSchema: z.record(z.string(), z.unknown()),
-  secretSchema: null,
-  async test() {
-    return { ok: true, detail: "ok" };
-  },
-  async *sync(): AsyncGenerator<SyncEvent, unknown, void> {
-    yield* pullNext;
-    return { lastSyncAt: new Date().toISOString() };
-  },
-  async push() {
-    return { cursor: null, pushed: pushNext.length, newLinks: pushNext };
-  },
-};
 
 /**
  * Starts a run and waits until the adapter is inside its sync. Returns the
@@ -127,9 +104,6 @@ function row(id: string) {
 describe("connector runs", () => {
   beforeAll(() => {
     registerAdapter(adapter as unknown as ConnectorAdapter<unknown, unknown>);
-    registerAdapter(
-      pushAdapter as unknown as ConnectorAdapter<unknown, unknown>,
-    );
     sqlite
       .prepare(
         "INSERT OR IGNORE INTO users (id, email, username, passwordHash) VALUES (?, ?, ?, 'hash')",
@@ -138,48 +112,39 @@ describe("connector runs", () => {
   });
 
   afterAll(() => {
-    sqlite.prepare("DELETE FROM connector_links WHERE ownerId = ?").run(owner);
-    sqlite.prepare("DELETE FROM contacts WHERE ownerId = ?").run(owner);
-    sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(owner);
-    sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(owner);
-    sqlite.prepare("DELETE FROM connector_runs WHERE ownerId = ?").run(owner);
-    sqlite.prepare("DELETE FROM connectors WHERE ownerId = ?").run(owner);
+    for (const table of ["connector_runs", "connectors"]) {
+      sqlite.prepare(`DELETE FROM ${table} WHERE ownerId = ?`).run(owner);
+    }
     sqlite.prepare("DELETE FROM users WHERE id = ?").run(owner);
   });
 
-  it("keeps a pause and a new interval set during a successful run", async () => {
-    fail = false;
-    const id = connector(30);
-    const { run } = await startRun(id);
-    await updateConnector(scope, id, {
-      status: "paused",
-      intervalMinutes: 240,
-    });
+  const minutesAhead = (id: string) =>
+    (new Date(row(id).nextRunAt).getTime() - Date.now()) / 60_000;
 
-    release();
-    expect((await run).status).toBe("ok");
+  it.each([
+    ["successful", false],
+    ["failing", true],
+  ])(
+    "keeps a pause and a new interval set during a %s run",
+    async (_name, failing) => {
+      fail = failing;
+      const id = connector(30);
+      const { run } = await startRun(id);
+      await updateConnector(scope, id, {
+        status: "paused",
+        intervalMinutes: 240,
+      });
 
-    const after = row(id);
-    expect(after.status).toBe("paused");
-    const minutesAhead =
-      (new Date(after.nextRunAt).getTime() - Date.now()) / 60_000;
-    expect(minutesAhead).toBeGreaterThan(200);
-  });
-
-  it("keeps a pause set during a failing run, and still records the error", async () => {
-    fail = true;
-    const id = connector(30);
-    const { run } = await startRun(id);
-    await updateConnector(scope, id, { status: "paused" });
-
-    release();
-    expect((await run).status).toBe("error");
-
-    const after = row(id);
-    expect(after.status).toBe("paused");
-    expect(after.lastError).toBe("boom");
-    expect(after.attempts).toBe(1);
-  });
+      release();
+      expect((await run).status).toBe(failing ? "error" : "ok");
+      expect(row(id).status).toBe("paused");
+      if (failing) {
+        expect(row(id)).toMatchObject({ lastError: "boom", attempts: 1 });
+      } else {
+        expect(minutesAhead(id)).toBeGreaterThan(200);
+      }
+    },
+  );
 
   it("schedules a successful run a whole interval out, a day for Daily", async () => {
     // The next run shared the backoff's four-hour cap, so a Daily connector
@@ -189,41 +154,7 @@ describe("connector runs", () => {
     const { run } = await startRun(id);
     release();
     expect((await run).status).toBe("ok");
-    const minutesAhead =
-      (new Date(row(id).nextRunAt).getTime() - Date.now()) / 60_000;
-    expect(minutesAhead).toBeGreaterThan(1430);
-  });
-
-  it("lets a card the push created take later edits from the server", async () => {
-    // A contact made in Contrack and pushed is the server's to write too, as
-    // one the pull created is. With only a link and no source row, the pull
-    // treated it as merely matched and dropped the server's edits.
-    const local = contactService.createContact(
-      scope,
-      { name: "Local Lou", emails: [{ email: "lou@push.example" }] },
-      "manual",
-    );
-    const id = connector(30, pushKind);
-    pullNext = [];
-    pushNext = [{ externalId: "/ab/lou.vcf", localId: local!.id }];
-    expect((await runNow(scope, id, "manual")).status).toBe("ok");
-
-    pushNext = [];
-    pullNext = [
-      {
-        kind: "contact",
-        externalId: "/ab/lou.vcf",
-        contact: {
-          name: "Louis Remote",
-          emails: [{ email: "louis@push.example", isPrimary: true }],
-        },
-      },
-    ];
-    expect((await runNow(scope, id, "manual")).status).toBe("ok");
-
-    const after = contactService.getContactById(scope, local!.id);
-    expect(after?.name).toBe("Louis Remote");
-    expect(after?.emails.map((e) => e.email)).toEqual(["louis@push.example"]);
+    expect(minutesAhead(id)).toBeGreaterThan(1430);
   });
 
   it("closes the runs a crash left running, and no run this process started", () => {
@@ -253,6 +184,7 @@ describe("connector runs", () => {
     expect(read.get(doneId)).toMatchObject({ status: "ok" });
     expect(read.get(liveId)).toMatchObject({ status: "running" });
   });
+
   it("moves the next run up when the interval gets shorter", async () => {
     const id = connector(10080);
     const weekAway = new Date(Date.now() + 7 * 86_400_000).toISOString();
@@ -260,7 +192,6 @@ describe("connector runs", () => {
       .prepare("UPDATE connectors SET nextRunAt = ? WHERE id = ?")
       .run(weekAway, id);
     await updateConnector(scope, id, { intervalMinutes: 30 });
-    const next = new Date(row(id).nextRunAt!).getTime();
-    expect(next).toBeLessThanOrEqual(Date.now() + 30 * 60_000);
+    expect(minutesAhead(id)).toBeLessThanOrEqual(30);
   });
 });

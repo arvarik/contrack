@@ -8,6 +8,7 @@ import { sqlite } from "../../server/db.ts";
 import { icsAdapter } from "../../server/connectors/adapters/ics.ts";
 import { createConnector, runNow } from "../../server/connectors/service.ts";
 import { contactService } from "../../server/services/contactService.ts";
+import type { Scope } from "../../server/tenancy/scope.ts";
 import {
   calendar,
   DAY_MS,
@@ -30,18 +31,24 @@ function at9(days: number): Date {
 
 const HOUR_MS = 3_600_000;
 
-/** A one-hour VEVENT at `start` with the given property lines. */
-function vevent(uid: string, start: Date, ...lines: string[]): string {
-  return [
+/** A VEVENT with the given property lines. */
+const rawEvent = (uid: string, ...lines: string[]) =>
+  [
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${icsTime(new Date())}`,
-    `DTSTART:${icsTime(start)}`,
-    `DTEND:${icsTime(new Date(start.getTime() + HOUR_MS))}`,
     ...lines,
     "END:VEVENT",
   ].join("\r\n");
-}
+
+/** A one-hour VEVENT at `start` with the given property lines. */
+const vevent = (uid: string, start: Date, ...lines: string[]) =>
+  rawEvent(
+    uid,
+    `DTSTART:${icsTime(start)}`,
+    `DTEND:${icsTime(new Date(start.getTime() + HOUR_MS))}`,
+    ...lines,
+  );
 
 async function labFeed(body: string) {
   const feed = await icsFeed();
@@ -50,89 +57,115 @@ async function labFeed(body: string) {
   return feed;
 }
 
+const column = (sql: string, ...params: unknown[]) =>
+  sqlite
+    .prepare(sql)
+    .pluck()
+    .all(...params);
+
 const upcomingOf = (ownerId: string) =>
-  (
-    sqlite
-      .prepare(
-        "SELECT title FROM upcoming_events WHERE ownerId = ? ORDER BY startsAt",
-      )
-      .all(ownerId) as { title: string }[]
-  ).map((r) => r.title);
+  column(
+    "SELECT title FROM upcoming_events WHERE ownerId = ? ORDER BY startsAt",
+    ownerId,
+  );
 
 const meetingTitles = (contactId: string) =>
-  (
-    sqlite
-      .prepare(
-        "SELECT title FROM interactions WHERE contactId = ? ORDER BY date",
-      )
-      .all(contactId) as { title: string }[]
-  ).map((r) => r.title);
+  column(
+    "SELECT title FROM interactions WHERE contactId = ? ORDER BY date",
+    contactId,
+  );
+
+const calendarConnector = (
+  scope: Scope,
+  url: string,
+  config: Record<string, unknown> = {},
+) =>
+  createConnector(scope, {
+    kind: "ics",
+    name: "Lab calendar",
+    config: { url, ...config },
+  });
+
+const addAna = (scope: Scope) =>
+  contactService.createContact(scope, {
+    name: "Ana Lee",
+    emails: [{ email: "ana@lee.example", label: "work" }],
+  })!;
 
 describe("ICS against a served feed", () => {
   it("logs past meetings once, lists upcoming ones, and follows a changed feed", async () => {
     const { ownerId, scope, email: me } = labOwner();
-    const ana = contactService.createContact(scope, {
-      name: "Ana Lee",
-      emails: [{ email: "ana@lee.example", label: "work" }],
-    })!;
+    const ana = addAna(scope);
     const people = [
       `ORGANIZER;CN=Me:mailto:${me}`,
       "ATTENDEE;CN=Ana Lee;PARTSTAT=ACCEPTED:mailto:ana@lee.example",
     ];
-    const event = (uid: string, start: Date, lines: string[] = []) =>
-      [
-        "BEGIN:VEVENT",
-        `UID:${uid}`,
-        `DTSTAMP:${icsTime(new Date())}`,
-        `DTSTART:${icsTime(start)}`,
-        `DTEND:${icsTime(new Date(start.getTime() + HOUR_MS))}`,
-        ...people,
-        ...lines,
-        "END:VEVENT",
-      ].join("\r\n");
+    const event = (uid: string, start: Date, ...lines: string[]) =>
+      vevent(uid, start, ...people, ...lines);
 
     // A weekly series from 20 days ago: one date taken out, one moved by two
-    // hours and renamed, and its fourth meeting tomorrow.
+    // hours and renamed, its fourth meeting tomorrow, and its fifth cancelled.
     const series = at9(-20);
     const week = (n: number) => new Date(series.getTime() + n * 7 * DAY_MS);
     const standup = [
-      event("standup@lab", series, [
+      event(
+        "standup@lab",
+        series,
         "SUMMARY:Standup",
-        "RRULE:FREQ=WEEKLY;COUNT=4",
+        "RRULE:FREQ=WEEKLY;COUNT=5",
         `EXDATE:${icsTime(week(1))}`,
-      ]),
-      event("standup@lab", new Date(week(2).getTime() + 2 * HOUR_MS), [
+      ),
+      event(
+        "standup@lab",
+        new Date(week(2).getTime() + 2 * HOUR_MS),
         "SUMMARY:Moved standup",
         `RECURRENCE-ID:${icsTime(week(2))}`,
-      ]),
+      ),
+      event(
+        "standup@lab",
+        week(4),
+        "SUMMARY:Standup",
+        `RECURRENCE-ID:${icsTime(week(4))}`,
+        "STATUS:CANCELLED",
+      ),
     ];
     // 15:00 in Kolkata (UTC+5:30, no daylight saving) is 09:30 UTC.
-    const kolkataDay = at9(-2);
-    const kolkataLocal = icsTime(kolkataDay).slice(0, 8) + "T150000";
-    const kolkata = [
-      "BEGIN:VEVENT",
-      "UID:kolkata@lab",
-      `DTSTAMP:${icsTime(new Date())}`,
+    const kolkataLocal = icsTime(at9(-2)).slice(0, 8) + "T150000";
+    const kolkata = rawEvent(
+      "kolkata@lab",
       `DTSTART;TZID=Asia/Kolkata:${kolkataLocal}`,
       `DTEND;TZID=Asia/Kolkata:${kolkataLocal.slice(0, 9)}160000`,
       "SUMMARY:Call with Mumbai",
       ...people,
-      "END:VEVENT",
-    ].join("\r\n");
-    const kickoff = event("kickoff@lab", at9(-3), ["SUMMARY:Kickoff"]);
-    const review = (cancelled: boolean) =>
-      event("review@lab", at9(5), [
-        "SUMMARY:Review",
-        ...(cancelled ? ["STATUS:CANCELLED"] : []),
-      ]);
-
-    const feed = await icsFeed();
-    feeds.push(feed);
-    feed.set(calendar(kickoff, ...standup, kolkata, review(false)));
-    const connector = await createConnector(scope, {
-      kind: "ics",
-      name: "Lab calendar",
-      config: { url: feed.url },
+    );
+    // An all-day event is kept as its day.
+    const offsiteDay = icsTime(at9(-4)).slice(0, 8);
+    const offsite = rawEvent(
+      "offsite@lab",
+      `DTSTART;VALUE=DATE:${offsiteDay}`,
+      "SUMMARY:Offsite",
+      ...people,
+    );
+    const kickoff = event(
+      "kickoff@lab",
+      at9(-3),
+      "SUMMARY:Kickoff",
+      "DESCRIPTION:Agenda: the roadmap",
+    );
+    // More attendees than the connector's cap of 25.
+    const allHands = event(
+      "all-hands@lab",
+      at9(-1),
+      "SUMMARY:All-hands",
+      ...Array.from({ length: 30 }, (_, i) => `ATTENDEE:mailto:p${i}@ext.test`),
+    );
+    const review = (...lines: string[]) =>
+      event("review@lab", at9(5), "SUMMARY:Review", ...lines);
+    const feed = await labFeed(
+      calendar(kickoff, ...standup, kolkata, offsite, allHands, review()),
+    );
+    const connector = await calendarConnector(scope, feed.url, {
+      includeDescription: true,
     });
 
     const first = await runNow(scope, connector.id);
@@ -141,35 +174,45 @@ describe("ICS against a served feed", () => {
     const meetings = () =>
       sqlite
         .prepare(
-          `SELECT title, date FROM interactions
+          `SELECT title, date, content FROM interactions
             WHERE contactId = ? ORDER BY date`,
         )
-        .all(ana.id) as { title: string; date: string }[];
-    expect(meetings().map((m) => m.title)).toEqual([
-      "Standup",
-      "Moved standup",
-      "Kickoff",
-      "Call with Mumbai",
+        .all(ana.id) as { title: string; date: string; content: string }[];
+    expect(meetings().map((m) => [m.title, m.date.slice(11, 16)])).toEqual([
+      ["Standup", "09:00"],
+      ["Moved standup", "11:00"],
+      ["Offsite", ""],
+      ["Kickoff", "09:00"],
+      ["Call with Mumbai", "09:30"],
     ]);
-    expect(meetings()[1].date.slice(11, 16)).toBe("11:00");
-    expect(meetings()[3].date.slice(11, 16)).toBe("09:30");
-    const upcoming = () =>
-      (
-        sqlite
-          .prepare(
-            "SELECT title FROM upcoming_events WHERE ownerId = ? ORDER BY startsAt",
-          )
-          .all(ownerId) as { title: string }[]
-      ).map((r) => r.title);
-    expect(upcoming()).toEqual(["Standup", "Review"]);
+    expect(meetings()[2].date).toBe(
+      `${offsiteDay.slice(0, 4)}-${offsiteDay.slice(4, 6)}-${offsiteDay.slice(6)}`,
+    );
+    expect(meetings()[3].content).toContain("Agenda: the roadmap");
+    // The contact was last in touch at the last meeting, not at the sync.
+    expect(
+      sqlite
+        .prepare("SELECT lastContactedAt FROM contacts WHERE id = ?")
+        .pluck()
+        .get(ana.id),
+    ).toBe(meetings()[4].date);
+    expect(upcomingOf(ownerId)).toEqual(["Standup", "Review"]);
 
     // The review is cancelled: it leaves Coming up, and nothing is logged
     // twice.
-    feed.set(calendar(kickoff, ...standup, kolkata, review(true)));
-    const second = await runNow(scope, connector.id);
-    expect(second.status).toBe("ok");
-    expect(meetings()).toHaveLength(4);
-    expect(upcoming()).toEqual(["Standup"]);
+    feed.set(
+      calendar(
+        kickoff,
+        ...standup,
+        kolkata,
+        offsite,
+        allHands,
+        review("STATUS:CANCELLED"),
+      ),
+    );
+    expect((await runNow(scope, connector.id)).status).toBe("ok");
+    expect(meetings()).toHaveLength(5);
+    expect(upcomingOf(ownerId)).toEqual(["Standup"]);
   });
 
   it("counts a stranger once per meeting, by address, and never the owner's calendar address or a shared calendar", async () => {
@@ -198,10 +241,9 @@ describe("ICS against a served feed", () => {
         ),
       ),
     );
-    const connector = await createConnector(scope, {
-      kind: "ics",
-      name: "Lab calendar",
-      config: { url: feed.url, aliases: [cal], ghostThreshold: 10 },
+    const connector = await calendarConnector(scope, feed.url, {
+      aliases: [cal],
+      ghostThreshold: 10,
     });
     for (let i = 0; i < 3; i++) {
       expect((await runNow(scope, connector.id)).status).toBe("ok");
@@ -224,10 +266,7 @@ describe("ICS against a served feed", () => {
 
   it("leaves out what the owner declined and events with no one else, and keeps single invited instances of a series", async () => {
     const { ownerId, scope, email: me } = labOwner();
-    const ana = contactService.createContact(scope, {
-      name: "Ana Lee",
-      emails: [{ email: "ana@lee.example", label: "work" }],
-    })!;
+    const ana = addAna(scope);
     const withAna = [
       "ORGANIZER;CN=Ana Lee:mailto:ana@lee.example",
       `ATTENDEE;PARTSTAT=ACCEPTED:mailto:${me}`,
@@ -258,11 +297,7 @@ describe("ICS against a served feed", () => {
         ...withAna,
       );
     const feed = await labFeed(calendar(instance(1), instance(2), ...others));
-    const connector = await createConnector(scope, {
-      kind: "ics",
-      name: "Lab calendar",
-      config: { url: feed.url },
-    });
+    const connector = await calendarConnector(scope, feed.url);
 
     expect((await runNow(scope, connector.id)).status).toBe("ok");
     expect(meetingTitles(ana.id)).toEqual(["Planning 1", "Planning 2"]);
@@ -334,11 +369,7 @@ describe("ICS against a served feed", () => {
     );
     // Two calendars with the same meetings, as two shared feeds can have.
     for (const feed of [await labFeed(body), await labFeed(body)]) {
-      const { id } = await createConnector(scope, {
-        kind: "ics",
-        name: "Lab calendar",
-        config: { url: feed.url },
-      });
+      const { id } = await calendarConnector(scope, feed.url);
       expect((await runNow(scope, id)).status).toBe("ok");
     }
 
@@ -363,11 +394,7 @@ describe("ICS against a served feed", () => {
       "ATTENDEE:mailto:ana@lee.example",
     );
     const feed = await labFeed(calendar(review));
-    const connector = await createConnector(scope, {
-      kind: "ics",
-      name: "Lab calendar",
-      config: { url: feed.url },
-    });
+    const connector = await calendarConnector(scope, feed.url);
     expect((await runNow(scope, connector.id)).status).toBe("ok");
     expect(upcomingOf(ownerId)).toEqual(["Review"]);
 
