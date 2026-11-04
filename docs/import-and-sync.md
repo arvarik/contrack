@@ -212,9 +212,11 @@ steps, with the redirect address to copy.
 3. Under Google Auth platform (the OAuth consent screen), set the audience.
    For a Google Workspace domain choose Internal: Google asks for no
    review. For personal Gmail choose External, then **Publish app**: while
-   the app stays in testing, every sign-in stops after a week. At sign-in,
-   Google warns that the app is unverified, which is normal for your own
-   server, and an unverified app takes up to 100 people.
+   the app stays in testing, every sign-in stops after a week, and Google
+   answers "Access blocked" to any account not listed under **Test users**.
+   At sign-in, Google shows "Google hasn't verified this app", which is
+   normal for your own server: choose **Continue**. An unverified app takes
+   up to 100 people.
 4. Under Credentials, create an OAuth client ID of type **Web application**,
    and paste the **Authorized redirect URI** from the Contrack row under
    **Authorized redirect URIs**. Google accepts `localhost`, or a domain

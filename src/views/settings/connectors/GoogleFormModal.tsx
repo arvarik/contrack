@@ -240,6 +240,14 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 <span>Connect Google Workspace</span>
               </button>
             </div>
+
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Google then shows &ldquo;Google hasn&rsquo;t verified this
+              app&rdquo;, because the sign-in goes through this server&rsquo;s
+              own Google Cloud client. Choose Continue. If Google shows
+              &ldquo;Access blocked&rdquo; instead, add this Google account as a
+              test user under Google Auth platform, Audience, or publish the app
+            </p>
           </div>
         )}
 
