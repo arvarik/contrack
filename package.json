@@ -64,6 +64,7 @@
     "test:coverage": "vitest run --project unit --project integration --project eval --coverage",
     "prepare": "husky",
     "test:contract": "vitest run --project contract",
+    "test:lab": "docker compose -f tests/lab/compose.yml up -d --wait && vitest run --project lab",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "audit:contrast": "node scripts/contrast-audit.mjs",

@@ -1,0 +1,30 @@
+# The connector lab: a real IMAP server and a real CardDAV server for
+# `npm run test:lab`. Both accept any user name and password, so each test
+# signs in as its own user and nothing needs a reset between runs. The ICS
+# feeds are served by the tests themselves.
+#
+# Stop them with `docker compose -f tests/lab/compose.yml down`.
+services:
+  greenmail:
+    image: greenmail/standalone:2.1.14@sha256:1ef95a966418cd09b7ea91d504d8c0826bbe7a2f6e679a75c601a831587c1626
+    ports:
+      - "127.0.0.1:3143:3143"
+    healthcheck:
+      # The image has no curl, and IMAP answers a connect with "* OK".
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/3143 && head -c 4 <&3",
+        ]
+      interval: 2s
+      retries: 30
+  radicale:
+    image: tomsquest/docker-radicale:3.8.3.0@sha256:a3b1b452f4bc3d1aee43015b85bc2d9ee5de0ff7e96d5d2b47f1d889aa682409
+    ports:
+      - "127.0.0.1:5232:5232"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:5232 || exit 1"]
+      interval: 2s
+      retries: 30

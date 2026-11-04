@@ -59,6 +59,7 @@ npm run dev            # http://localhost:3210, with hot reload
 | `npm run test:coverage`         | The same, with the coverage floor enforced                       |
 | `npm run test:e2e`              | Run the browser suite against `dist/`                            |
 | `npm run test:contract`         | Call real provider APIs. Each block skips without its key        |
+| `npm run test:lab`              | Run the mail, calendar and CardDAV connectors on Docker servers  |
 | `npm run lint`                  | Oxlint, `tsc --noEmit` and the tenant lint                       |
 | `npm run knip`                  | Find files, exports and types that nothing uses                  |
 | `npm run api:openapi`           | Write `docs/openapi.json` from the route contracts               |

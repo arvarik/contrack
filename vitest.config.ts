@@ -85,6 +85,22 @@ export default defineConfig({
         },
       },
       {
+        // The connector lab: the Mailbox, Calendar and CardDAV connectors
+        // against real servers in Docker (tests/lab/compose.yml), so the
+        // tests meet real protocol answers, not stubs written from our own
+        // assumptions. Not in `npm test`, which needs no Docker.
+        //   npm run test:lab
+        test: {
+          name: "lab",
+          environment: "node",
+          globals: true,
+          include: ["tests/lab/**/*.lab.test.ts"],
+          setupFiles: ["./tests/integration-setup.ts", "./tests/lab/setup.ts"],
+          testTimeout: 60_000,
+          pool: "forks",
+        },
+      },
+      {
         // Integration tests run the real request pipeline (supertest against
         // createApp()) on a real SQLite database in a per-file temp DATA_DIR.
         // No db mock — migrations, FTS triggers, and cascades all execute.
