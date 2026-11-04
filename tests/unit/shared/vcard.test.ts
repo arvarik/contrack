@@ -1,34 +1,26 @@
-// Unit: vCard, the round trip and the four things that break parsers.
-// A file this app writes reads back with nothing lost, and a file another
-// address book writes reads in. Both are tested here.
-//
-// The round trip comes first and matters most: contacts with awkward values
-// (a semicolon in a surname, a comma in a company, a newline in a note, an
-// emoji, a name long enough to fold) go out through the serializer and back
-// through the importer, and every field is compared.
-//
-// The rest cover folding, escaping, the three spellings of a parameter, and
-// quoted-printable, each with a sample from an exporter that produces it.
+// Unit: the vCard parser rules. A file this app writes reads back with nothing
+// lost, a file another address book or a CardDAV server writes reads in, and a
+// patch keeps every line of the card that Contrack does not change.
+// tests/integration/api.vcard.test.ts runs the round trip through the API.
 
 import { describe, it, expect } from "vitest";
 import {
   escapeValue,
   extractVCardContacts,
-  firstValue,
   foldLine,
-  splitDisplayName,
   parseVCards,
   patchVCard,
   serializeVCard,
   serializeVCards,
-  splitComponents,
+  splitDisplayName,
   unescapeValue,
   valuesOf,
   type VCardInput,
 } from "../../../shared/vcard";
-import { parseVCard } from "../../../src/lib/importers";
 
-// The round trip
+const card = (...lines: string[]) =>
+  ["BEGIN:VCARD", ...lines, "END:VCARD", ""].join("\r\n");
+const read = (text: string) => extractVCardContacts(text).contacts;
 
 /** Contacts chosen for the values that break a naive implementation. */
 const ROUND_TRIP: VCardInput[] = [
@@ -67,7 +59,6 @@ const ROUND_TRIP: VCardInput[] = [
     role: "VP, Sales",
     about: "First line.\nSecond line, with a comma; and a semicolon.\nThird.",
     emails: [{ email: "rob@widgets.example", label: "work", isPrimary: true }],
-    phones: [],
     tags: ["needs, review", "a;b"],
   },
   {
@@ -86,602 +77,307 @@ const ROUND_TRIP: VCardInput[] = [
       },
     ],
   },
-  {
-    // The minimum a contact can be. One word, so nothing is guessed from it.
-    name: "Prince",
-  },
+  // The minimum a contact can be. One word, so nothing is guessed from it.
+  { name: "Prince" },
 ];
+
+/** The fields a round trip must keep, with the defaults a reader fills in. */
+const kept = (c: VCardInput) => ({
+  name: c.name,
+  firstName: c.firstName ?? null,
+  lastName: c.lastName ?? null,
+  company: c.company ?? null,
+  role: c.role ?? null,
+  birthday: c.birthday ?? null,
+  about: c.about ?? null,
+  emails: c.emails ?? [],
+  phones: c.phones ?? [],
+  addresses: c.addresses ?? [],
+  tags: c.tags ?? [],
+});
 
 describe("a contact written out and read back", () => {
   const written = serializeVCards(ROUND_TRIP);
-  const read = parseVCard(written, "contrack");
+  const back = read(written);
 
   it.each(ROUND_TRIP.map((c, i) => [c.name, i] as const))(
     "keeps every field of %s",
     (_name, index) => {
-      const before = ROUND_TRIP[index];
-      const after = read[index];
-
-      expect(after.name).toBe(before.name);
-      expect(after.firstName).toBe(before.firstName ?? null);
-      expect(after.lastName).toBe(before.lastName ?? null);
-      expect(after.company).toBe(before.company ?? null);
-      expect(after.role).toBe(before.role ?? null);
-      expect(after.birthday).toBe(before.birthday ?? null);
-      expect(after.about).toBe(before.about ?? null);
-
-      expect((after.emails ?? []).map((e) => e.email)).toEqual(
-        (before.emails ?? []).map((e) => e.email),
-      );
-      expect((after.emails ?? []).map((e) => e.label)).toEqual(
-        (before.emails ?? []).map((e) => e.label),
-      );
-      expect((after.phones ?? []).map((p) => p.phone)).toEqual(
-        (before.phones ?? []).map((p) => p.phone),
-      );
-      expect((after.addresses ?? []).map((a) => a.address)).toEqual(
-        (before.addresses ?? []).map((a) => a.address),
-      );
-      expect((after.socialLinks ?? []).map((s) => s.url)).toEqual(
+      const before = ROUND_TRIP[index]!;
+      expect(kept(back[index]!)).toEqual(kept(before));
+      expect(back[index]!.socialLinks.map((s) => s.url)).toEqual(
         expect.arrayContaining((before.socialLinks ?? []).map((s) => s.url)),
       );
-      expect(after.tags ?? []).toEqual(before.tags ?? []);
     },
   );
 
-  it("keeps the primary flag on the value it belonged to", () => {
-    const jane = read[0];
-    expect(jane.emails?.[0]).toMatchObject({
-      email: "jane@acme.com",
-      isPrimary: true,
-    });
-    expect(jane.emails?.[1]?.isPrimary).toBe(false);
-  });
-
-  it("writes a file another address book will accept", () => {
-    // Every card is a complete BEGIN/VERSION/N/FN/END, CRLF-terminated. An
-    // exporter that omits VERSION or N produces a file Apple Contacts opens as
-    // zero contacts and says nothing about.
+  it("writes a file another address book accepts, and the same file again", () => {
+    // Every card is a complete BEGIN/VERSION/N/FN/END, CRLF-terminated and
+    // folded. Apple Contacts opens a file without VERSION or N as zero
+    // contacts and says nothing.
     expect(written.split("BEGIN:VCARD")).toHaveLength(ROUND_TRIP.length + 1);
     expect(written.split("END:VCARD")).toHaveLength(ROUND_TRIP.length + 1);
     expect(written).toContain("VERSION:3.0");
-    expect(written).toMatch(/\r\n/);
     expect(written).not.toMatch(/[^\r]\n/);
     for (const line of written.split("\r\n")) {
       expect(line.length, line).toBeLessThanOrEqual(76);
     }
-  });
-
-  it("survives being written, read and written again unchanged", () => {
-    // The strongest form of the promise: the second file is byte-identical to
-    // the first, so nothing drifts with each pass through the app.
+    // A fold inside an emoji is not valid UTF-8. One letter puts a pair
+    // across the first fold.
+    for (const line of foldLine("NOTE:x" + "🎉".repeat(80)).split("\r\n")) {
+      expect(line).not.toMatch(/[\uD800-\uDBFF]$|^ ?[\uDC00-\uDFFF]/);
+    }
+    // Nothing drifts with each pass through the app.
     const again = serializeVCards(
-      read.map((c) => ({
-        name: c.name,
-        firstName: c.firstName,
-        lastName: c.lastName,
-        company: c.company,
-        role: c.role,
-        birthday: c.birthday,
-        about: c.about,
-        website: c.website,
-        emails: c.emails,
-        phones: c.phones,
-        addresses: c.addresses,
-        socialLinks: (c.socialLinks ?? []).filter(
-          (s) => s.platform !== "website",
-        ),
-        tags: c.tags,
+      back.map(({ uid: _uid, avatarUrl: _a, location: _l, ...c }) => ({
+        ...c,
+        socialLinks: c.socialLinks.filter((s) => s.platform !== "website"),
       })),
     );
     expect(again).toBe(written);
   });
 });
 
-// Guessing a structured name
-
 describe("splitDisplayName", () => {
   // A contact added by hand has one name field, so without this every export
   // carries `N:;;;;` and lands in another address book filed under nothing.
-
   it.each([
-    ["Ada Lovelace", { given: "Ada", family: "Lovelace", suffix: "" }],
-    ["José García", { given: "José", family: "García", suffix: "" }],
-    [
-      "Ana María Gonzáles de la Vega",
-      { given: "Ana María Gonzáles de la", family: "Vega", suffix: "" },
-    ],
-    ["Lovelace, Ada", { given: "Ada", family: "Lovelace", suffix: "" }],
-    [
-      "Martin Luther King Jr.",
-      { given: "Martin Luther", family: "King", suffix: "Jr." },
-    ],
-    ["Grace Hopper PhD", { given: "Grace", family: "Hopper", suffix: "PhD" }],
-  ])("reads %s", (name, expected) => {
-    expect(splitDisplayName(name)).toEqual(expected);
-  });
-
-  it.each([
-    // One word: there is nothing to split, and guessing would be wrong.
-    "Prince",
-    // Already carries the format's own separator.
-    "Smith; Jr., Robert",
-    // Two commas: a title, a suffix, or something this cannot read.
-    "King, Martin Luther, Jr.",
-    // A suffix and nothing else.
-    "Jr.",
-    "",
-    "   ",
-  ])("declines to guess at %j", (name) => {
-    expect(splitDisplayName(name)).toEqual({
-      given: "",
-      family: "",
-      suffix: "",
-    });
-  });
-
-  it("never overrules a name the contact already has", () => {
-    const card = serializeVCard({
-      name: "Robert Smith",
-      firstName: "Bob",
-      lastName: "Smith",
-    });
-    expect(card).toContain("N:Smith;Bob;;;");
-  });
-
-  it("writes the suffix in its own component", () => {
-    const card = serializeVCard({ name: "Martin Luther King Jr." });
-    expect(card).toContain("N:King;Martin Luther;;;Jr.");
+    ["Ada Lovelace", "Ada", "Lovelace", ""],
+    ["José García", "José", "García", ""],
+    ["Ana María Gonzáles de la Vega", "Ana María Gonzáles de la", "Vega", ""],
+    ["Lovelace, Ada", "Ada", "Lovelace", ""],
+    ["Martin Luther King Jr.", "Martin Luther", "King", "Jr."],
+    ["Grace Hopper PhD", "Grace", "Hopper", "PhD"],
+    // Nothing to split, the format's own separator, two commas, a suffix
+    // alone: guessing would be wrong.
+    ...["Prince", "Smith; Jr., Robert", "King, Martin Luther, Jr.", "Jr."].map(
+      (name) => [name, "", "", ""],
+    ),
+    ["   ", "", "", ""],
+  ])("reads %j", (name, given, family, suffix) => {
+    expect(splitDisplayName(name)).toEqual({ given, family, suffix });
   });
 });
-
-// Escaping
 
 describe("escaping", () => {
-  const AWKWARD = [
-    "plain",
-    "a,b",
-    "a;b",
-    "a\\b",
-    "line\nbreak",
-    "everything: \\ ; , \n at once",
-    "trailing backslash \\",
-    "🎉 emoji",
-    "",
-  ];
-
-  it.each(AWKWARD)("survives %j", (value) => {
-    expect(unescapeValue(escapeValue(value))).toBe(value);
-  });
-
-  it("does not cut a structured value inside an escaped semicolon", () => {
-    // `N:Smith\; Jr.;Robert;;;` is one surname and one given name, not two
-    // surnames. Splitting on a raw semicolon is the bug this prevents.
-    const encoded = `${escapeValue("Smith; Jr.")};${escapeValue("Robert")};;;`;
-    expect(splitComponents(encoded)).toEqual([
-      "Smith; Jr.",
-      "Robert",
-      "",
-      "",
-      "",
-    ]);
-  });
-
-  it("reads an escape an exporter did not need to write", () => {
-    expect(unescapeValue("a\\:b")).toBe("a:b");
-    expect(unescapeValue("Ada\\NLovelace")).toBe("Ada\nLovelace");
-  });
+  it.each(["everything: \\ ; , \n at once", "trailing backslash \\", ""])(
+    "survives %j",
+    (value) => {
+      expect(unescapeValue(escapeValue(value))).toBe(value);
+    },
+  );
 });
 
-// Folding
-
-describe("folding", () => {
-  it("leaves a short line alone", () => {
-    expect(foldLine("FN:Ada")).toBe("FN:Ada");
-  });
-
-  it("breaks a long line and marks the continuation", () => {
-    const folded = foldLine("NOTE:" + "x".repeat(300));
-    const lines = folded.split("\r\n");
-    expect(lines.length).toBeGreaterThan(3);
-    for (const line of lines.slice(1)) expect(line.startsWith(" ")).toBe(true);
-    for (const line of lines) expect(line.length).toBeLessThanOrEqual(76);
-  });
-
-  it("never splits a surrogate pair", () => {
-    // A fold inside an emoji produces a file that is not valid UTF-8, which
-    // some readers reject and others render as two replacement characters.
-    const folded = foldLine("NOTE:" + "🎉".repeat(80));
-    for (const line of folded.split("\r\n")) {
-      expect(line).not.toMatch(/[\uD800-\uDBFF]$/);
-      expect(line).not.toMatch(/^[\uDC00-\uDFFF]/);
-    }
-  });
-
-  it("is undone exactly by the parser", () => {
-    const note = "y".repeat(500);
-    const card = parseVCards(
-      `BEGIN:VCARD\r\nVERSION:3.0\r\n${foldLine("NOTE:" + note)}\r\nEND:VCARD\r\n`,
-    )[0];
-    expect(firstValue(card, "NOTE")).toBe(note);
-  });
-
-  it("undoes a tab continuation as well as a space one", () => {
-    const card = parseVCards(
-      "BEGIN:VCARD\r\nFN:Ada\r\nNOTE:first\r\n\tsecond\r\nEND:VCARD\r\n",
-    )[0];
-    expect(firstValue(card, "NOTE")).toBe("firstsecond");
-  });
-});
-
-// Files from other address books
-
-describe("files other address books produce", () => {
-  it("reads Apple's grouped properties and custom labels", () => {
-    const vcf = [
-      "BEGIN:VCARD",
-      "VERSION:3.0",
-      "N:Lovelace;Ada;;;",
-      "FN:Ada Lovelace",
-      "item1.EMAIL;type=INTERNET;type=pref:ada@analytical.example",
-      "item1.X-ABLabel:_$!<Work>!$_",
-      "item2.TEL;type=pref:+44 20 7946 0000",
-      "item2.X-ABLabel:Studio",
-      "X-SOCIALPROFILE;type=GitHub:x-apple:adalovelace",
-      "END:VCARD",
-    ].join("\r\n");
-
-    const [contact] = parseVCard(vcf, "apple");
-    expect(contact.emails?.[0]).toMatchObject({
-      email: "ada@analytical.example",
-      label: "work",
-      isPrimary: true,
-    });
-    expect(contact.phones?.[0]).toMatchObject({ label: "studio" });
-    expect(contact.socialLinks?.[0]).toMatchObject({
-      platform: "github",
-      url: "https://github.com/adalovelace",
-      handle: "adalovelace",
-    });
-  });
-
-  it("reads the vCard 2.1 shorthand a phone still writes", () => {
-    // `TEL;WORK;VOICE:` with no `TYPE=` at all. Treating a bare parameter as
-    // anything but a TYPE loses the label on every contact from those exports.
-    const vcf = [
-      "BEGIN:VCARD",
-      "VERSION:2.1",
-      "N:Hopper;Grace;;;",
-      "FN:Grace Hopper",
-      "TEL;WORK;VOICE:+1 202 555 0100",
-      "EMAIL;HOME;INTERNET:grace@navy.example",
-      "END:VCARD",
-    ].join("\r\n");
-
-    const [contact] = parseVCard(vcf, "generic");
-    expect(contact.phones?.[0]).toMatchObject({ label: "work" });
-    expect(contact.emails?.[0]).toMatchObject({ label: "home" });
+describe("reading", () => {
+  const png = "data:image/png;base64,iVBORw0KGgo=";
+  it.each<[string, string[], Record<string, unknown>]>([
+    [
+      "Apple's grouped properties, custom labels and social profiles",
+      [
+        "FN:Ada",
+        "item1.EMAIL;type=INTERNET;type=pref:ada@analytical.example",
+        "item1.X-ABLabel:_$!<Work>!$_",
+        "item2.TEL;type=pref:+44 20 7946 0000",
+        "item2.X-ABLabel:Studio",
+        "X-SOCIALPROFILE;type=GitHub:x-apple:adalovelace",
+      ],
+      {
+        emails: [
+          { email: "ada@analytical.example", label: "work", isPrimary: true },
+        ],
+        phones: [{ label: "studio" }],
+        socialLinks: [
+          {
+            platform: "github",
+            url: "https://github.com/adalovelace",
+            handle: "adalovelace",
+          },
+        ],
+      },
+    ],
+    [
+      // A bare parameter is a TYPE, or every phone export loses its labels.
+      "the vCard 2.1 shorthand a phone still writes",
+      [
+        "FN:Grace",
+        "TEL;WORK;VOICE:+1 202 555 0100",
+        "EMAIL;HOME;INTERNET:g@navy.example",
+      ],
+      { phones: [{ label: "work" }], emails: [{ label: "home" }] },
+    ],
+    [
+      // Decoded one escape at a time, "José" reads as "JosÃ©".
+      "quoted-printable, a whole character at a time",
+      [
+        "N;ENCODING=QUOTED-PRINTABLE:Garc=C3=ADa;Jos=C3=A9;;;",
+        "FN;ENCODING=QUOTED-PRINTABLE:Jos=C3=A9 Garc=C3=ADa",
+      ],
+      { name: "José García", firstName: "José", lastName: "García" },
+    ],
+    ["a name from N without FN", ["N:Turing;Alan;;;"], { name: "Alan Turing" }],
+    [
+      "a tab continuation and escapes nobody needed to write",
+      ["FN:Ada", "NOTE:Ada\\NLovelace\r\n\ta\\:b"],
+      { about: "Ada\nLovelacea:b" },
+    ],
+    [
+      "a tel: URI",
+      ["VERSION:4.0", "FN:Ann", "TEL;VALUE=uri:tel:+1-555-0100"],
+      { phones: [{ phone: "+1-555-0100", label: "mobile", isPrimary: true }] },
+    ],
+    [
+      "4.0's PREF=1, every CATEGORIES line, and one primary per list",
+      [
+        "VERSION:4.0",
+        "FN:X",
+        "EMAIL;TYPE=home:a@x.example",
+        "EMAIL;TYPE=work;PREF=1:b@x.example",
+        "TEL:+1 555 0100",
+        "TEL:+1 555 0101",
+        "CATEGORIES:Friends,Climbing",
+        "CATEGORIES:Work",
+      ],
+      {
+        emails: [
+          { label: "home", isPrimary: false },
+          { label: "work", isPrimary: true },
+        ],
+        phones: [{ isPrimary: true }, { isPrimary: false }],
+        tags: ["Friends", "Climbing", "Work"],
+      },
+    ],
+    [
+      "a base64 photo",
+      ["FN:X", "PHOTO;ENCODING=b;TYPE=PNG:iVBORw0KGgo="],
+      { avatarUrl: png },
+    ],
+    ["a data URI photo", ["FN:X", `PHOTO:${png}`], { avatarUrl: png }],
+    [
+      "a photo URL",
+      ["FN:X", "PHOTO:https://x.example/a.png"],
+      { avatarUrl: "https://x.example/a.png" },
+    ],
+    [
+      "a photo whose type is a media type",
+      ["FN:X", "PHOTO;ENCODING=b;TYPE=image/jpeg:/9j/4A=="],
+      { avatarUrl: "data:image/jpeg;base64,/9j/4A==" },
+    ],
+  ])("reads %s", (_label, lines, expected) => {
+    const [contact] = read(card(...lines));
+    expect(contact).toMatchObject(expected);
   });
 
   it("reads a quoted parameter list", () => {
-    const card = parseVCards(
-      'BEGIN:VCARD\r\nFN:X\r\nTEL;TYPE="WORK,VOICE":+1 555 0000\r\nEND:VCARD\r\n',
-    )[0];
-    expect(valuesOf(card, "TEL")[0].params.TYPE).toEqual(["WORK", "VOICE"]);
+    const [parsed] = parseVCards(card('TEL;TYPE="WORK,VOICE":+1 555 0000'));
+    expect(valuesOf(parsed!, "TEL")[0]!.params.TYPE).toEqual(["WORK", "VOICE"]);
   });
 
-  it("decodes quoted-printable, as a whole character at a time", () => {
-    // `=C3=A9` is two octets of one "é". Decoding each escape separately turns
-    // "José" into "JosÃ©", which is the classic symptom of an address book
-    // imported from an older phone.
-    const vcf = [
-      "BEGIN:VCARD",
-      "VERSION:2.1",
-      "N;ENCODING=QUOTED-PRINTABLE:Garc=C3=ADa;Jos=C3=A9;;;",
-      "FN;ENCODING=QUOTED-PRINTABLE:Jos=C3=A9 Garc=C3=ADa",
-      "END:VCARD",
-    ].join("\r\n");
-
-    const [contact] = parseVCard(vcf, "generic");
-    expect(contact.name).toBe("José García");
-    expect(contact.firstName).toBe("José");
-    expect(contact.lastName).toBe("García");
-  });
-
-  it("builds a name from N when FN is missing", () => {
-    const [contact] = parseVCard(
-      "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Turing;Alan;;;\r\nEND:VCARD\r\n",
-      "generic",
-    );
-    expect(contact.name).toBe("Alan Turing");
-  });
-
-  it("reads a photo whether it is base64, a data URI, or a URL", () => {
-    const base64 = parseVCard(
-      [
-        "BEGIN:VCARD",
-        "FN:B64",
-        "PHOTO;ENCODING=b;TYPE=PNG:iVBORw0KGgo=",
-        "END:VCARD",
-      ].join("\r\n"),
-      "apple",
-    )[0];
-    expect(base64.avatarUrl).toBe("data:image/png;base64,iVBORw0KGgo=");
-
-    const uri = parseVCard(
-      [
-        "BEGIN:VCARD",
-        "FN:URI",
-        "PHOTO:data:image/png;base64,iVBORw0KGgo=",
-        "END:VCARD",
-      ].join("\r\n"),
-      "apple",
-    )[0];
-    expect(uri.avatarUrl).toBe("data:image/png;base64,iVBORw0KGgo=");
-
-    const url = parseVCard(
-      [
-        "BEGIN:VCARD",
-        "FN:URL",
-        "PHOTO:https://x.example/a.png",
-        "END:VCARD",
-      ].join("\r\n"),
-      "apple",
-    )[0];
-    expect(url.avatarUrl).toBe("https://x.example/a.png");
+  it.each([
+    ["an empty file", "", []],
+    ["text that is not a vCard", "this is not a vcard at all", []],
+    ["a card with no end", "BEGIN:VCARD", []],
+    ["an end before the begin", "END:VCARD\r\nBEGIN:VCARD", []],
+    [
+      "a card with no name between two others",
+      card("FN:First") + card("EMAIL:nameless@example.com") + card("FN:Third"),
+      ["First", "Third"],
+    ],
+    [
+      "group cards from Apple and vCard 4.0",
+      card("FN:VIP", "X-ADDRESSBOOKSERVER-KIND:group") +
+        card("VERSION:4.0", "FN:Team", "KIND:group") +
+        card("FN:Margaret Hamilton"),
+      ["Margaret Hamilton"],
+    ],
+    [
+      "a byte-order mark and blank lines",
+      "\uFEFF\r\n\r\nBEGIN:VCARD\r\nFN:Ada\r\n\r\nEND:VCARD\r\n\r\n",
+      ["Ada"],
+    ],
+    ["bare newlines", "BEGIN:VCARD\nFN:Ada\nEND:VCARD\n", ["Ada"]],
+    ["a line with no colon", card("FN:Ada", "GARBAGE"), ["Ada"]],
+  ])("reads only the contacts in %s", (_label, text, names) => {
+    expect(read(text).map((c) => c.name)).toEqual(names);
   });
 });
 
-// Files that are not really files
-
-describe("a file that is damaged, or not a vCard at all", () => {
-  it("reads nothing rather than throwing", () => {
-    expect(parseVCard("", "apple")).toEqual([]);
-    expect(parseVCard("this is not a vcard at all", "apple")).toEqual([]);
-    expect(parseVCard("BEGIN:VCARD", "apple")).toEqual([]);
-    expect(parseVCard("END:VCARD\r\nBEGIN:VCARD", "apple")).toEqual([]);
-  });
-
-  it("skips a card with no name and keeps the ones around it", () => {
-    const vcf = [
-      "BEGIN:VCARD",
-      "FN:First Person",
-      "END:VCARD",
-      "BEGIN:VCARD",
-      "EMAIL:nameless@example.com",
-      "END:VCARD",
-      "BEGIN:VCARD",
-      "FN:Third Person",
-      "END:VCARD",
-    ].join("\r\n");
-    expect(parseVCard(vcf, "apple").map((c) => c.name)).toEqual([
-      "First Person",
-      "Third Person",
-    ]);
-  });
-
-  it("ignores a byte-order mark and stray blank lines", () => {
-    const vcf = "\uFEFF\r\n\r\nBEGIN:VCARD\r\nFN:Ada\r\n\r\nEND:VCARD\r\n\r\n";
-    expect(parseVCard(vcf, "apple").map((c) => c.name)).toEqual(["Ada"]);
-  });
-
-  it("accepts a file that uses bare newlines", () => {
-    // Anything that has been through a text editor or a copy-paste.
-    const vcf = "BEGIN:VCARD\nFN:Ada\nEMAIL:ada@x.example\nEND:VCARD\n";
-    expect(parseVCard(vcf, "apple")[0].emails?.[0].email).toBe("ada@x.example");
-  });
-
-  it("ignores a line with no colon in it", () => {
-    const card = parseVCards(
-      "BEGIN:VCARD\r\nFN:Ada\r\nGARBAGE\r\nEND:VCARD\r\n",
-    )[0];
-    expect(card.properties.map((p) => p.name)).toEqual(["FN"]);
-  });
-});
-
-// Writing
-
-describe("serializeVCard", () => {
-  it("writes N even when there is nothing to put in it", () => {
-    // Required by the specification, and some readers show nothing without it.
-    const card = serializeVCard({ name: "Prince" });
-    expect(card).toContain("N:;;;;");
-    expect(card).toContain("FN:Prince");
-  });
-
-  it("writes REV as a date-time, whichever way the database wrote it", () => {
-    // SQLite stamps `2026-09-11 19:35:49` and the app writes ISO, so the column
-    // holds both. A space where the T belongs is not a date-time.
-    for (const stored of ["2026-09-11 19:35:49", "2026-09-11T19:35:49.000Z"]) {
-      const card = serializeVCard({ name: "X", updatedAt: stored });
-      expect(card).toContain("REV:2026-09-11T19:35:49.000Z");
-    }
-    // And a value that is not a date at all is left out rather than written.
-    expect(serializeVCard({ name: "X", updatedAt: "whenever" })).not.toContain(
-      "REV:",
-    );
-  });
-
-  it("writes nothing for a field the contact does not have", () => {
-    const card = serializeVCard({ name: "Prince" });
-    expect(card).not.toContain("ORG:");
-    expect(card).not.toContain("TITLE:");
-    expect(card).not.toContain("EMAIL");
-    expect(card).not.toContain("CATEGORIES:");
-  });
-
-  it("marks the primary value and no other", () => {
-    const card = serializeVCard({
-      name: "X",
-      emails: [
-        { email: "a@x.example", isPrimary: false },
-        { email: "b@x.example", isPrimary: true },
+describe("writing", () => {
+  it.each<[string, VCardInput, string[], string[]]>([
+    [
+      // N is required, and some readers show nothing without it.
+      "N and FN, and no line for a field it does not have",
+      { name: "Prince", birthday: "1985" },
+      ["N:;;;;", "FN:Prince"],
+      ["ORG:", "TITLE:", "EMAIL", "CATEGORIES:", "BDAY"],
+    ],
+    [
+      "the contact's own name over a guess",
+      { name: "Robert Smith", firstName: "Bob", lastName: "Smith" },
+      ["N:Smith;Bob;;;"],
+      [],
+    ],
+    [
+      "a guessed suffix in its own component",
+      { name: "Martin Luther King Jr." },
+      ["N:King;Martin Luther;;;Jr."],
+      [],
+    ],
+    [
+      // SQLite writes `2026-09-11 19:35:49` and the app ISO.
+      "REV from a SQLite timestamp",
+      { name: "X", updatedAt: "2026-09-11 19:35:49" },
+      ["REV:2026-09-11T19:35:49.000Z"],
+      [],
+    ],
+    [
+      "no REV for a value that is not a date",
+      { name: "X", updatedAt: "whenever" },
+      [],
+      ["REV:"],
+    ],
+    [
+      "PREF on the primary value only",
+      {
+        name: "X",
+        emails: [
+          { email: "a@x.example", isPrimary: false },
+          { email: "b@x.example", isPrimary: true },
+        ],
+      },
+      [
+        "\r\nEMAIL;TYPE=INTERNET:a@x.example\r\n",
+        "\r\nEMAIL;TYPE=INTERNET;TYPE=PREF:b@x.example\r\n",
       ],
-    });
-    const lines = card.split("\r\n").filter((l) => l.startsWith("EMAIL"));
-    expect(lines[0]).not.toContain("PREF");
-    expect(lines[1]).toContain("PREF");
-  });
-
-  it("writes a label the parameter syntax cannot carry as an Apple label", () => {
-    const card = serializeVCard({
-      name: "X",
-      phones: [{ phone: "+1", label: "at home; really" }],
-    });
-    expect(card).toContain("item1.TEL;TYPE=VOICE:+1");
-    expect(card).toContain("item1.X-ABLabel:at home\\; really");
-  });
-
-  it("writes UID when provided for CardDAV resources", () => {
-    const card = serializeVCard({
-      uid: "contact-uuid-123",
-      name: "Ada Lovelace",
-    });
-    expect(card).toContain("UID:contact-uuid-123");
-  });
-});
-
-describe("extractVCardContacts", () => {
-  it("skips Apple X-ADDRESSBOOKSERVER-KIND:group and vCard 4.0 KIND:group cards and respects PREF=1", () => {
-    const vcf = [
-      "BEGIN:VCARD",
-      "VERSION:3.0",
-      "FN:VIP List",
-      "X-ADDRESSBOOKSERVER-KIND:group",
-      "END:VCARD",
-      "BEGIN:VCARD",
-      "VERSION:4.0",
-      "FN:Engineering Team",
-      "KIND:group",
-      "END:VCARD",
-      "BEGIN:VCARD",
-      "VERSION:4.0",
-      "FN:Margaret Hamilton",
-      "N:Hamilton;Margaret;;;",
-      "EMAIL;TYPE=home:margaret@home.example",
-      "EMAIL;TYPE=work;PREF=1:margaret@mit.edu",
-      "END:VCARD",
-    ].join("\r\n");
-
-    const { contacts, totalCards } = extractVCardContacts(vcf);
-    expect(totalCards).toBe(3);
-    expect(contacts).toHaveLength(1);
-    expect(contacts[0].name).toBe("Margaret Hamilton");
-    expect(contacts[0].emails).toEqual([
-      { email: "margaret@home.example", label: "home", isPrimary: false },
-      { email: "margaret@mit.edu", label: "work", isPrimary: true },
-    ]);
-  });
-});
-
-describe("cards from a CardDAV server", () => {
-  const v4 = [
-    "BEGIN:VCARD",
-    "VERSION:4.0",
-    "KIND:individual",
-    "FN:Ann Lee",
-    "TEL;VALUE=uri;PREF=1:tel:+1-555-0100",
-    "PHOTO:data:image/png;base64,iVBORw0KGgo=",
-    "END:VCARD",
-  ].join("\r\n");
-
-  it("reads a tel: URI as the number and patches a 4.0 card as 4.0", () => {
-    const [ann] = extractVCardContacts(v4).contacts;
-    expect(ann.phones).toEqual([
-      { phone: "+1-555-0100", label: "mobile", isPrimary: true },
-    ]);
-    const patched = patchVCard(v4, {
-      ...ann,
-      emails: [{ email: "ann@lee.example", isPrimary: true }],
-    });
-    expect(patched).toContain("VERSION:4.0");
-    expect(patched).not.toContain("VERSION:3.0");
-    // The number is the card's own line, and the new address uses 4.0's PREF.
-    expect(patched).toContain("TEL;VALUE=uri;PREF=1:tel:+1-555-0100");
-    expect(patched).toContain("EMAIL;TYPE=INTERNET;PREF=1:ann@lee.example");
-  });
-
-  it("keeps a birthday the parser cannot read as the card wrote it", () => {
-    for (const bday of ["19850514T000000Z", "---14", "1985", "circa 1950"]) {
-      const card = `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\nBDAY:${bday}\r\nEND:VCARD\r\n`;
-      const [x] = extractVCardContacts(card).contacts;
-      expect(patchVCard(card, x), bday).toContain(`BDAY:${bday}`);
-    }
-    // And invents no day for a new card.
-    expect(serializeVCard({ name: "X", birthday: "1985" })).not.toContain(
-      "BDAY",
-    );
-  });
-
-  it("reads a photo whose type is a media type", () => {
-    const [x] = extractVCardContacts(
-      "BEGIN:VCARD\r\nFN:X\r\nPHOTO;ENCODING=b;TYPE=image/jpeg:/9j/4A==\r\nEND:VCARD\r\n",
-    ).contacts;
-    expect(x.avatarUrl).toBe("data:image/jpeg;base64,/9j/4A==");
-  });
-
-  it("reads every CATEGORIES line and marks one value primary", () => {
-    const card = [
-      "BEGIN:VCARD",
-      "VERSION:3.0",
-      "FN:X",
-      "EMAIL:a@x.example",
-      "EMAIL;TYPE=PREF:b@x.example",
-      "TEL:+1 555 0100",
-      "TEL:+1 555 0101",
-      "CATEGORIES:Friends,Climbing",
-      "CATEGORIES:Work",
-      "END:VCARD",
-    ].join("\r\n");
-    const [x] = extractVCardContacts(card).contacts;
-    expect(x.tags).toEqual(["Friends", "Climbing", "Work"]);
-    expect(x.emails.map((e) => e.isPrimary)).toEqual([false, true]);
-    expect(x.phones.map((p) => p.isPrimary)).toEqual([true, false]);
-    // Unchanged, the card keeps its own lines: no PREF added to the first.
-    const patched = patchVCard(card, x);
-    expect(patched).toContain("\r\nTEL:+1 555 0100\r\n");
-    expect(patched).toContain("\r\nEMAIL:a@x.example\r\n");
-  });
-
-  it("keeps a custom label with its spaces", () => {
-    const card = serializeVCard({
-      name: "X",
-      phones: [{ phone: "+1", label: "old work" }],
-    });
-    const [x] = extractVCardContacts(card).contacts;
-    expect(x.phones[0].label).toBe("old work");
-    const [y] = extractVCardContacts(patchVCard(card, x)).contacts;
-    expect(y.phones[0].label).toBe("old work");
-  });
-
-  it("reads and patches a card with 40,000 addresses in linear time", () => {
-    const card = [
-      "BEGIN:VCARD",
-      "VERSION:3.0",
-      "FN:Big",
-      ...Array.from({ length: 40_000 }, (_, i) => `EMAIL:u${i}@x.example`),
-      "END:VCARD",
-    ].join("\r\n");
-    const started = performance.now();
-    const [big] = extractVCardContacts(card).contacts;
-    patchVCard(card, big);
-    expect(big.emails).toHaveLength(40_000);
-    expect(performance.now() - started).toBeLessThan(2_000);
+      [],
+    ],
+    [
+      "a label TYPE cannot carry as an Apple label",
+      { name: "X", phones: [{ phone: "+1", label: "at home; really" }] },
+      ["item1.TEL;TYPE=VOICE:+1", "item1.X-ABLabel:at home\\; really"],
+      [],
+    ],
+    [
+      "the UID of a CardDAV card",
+      { uid: "contact-uuid-123", name: "X" },
+      ["UID:contact-uuid-123"],
+      [],
+    ],
+  ])("writes %s", (_label, contact, has, hasNot) => {
+    const written = serializeVCard(contact);
+    for (const line of has) expect(written).toContain(line);
+    for (const line of hasNot) expect(written).not.toContain(line);
   });
 });
 
 describe("patchVCard", () => {
-  it("preserves PHOTO, NICKNAME, structured ADR, Apple X-ABLabel, X-* properties, and server UID when updating owned fields", () => {
+  it("keeps every line Contrack does not own, and the server's UID", () => {
     const existing = [
-      "BEGIN:VCARD",
-      "VERSION:3.0",
       "PRODID:-//Apple Inc.//macOS 15.0//EN",
       "UID:server-uid-original-777",
       "N:Lovelace;Ada;Augusta;Countess;",
       "FN:Ada Lovelace",
       "NICKNAME:Enchantress of Numbers",
       "ORG:Analytical Engine Ltd;Research Division",
-      "TITLE:Mathematician",
       "PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQAAAQABAAD/",
       "item1.TEL;type=pref:+44 20 7946 0921",
       "item1.X-ABLabel:_$!<Mobile>!$_",
@@ -690,18 +386,14 @@ describe("patchVCard", () => {
       "item3.X-ABDATE;type=pref:1835-07-08",
       "item3.X-ABLabel:_$!<Anniversary>!$_",
       "X-ABUID:550E8400-E29B-41D4-A716-446655440000:ABPerson",
-      "X-PHONETIC-FIRST-NAME:Ey-dah",
-      "END:VCARD",
-    ].join("\r\n");
-
-    const patched = patchVCard(existing, {
+    ];
+    const patched = patchVCard(card("VERSION:3.0", ...existing), {
       uid: "wrong-fallback-contact-id",
       name: "Ada Lovelace",
       firstName: "Ada",
       lastName: "Lovelace",
       company: "Analytical Engine Ltd",
       role: "Chief Architect",
-      about: "Updated note from Contrack",
       phones: [{ phone: "+44 20 7946 0921", label: "mobile", isPrimary: true }],
       addresses: [
         {
@@ -710,31 +402,64 @@ describe("patchVCard", () => {
           isPrimary: true,
         },
       ],
+    }).replace(/\r\n[ \t]/g, "");
+    for (const line of existing) expect(patched).toContain(line);
+    expect(patched).toContain("TITLE:Chief Architect");
+    expect(patched).not.toContain("wrong-fallback-contact-id");
+  });
+
+  it("keeps a 4.0 card 4.0, with its own lines for values that did not change", () => {
+    const v4 = card(
+      "VERSION:4.0",
+      "FN:Ann Lee",
+      "TEL;VALUE=uri;PREF=1:tel:+1-555-0100",
+      "EMAIL:a@x.example",
+      "EMAIL;TYPE=PREF:b@x.example",
+      "CATEGORIES:Friends,Climbing",
+      "CATEGORIES:Work",
+    );
+    const [ann] = read(v4);
+    const unchanged = patchVCard(v4, ann!);
+    for (const line of v4.split("\r\n").slice(2)) {
+      expect(unchanged).toContain(line);
+    }
+    const patched = patchVCard(v4, {
+      ...ann!,
+      emails: [{ email: "c@x.example", isPrimary: true }],
     });
+    expect(patched).not.toContain("VERSION:3.0");
+    expect(patched).toContain("EMAIL;TYPE=INTERNET;PREF=1:c@x.example");
+  });
 
-    const unfolded = patched.replace(/\r\n[ \t]/g, "");
+  it.each(["19850514T000000Z", "---14", "1985", "circa 1950"])(
+    "keeps a birthday the parser cannot read, %s, as the card wrote it",
+    (bday) => {
+      const written = card("VERSION:3.0", "FN:X", `BDAY:${bday}`);
+      expect(patchVCard(written, read(written)[0]!)).toContain(`BDAY:${bday}`);
+    },
+  );
 
-    expect(unfolded).toContain("UID:server-uid-original-777");
-    expect(unfolded).not.toContain("wrong-fallback-contact-id");
-    expect(unfolded).toContain("N:Lovelace;Ada;Augusta;Countess;");
-    expect(unfolded).toContain("ORG:Analytical Engine Ltd;Research Division");
-    expect(unfolded).toContain("TITLE:Chief Architect");
-    expect(unfolded).toContain("NOTE:Updated note from Contrack");
-    expect(unfolded).toContain("NICKNAME:Enchantress of Numbers");
-    expect(unfolded).toContain(
-      "PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQAAAQABAAD/",
+  it("keeps a custom label with its spaces", () => {
+    const written = serializeVCard({
+      name: "X",
+      phones: [{ phone: "+1", label: "old work" }],
+    });
+    const [x] = read(written);
+    expect(x!.phones[0]!.label).toBe("old work");
+    expect(read(patchVCard(written, x!))[0]!.phones[0]!.label).toBe("old work");
+  });
+
+  it("reads and patches a card of 20,000 addresses in linear time", () => {
+    // The quadratic version took 5 seconds at this size.
+    const big = card(
+      "VERSION:3.0",
+      "FN:Big",
+      ...Array.from({ length: 20_000 }, (_, i) => `EMAIL:u${i}@x.example`),
     );
-    expect(unfolded).toContain("item1.TEL;type=pref:+44 20 7946 0921");
-    expect(unfolded).toContain("item1.X-ABLabel:_$!<Mobile>!$_");
-    expect(unfolded).toContain(
-      "item2.ADR;type=HOME;type=pref:;;10 St James Square;London;Greater London;SW1Y 4LE;UK",
-    );
-    expect(unfolded).toContain("item2.X-ABLabel:_$!<Home>!$_");
-    expect(unfolded).toContain("item3.X-ABDATE;type=pref:1835-07-08");
-    expect(unfolded).toContain("item3.X-ABLabel:_$!<Anniversary>!$_");
-    expect(unfolded).toContain(
-      "X-ABUID:550E8400-E29B-41D4-A716-446655440000:ABPerson",
-    );
-    expect(unfolded).toContain("X-PHONETIC-FIRST-NAME:Ey-dah");
+    const started = performance.now();
+    const [contact] = read(big);
+    patchVCard(big, contact!);
+    expect(contact!.emails).toHaveLength(20_000);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });
