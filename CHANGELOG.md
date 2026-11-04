@@ -32,6 +32,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A CardDAV server that falsely answers that a card is gone no longer makes
+  the next sync write the server's copy over a newer edit in Contrack.
 - A Calendar or Mailbox connector counts each person once for each meeting or
   mail. A calendar counted the people of every past meeting again on each
   sync, so someone met once became a suggested person by the third sync. The

@@ -506,6 +506,12 @@ describe("CardDAV against a stub server", () => {
     dav.flags.getStatus = 0;
     expect(await errors()).toBe(0);
     expect(stored()).toContain("ORG:Unread");
+    // The false 404 kept the card's ETag, so the next pull does not take
+    // the card back over a newer edit.
+    edit("Newer");
+    await run();
+    expect(contactService.getContactById(s, id!)!.company).toBe("Newer");
+    expect(stored()).toContain("ORG:Newer");
 
     // A connection dropped mid-push keeps the cards already written.
     const one = contactService.createContact(s, { name: "Aaa Local" })!;
