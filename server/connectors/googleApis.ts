@@ -194,7 +194,7 @@ export const google = {
             ...query
           }: {
             userId: string;
-            q: string;
+            q?: string;
             maxResults: number;
             pageToken?: string;
           },

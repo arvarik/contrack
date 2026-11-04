@@ -59,6 +59,14 @@ export type SyncEvent =
       kind: "progress";
       fetched: number;
       message?: string;
+    }
+  | {
+      /**
+       * One part of a sync failed and the others went on: the run counts it
+       * as an error and keeps the message, instead of passing as clean.
+       */
+      kind: "stage_failed";
+      message: string;
     };
 
 export interface SyncContext<C = unknown, S = unknown> {

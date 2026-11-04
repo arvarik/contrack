@@ -20,6 +20,15 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Access log lines use one layout everywhere, the old `short` one without the
   empty user field. A terminal no longer gets the colored `dev` layout.
 
+### Fixed
+
+- A Google connector signed in with AI summaries off syncs Gmail. Every sync of
+  its mail failed before, and the run still showed no error.
+- A contact deleted in Google is moved to the trash in Contrack on the next
+  sync. The first sync after this update pulls the Google contacts once more.
+- A sync where one part fails, such as Gmail, shows the error on the connector
+  and in its run history while the other parts still sync.
+
 ## [2.0.5] - 2026-11-02
 
 ### Security

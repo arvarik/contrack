@@ -775,7 +775,7 @@ export async function runNow(
       },
     };
 
-    const { stats, ingestedContactIds } = await ingestStream(
+    const { stats, ingestedContactIds, failures } = await ingestStream(
       scope,
       {
         id: connector.id,
@@ -944,10 +944,19 @@ export async function runNow(
     sqlite
       .prepare(
         `UPDATE connector_runs
-         SET status = 'ok', finishedAt = ?, stats = ?, error = NULL
+         SET status = 'ok', finishedAt = ?, stats = ?, error = ?
          WHERE id = ? AND ownerId = ?`,
       )
-      .run(finishIso, JSON.stringify(stats), runId, scope.ownerId);
+      .run(
+        finishIso,
+        JSON.stringify(stats),
+        failures.length > 0 ? failures.join("\n") : null,
+        runId,
+        scope.ownerId,
+      );
+    for (const failure of failures) {
+      log.warn("Connectors", `[${connector.id}] ${failure}`);
+    }
 
     return {
       runId,

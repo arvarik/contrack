@@ -63,6 +63,8 @@ export interface ConnectorInfo {
 export interface IngestResult {
   stats: RunStats;
   ingestedContactIds: Set<string>;
+  /** The messages of the stages that failed while the rest went on. */
+  failures: string[];
 }
 
 /** Events committed in one transaction. */
@@ -323,6 +325,7 @@ export async function ingestStream(
 
   const seenUpcomingExternalIds = new Set<string>();
   const ingestedContactIds = new Set<string>();
+  const failures: string[] = [];
   let hasUpcomingEvents = false;
 
   /** The link of the card `externalId` to a contact, if the card has one. */
@@ -453,6 +456,12 @@ export async function ingestStream(
     const event = capped(raw);
     if (event.kind === "progress") {
       stats.fetched = event.fetched;
+      return;
+    }
+
+    if (event.kind === "stage_failed") {
+      stats.errors = (stats.errors ?? 0) + 1;
+      failures.push(event.message);
       return;
     }
 
@@ -1107,5 +1116,5 @@ export async function ingestStream(
     })();
   }
 
-  return { stats, ingestedContactIds };
+  return { stats, ingestedContactIds, failures };
 }
