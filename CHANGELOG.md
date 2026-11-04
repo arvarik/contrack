@@ -9,129 +9,99 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-11-04
+
+Upgrading runs one database migration when the server starts. The first
+Google sync reads every Google contact once more, and the first calendar sync
+counts each person in your past meetings once more.
+
 ### Security
 
 - Running from source needs Node.js 26.13.0 or later. Until the image library
-  ships the libheif security fixes, the server does not read HEIF or AVIF
-  images, so an account photo or a remote logo or photo in AVIF is refused.
-- A name or a mail sender's name with a long run of dashes or apostrophes no
-  longer stalls the server. One of 40,000 dashes took 0.6 seconds.
-- With `CONNECTORS_ALLOW_PRIVATE_HOSTS`, the CardDAV connector accepts a
-  plain `http://` address only on the private network, so the password never
-  crosses the internet in cleartext.
+  ships the libheif security fixes, HEIF and AVIF images are refused, such as
+  an account photo or a remote logo in AVIF.
+- A long run of dashes or apostrophes in a name or a mail sender's name no
+  longer stalls the server.
+- With `CONNECTORS_ALLOW_PRIVATE_HOSTS`, CardDAV accepts a plain `http://`
+  address only on the private network.
 
 ### Added
 
-- The Google connector syncs birthdays, addresses, notes and websites from
-  Google Contacts, and adds each contact's Google labels as tags.
+- Google Contacts sync birthdays, addresses, notes and websites, and Google
+  labels become tags.
+- The Calendar connector has **Also treat these addresses as mine**, for a
+  calendar that invites you at another address than your sign-in email.
 
 ### Changed
 
-- Access log lines use one layout everywhere, the old `short` one without the
-  empty user field. A terminal no longer gets the colored `dev` layout.
+- Access log lines use one layout, the old `short` one without the empty user
+  field.
+- A sync where one part fails shows the error on the connector and in its run
+  history, while the other parts still sync. A CardDAV write that the server
+  refuses is an error, and it is tried again after your next edit.
 
 ### Fixed
 
-- A CardDAV server that falsely answers that a card is gone no longer makes
-  the next sync write the server's copy over a newer edit in Contrack.
-- A Calendar or Mailbox connector counts each person once for each meeting or
-  mail. A calendar counted the people of every past meeting again on each
-  sync, so someone met once became a suggested person by the third sync. The
-  first calendar sync after this update counts each of them once more.
-- The Calendar connector has **Also treat these addresses as mine**, for a
-  calendar that invites you at another address than your sign-in email. You
-  were a stranger in each of your meetings before.
-- The mailbox that a Mailbox connector reads counts as you, also when it is
-  not your sign-in email.
-- The Mailbox connector reads the newsletter and mailing list headers, so bulk
-  mail no longer suggests people.
-- A Calendar connector leaves out meetings you declined, keeps events with no
-  one but you off Coming up, and no longer counts shared or room calendars, or
-  Outlook's hidden attendees, as people. It reads the address that CalDAV
-  servers give with a `urn:uuid:` attendee.
-- Each meeting of someone else's series that you are invited to is logged,
-  once, also after the whole series reaches the calendar.
-- A calendar address that returns a web page, such as a sign-in page, fails the
-  sync and the connection test. Before, it emptied Coming up.
-- A mailbox folder that cannot be opened shows as an error while the other
-  folders sync. The Mailbox connector no longer takes a folder such as
-  "Presentations" for the Sent folder.
-- People at a mail provider or a university, such as `mail.ru` or
-  `email.arizona.edu`, can be suggested again.
-- Mail moved in from another mailbox keeps the date it was sent.
-- Switching a CardDAV connector from Pull only to Two-way sync uploads only
-  the contacts you edit afterwards. It uploaded almost every contact that a
-  meeting or a briefing had touched, and so did a first sync that came days
-  after connecting.
-- A CardDAV push writes only the fields you changed in Contrack, so a change
-  made on the server to another field stays. An edit to a contact that existed
-  before connecting wrote its old name and phone back over the server's.
-- A CardDAV address book of more than about 15,000 cards syncs. Every sync of
-  one failed.
-- A CardDAV card that cannot be read, or a contact that the server refuses,
-  shows as a sync error. The run passed before, and the change could be lost.
-  It is tried again on the next sync, a card too large to read once it
-  changes, and a refused contact once you edit it again.
-- A CardDAV card deleted on the server is unlinked even when the upload of
-  that sync failed.
-- Removing a Google or CardDAV connector and adding it back links its
-  contacts again. It added the contacts without an email address twice. A
-  card that a stopped CardDAV upload saved is linked, not imported twice.
-- A CardDAV card keeps updating its contact when a second card shares its
-  email address, and Contrack writes the contact to the card that made it.
-- A contact that Google or a CardDAV book brought in keeps taking that
-  source's edits after a CardDAV connector uploads it to another book. Both
-  sources stopped updating it.
-- A vCard 4.0 card stays 4.0 when Contrack updates it, and a `tel:` number is
-  read without its `tel:` prefix.
-- A birthday written as a date-time, such as 19850514T000000Z, reads as the
-  day written in every time zone. A year alone or text such as "circa 1950"
-  no longer becomes January 1, and a CardDAV upload keeps such a birthday as
-  the card had it.
-- A vCard photo of type `image/jpeg` is saved, and a photo removed on the
-  CardDAV server is removed from the contact.
-- A vCard with thousands of addresses no longer stalls the server, and a
-  synced contact is capped like one made in the app.
-- vCards: every CATEGORIES line becomes tags, a card has one primary email,
-  phone and address, and a custom label such as "old work" keeps its spaces.
-- A Google connector signed in with AI summaries off syncs Gmail. Every sync of
-  its mail failed before, and the run still showed no error.
-- A contact deleted in Google is moved to the trash in Contrack on the next
-  sync. The first sync after this update pulls the Google contacts once more.
-- A sync where one part fails, such as Gmail, shows the error on the connector
-  and in its run history while the other parts still sync.
-- Correspondents list each person once, whatever the spelling of the address
-  ("+tag", dots in a Gmail address), and leave out your own addresses, robots
-  such as billing@ or no-reply@, Apple's Hide My Email relays and bulk mail.
-  Mail with no one but you and strangers no longer lands on your own contact.
-- A duplicate group says how many contacts share a name once, with the latest
-  count.
-- Connect Google says what to do at Google's "hasn't verified this app" and
-  "Access blocked" screens.
-- Google connects on a server whose time zone is east of UTC. The sign-in
-  read the server's UTC time as local time and expired at once.
-- A Google sign-in that leaves a permission unticked turns that part of the
-  sync off, instead of failing on every run.
-- Reconnect fixes a Google connector whose secret the encryption key no
-  longer opens, instead of adding a second one.
-- AI summaries no longer try to read mail Google did not allow, and say how to
-  allow it. A run tries at most 50 summaries, failed ones included.
+- **Google**
+  - Gmail syncs when AI summaries are off. Every sync of its mail failed.
+  - A contact deleted in Google moves to the trash in Contrack.
+  - A meeting is logged after it ends. Coming up shows the next 60 days of
+    meetings with someone else, without birthdays, focus time, out of office
+    or cancelled events.
+  - Connecting works on a server east of UTC, and a permission you untick
+    turns that part of the sync off instead of failing on every run.
+  - Reconnect repairs a connector whose secret no longer opens. Removing a
+    connector revokes Contrack's access at Google. "Sign-in expired" names the
+    7-day limit of an app in Testing, and Connect Google explains Google's
+    "hasn't verified this app" and "Access blocked" screens.
+  - With two Google accounts, each one counts as you, and a mail or invite
+    that both receive is logged once.
+  - AI summaries no longer try mail that Google did not allow, and a run tries
+    at most 50.
+  - Google's letter tile is no longer saved as a photo, and email addresses and
+    phone numbers keep their work and home labels.
+  - A suggested person that you save in Google Contacts becomes a contact, and
+    turning Gmail or Calendar on later starts at the lookback date.
+- **People and correspondents**
+  - Each person counts once per mail or meeting, whatever the spelling of the
+    address ("+tag", Gmail's dots), and a mail to such an address finds the
+    contact.
+  - Your own addresses, robots such as billing@ or no-reply@, Hide My Email
+    relays and bulk mail are left out. Mail with only you and strangers no
+    longer lands on your own contact. People at mail providers and
+    universities can be suggested again.
+  - A duplicate group says once how many contacts share a name.
+- **Mailbox (IMAP)**
+  - The mailbox you connect counts as you, and newsletters and mailing lists
+    no longer suggest people.
+  - A folder that cannot be opened shows as an error, "Presentations" is no
+    longer taken for the Sent folder, and mail moved in from another mailbox
+    keeps the date it was sent.
+- **Calendar (ICS)**
+  - Meetings you declined are left out, events with no one but you stay off
+    Coming up, and shared or room calendars and Outlook's hidden attendees are
+    not people. A CalDAV `urn:uuid:` attendee is read by its address.
+  - A meeting of someone else's series that you are invited to is logged once.
+  - An address that returns a web page fails the sync instead of emptying
+    Coming up.
+- **CardDAV and vCards**
+  - Two-way sync uploads only the contacts and fields you change, so a server
+    edit to another field stays. Switching from Pull only to Two-way no longer
+    uploads almost every contact.
+  - Address books of more than about 15,000 cards sync.
+  - Removing a connector and adding it back links its contacts again instead
+    of importing some twice, and a card from a stopped upload is linked.
+  - A contact keeps taking its source's edits when a second card shares its
+    address or another connector uploads it. A card deleted on the server is
+    unlinked even when the upload of that sync failed, and a false "gone" from
+    the server no longer lets the next sync undo a newer edit.
+  - vCard 4.0 cards stay 4.0. `tel:` numbers, `image/jpeg` photos, every
+    CATEGORIES line and custom labels such as "old work" are read, and a photo
+    removed on the server is removed. A birthday written as a date-time keeps
+    its day, and a year alone or "circa 1950" no longer becomes January 1.
+  - A card with thousands of addresses no longer stalls the server, and synced
+    contacts are capped like the ones made in the app.
 - A shorter sync interval moves the next run up.
-- Removing a Google connector revokes Contrack's access at Google.
-- With two Google accounts, each one counts as you, and a mail or invite both
-  receive is logged and shown once.
-- "Sign-in expired" says when Google ended the sign-in because the app is
-  still in Testing, which happens every 7 days.
-- A Google meeting is logged after it ends, not only when it changes. Coming
-  up shows the next 60 days of meetings with someone else, without
-  birthdays, focus time or out of office, and drops cancelled ones.
-- Turning Gmail or Calendar on later starts at the lookback date.
-- A mail to a contact's address with a "+tag" or Gmail's dots finds the
-  contact.
-- Google's letter tile is no longer saved as a contact photo, and the drawn
-  avatar replaces a tile an earlier sync saved.
-- A suggested person that you save in Google Contacts becomes a contact.
-- Synced email addresses and phone numbers keep Google's work and home labels.
 
 ## [2.0.5] - 2026-11-02
 
@@ -457,6 +427,7 @@ The first release: a local-first personal CRM with contact management,
 semantic search, AI enrichment and duplicate detection.
 
 [unreleased]: https://github.com/arvarik/contrack/compare/v2.0.5...HEAD
+[2.0.6]: https://github.com/arvarik/contrack/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/arvarik/contrack/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/arvarik/contrack/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/arvarik/contrack/compare/v2.0.2...v2.0.3
