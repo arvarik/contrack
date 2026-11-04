@@ -727,18 +727,12 @@ export async function runNow(
     }
   }
 
-  let since: string;
-  if (
-    cursor &&
-    typeof (cursor as { lastSyncAt?: string }).lastSyncAt === "string"
-  ) {
-    since = (cursor as { lastSyncAt: string }).lastSyncAt;
-  } else {
-    const lookbackDays = Number(config.lookbackDays ?? 90);
-    since = new Date(
-      Date.now() - lookbackDays * 24 * 60 * 60 * 1000,
-    ).toISOString();
-  }
+  const lookbackDays = Number(config.lookbackDays ?? 90);
+  const firstSince = new Date(
+    Date.now() - lookbackDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const lastSyncAt = (cursor as { lastSyncAt?: unknown } | null)?.lastSyncAt;
+  const since = typeof lastSyncAt === "string" ? lastSyncAt : firstSince;
 
   const matcher = buildContactMatcher(scope);
 
@@ -748,6 +742,7 @@ export async function runNow(
     secret,
     cursor,
     since,
+    firstSince,
     selfAddresses: { emails: selfEmails, phones: selfPhones },
     signal,
     log: (msg: string) => log.info("Connectors", `[${connector.id}] ${msg}`),
