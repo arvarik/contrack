@@ -278,7 +278,43 @@ export const MAX_SYNCED_TITLE = 300;
 export const MAX_SYNCED_CONTENT = 20_000;
 const MAX_SYNCED_NAME = 200;
 
+/** A list the API caps at 100 items, as `childRecordsSchema` does. */
+const MAX_SYNCED_ITEMS = 100;
+/** A tag, as the API caps one. */
+const MAX_SYNCED_TAG = 100;
+
+/**
+ * A synced person within the API's limits: a card is the server's, and one
+ * card held 40,000 addresses. A name keeps 300 characters, another field
+ * 20,000, and a list 100 items.
+ */
+function cappedContact(contact: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(contact)) {
+    if (typeof value === "string") {
+      out[key] = value.slice(
+        0,
+        key === "name" ? MAX_SYNCED_TITLE : MAX_SYNCED_CONTENT,
+      );
+    } else if (Array.isArray(value)) {
+      const items = value.slice(0, MAX_SYNCED_ITEMS);
+      out[key] =
+        key === "tags"
+          ? items.map((t) =>
+              typeof t === "string" ? t.slice(0, MAX_SYNCED_TAG) : t,
+            )
+          : items;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 function capped(event: SyncEvent): SyncEvent {
+  if (event.kind === "contact") {
+    return { ...event, contact: cappedContact(event.contact) };
+  }
   if (event.kind !== "interaction" && event.kind !== "upcoming") return event;
   const participants = event.participants.map((p) =>
     p.name && p.name.length > MAX_SYNCED_NAME

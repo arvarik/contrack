@@ -29,6 +29,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A vCard 4.0 card stays 4.0 when Contrack updates it, and a `tel:` number is
+  read without its `tel:` prefix.
+- A birthday written as a date-time, such as 19850514T000000Z, reads as the
+  day written in every time zone. A year alone or text such as "circa 1950"
+  no longer becomes January 1, and a CardDAV upload keeps such a birthday as
+  the card had it.
+- A vCard photo of type `image/jpeg` is saved.
+- A vCard with thousands of addresses no longer stalls the server, and a
+  synced contact is capped like one made in the app.
+- vCards: every CATEGORIES line becomes tags, a card has one primary email,
+  phone and address, and a custom label such as "old work" keeps its spaces.
 - A Google connector signed in with AI summaries off syncs Gmail. Every sync of
   its mail failed before, and the run still showed no error.
 - A contact deleted in Google is moved to the trash in Contrack on the next

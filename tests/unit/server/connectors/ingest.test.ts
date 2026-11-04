@@ -719,6 +719,40 @@ describe("connectors ingestStream", () => {
       (r) => Object.values(r)[0],
     );
 
+  it("caps a synced person like the API caps one", async () => {
+    await ingest([
+      card("huge", "N".repeat(1_000), "huge@example.com", {
+        about: "A".repeat(30_000),
+        emails: Array.from({ length: 300 }, (_, i) => ({
+          email: `e${i}@huge.example`,
+        })),
+        tags: Array.from({ length: 300 }, (_, i) => `${i}`.padEnd(150, "t")),
+      }),
+    ]);
+    const [id] = column(
+      "SELECT id FROM contacts WHERE ownerId = ? AND name LIKE 'NNN%'",
+      ownerId,
+    );
+    expect(
+      column("SELECT length(name) FROM contacts WHERE id = ?", id),
+    ).toEqual([300]);
+    expect(
+      column("SELECT length(about) FROM contacts WHERE id = ?", id),
+    ).toEqual([20_000]);
+    expect(
+      column("SELECT COUNT(*) FROM contact_emails WHERE contactId = ?", id),
+    ).toEqual([100]);
+    expect(
+      column("SELECT COUNT(*) FROM contact_tags WHERE contactId = ?", id),
+    ).toEqual([100]);
+    expect(
+      column(
+        "SELECT MAX(length(tag)) FROM contact_tags WHERE contactId = ?",
+        id,
+      ),
+    ).toEqual([100]);
+  });
+
   it("merges a synced person into the contact it was linked to by a shared address", async () => {
     // The local contact and a Google card share one address, so the card
     // binds to the contact. A later sync of that card must not rename the
