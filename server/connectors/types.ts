@@ -20,6 +20,12 @@ export type SyncEvent =
       externalId: string;
       contact: Record<string, unknown>;
       photoUrl?: string;
+      /**
+       * The source's placeholder image for a card with no photo, such as
+       * Google's letter tile. Ingest never saves it. It only takes back a
+       * copy of it that an earlier sync saved as the contact's photo.
+       */
+      defaultPhotoUrl?: string;
     }
   | {
       kind: "contact_deleted";

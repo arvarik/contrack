@@ -49,7 +49,7 @@ import type { SyncEvent } from "../../server/connectors/types.ts";
 
 /** The People fields the adapter asks for. `metadata` carries `deleted`. */
 const PERSON_FIELDS =
-  "metadata,names,emailAddresses,phoneNumbers,organizations,photos";
+  "metadata,names,emailAddresses,phoneNumbers,organizations,photos,birthdays,addresses,biographies,urls,memberships";
 
 describe("Google Workspace Connector & OAuth Integration", () => {
   let server: http.Server;
@@ -1375,6 +1375,122 @@ describe("Google Workspace Connector & OAuth Integration", () => {
           }),
         }),
       ]);
+    });
+
+    it("maps a card's birthday, addresses, notes, links and labels to the contact", async () => {
+      const list = vi.fn().mockResolvedValue({
+        data: {
+          connections: [
+            {
+              resourceName: "people/c1",
+              names: [{ displayName: "Ana Lee" }],
+              birthdays: [{ date: { month: 5, day: 14 } }],
+              addresses: [
+                {
+                  formattedValue: "1 Main St\nSpringfield, IL 62701\nUS",
+                  type: "home",
+                  metadata: { primary: true },
+                },
+              ],
+              biographies: [{ value: "Met at the conference." }],
+              urls: [
+                { value: "https://analee.example" },
+                {
+                  value: "https://www.linkedin.com/in/analee",
+                  type: "profile",
+                },
+              ],
+              memberships: [
+                {
+                  contactGroupMembership: {
+                    contactGroupResourceName: "contactGroups/friends",
+                  },
+                },
+                {
+                  contactGroupMembership: {
+                    contactGroupResourceName: "contactGroups/starred",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      });
+      const groups = vi.fn().mockResolvedValue({
+        data: {
+          contactGroups: [
+            {
+              resourceName: "contactGroups/friends",
+              name: "Friends",
+              groupType: "USER_CONTACT_GROUP",
+            },
+            {
+              resourceName: "contactGroups/starred",
+              name: "starred",
+              groupType: "SYSTEM_CONTACT_GROUP",
+            },
+          ],
+        },
+      });
+      vi.spyOn(google, "people").mockReturnValue({
+        people: { connections: { list } },
+        contactGroups: { list: groups },
+      } as unknown as ReturnType<typeof google.people>);
+
+      const { events } = await run({ syncContacts: true });
+
+      expect(events).toEqual([
+        {
+          kind: "contact",
+          externalId: "people/c1",
+          contact: {
+            name: "Ana Lee",
+            emails: [],
+            phones: [],
+            birthday: "--05-14",
+            about: "Met at the conference.",
+            website: "https://analee.example",
+            addresses: [
+              {
+                address: "1 Main St, Springfield, IL 62701, US",
+                label: "home",
+                isPrimary: true,
+              },
+            ],
+            socialLinks: [
+              { url: "https://analee.example" },
+              { url: "https://www.linkedin.com/in/analee" },
+            ],
+            tags: ["Friends"],
+          },
+        },
+      ]);
+    });
+
+    it("sends Google's letter tile as the card's placeholder, not as its photo", async () => {
+      const tile = "https://lh3.googleusercontent.com/cm/ABC123=s100";
+      vi.spyOn(google, "people").mockReturnValue({
+        people: {
+          connections: {
+            list: vi.fn().mockResolvedValue({
+              data: {
+                connections: [
+                  {
+                    resourceName: "people/c1",
+                    names: [{ displayName: "Ana Lee" }],
+                    photos: [{ url: tile, default: true }],
+                  },
+                ],
+              },
+            }),
+          },
+        },
+      } as unknown as ReturnType<typeof google.people>);
+
+      const { events } = await run({ syncContacts: true });
+
+      expect(events[0]).toMatchObject({ defaultPhotoUrl: tile });
+      expect(events[0]).not.toHaveProperty("photoUrl", tile);
     });
 
     it("logs a meeting that ended since the last window once, though its token returns nothing, and lists 60 days ahead", async () => {
