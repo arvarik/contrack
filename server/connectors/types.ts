@@ -63,10 +63,6 @@ export type SyncEvent =
       participants: Participant[];
     }
   | {
-      kind: "upcoming_cancelled";
-      externalId: string;
-    }
-  | {
       /**
        * The adapter yielded every upcoming event in its window: ingest drops
        * the connector's upcoming rows that this run did not yield.

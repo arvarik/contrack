@@ -593,15 +593,6 @@ export async function ingestStream(
       return;
     }
 
-    if (event.kind === "upcoming_cancelled") {
-      sqlite
-        .prepare(
-          `DELETE FROM upcoming_events WHERE connectorId = ? AND ownerId = ? AND externalId = ?`,
-        )
-        .run(connector.id, scope.ownerId, event.externalId);
-      return;
-    }
-
     stats.fetched = (stats.fetched ?? 0) + 1;
 
     if (event.kind === "upcoming") {

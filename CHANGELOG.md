@@ -15,6 +15,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ships the libheif security fixes, the server does not read HEIF or AVIF
   images, so an account photo or a remote logo or photo in AVIF is refused.
 
+### Added
+
+- The Google connector syncs birthdays, addresses, notes and websites from
+  Google Contacts, and adds each contact's Google labels as tags.
+
 ### Changed
 
 - Access log lines use one layout everywhere, the old `short` one without the
@@ -50,6 +55,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   receive is logged and shown once.
 - "Sign-in expired" says when Google ended the sign-in because the app is
   still in Testing, which happens every 7 days.
+- A Google meeting is logged after it ends, not only when it changes. Coming
+  up shows the next 60 days of meetings with someone else, without
+  birthdays, focus time or out of office, and drops cancelled ones.
+- Turning Gmail or Calendar on later starts at the lookback date.
+- A mail to a contact's address with a "+tag" or Gmail's dots finds the
+  contact.
+- Google's letter tile is no longer saved as a contact photo, and the drawn
+  avatar replaces a tile an earlier sync saved.
+- A suggested person that you save in Google Contacts becomes a contact.
+- Synced email addresses and phone numbers keep Google's work and home labels.
 
 ## [2.0.5] - 2026-11-02
 
