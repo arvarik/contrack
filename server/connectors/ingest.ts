@@ -318,6 +318,14 @@ export async function ingestStream(
     errors: 0,
   };
 
+  /** The owner's other connectors of this kind: two Google accounts. */
+  const siblingConnectorIds = (
+    sqlite
+      .prepare(
+        `SELECT id FROM connectors WHERE ownerId = ? AND kind = ? AND id != ?`,
+      )
+      .all(scope.ownerId, connector.kind, connector.id) as Array<{ id: string }>
+  ).map((r) => r.id);
   const seenUpcomingExternalIds = new Set<string>();
   const ingestedContactIds = new Set<string>();
   const failures: string[] = [];
@@ -576,6 +584,39 @@ export async function ingestStream(
              WHERE connectorId = ? AND ownerId = ? AND kind = 'interaction' AND externalId = ?`,
           )
           .run(nowIso, connector.id, scope.ownerId, event.externalId);
+        stats.skipped = (stats.skipped ?? 0) + 1;
+        return;
+      }
+
+      // The same mail or invite reached through another of the owner's
+      // connectors of this kind, such as two Google accounts on one thread,
+      // is that interaction: it is linked here too, and not logged twice.
+      let shared: { localId: string } | undefined;
+      for (const siblingId of siblingConnectorIds) {
+        shared = sqlite
+          .prepare(
+            `SELECT localId FROM connector_links
+             WHERE connectorId = ? AND kind = 'interaction' AND externalId = ?
+               AND ownerId = ? AND localId IS NOT NULL`,
+          )
+          .get(siblingId, event.externalId, scope.ownerId) as
+          { localId: string } | undefined;
+        if (shared) break;
+      }
+      if (shared) {
+        sqlite
+          .prepare(
+            `INSERT INTO connector_links (
+              connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
+            ) VALUES (?, ?, 'interaction', ?, ?, 1, ?)`,
+          )
+          .run(
+            connector.id,
+            scope.ownerId,
+            event.externalId,
+            shared.localId,
+            nowIso,
+          );
         stats.skipped = (stats.skipped ?? 0) + 1;
         return;
       }

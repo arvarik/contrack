@@ -36,6 +36,20 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   count.
 - Connect Google says what to do at Google's "hasn't verified this app" and
   "Access blocked" screens.
+- Google connects on a server whose time zone is east of UTC. The sign-in
+  read the server's UTC time as local time and expired at once.
+- A Google sign-in that leaves a permission unticked turns that part of the
+  sync off, instead of failing on every run.
+- Reconnect fixes a Google connector whose secret the encryption key no
+  longer opens, instead of adding a second one.
+- AI summaries no longer try to read mail Google did not allow, and say how to
+  allow it. A run tries at most 50 summaries, failed ones included.
+- A shorter sync interval moves the next run up.
+- Removing a Google connector revokes Contrack's access at Google.
+- With two Google accounts, each one counts as you, and a mail or invite both
+  receive is logged and shown once.
+- "Sign-in expired" says when Google ended the sign-in because the app is
+  still in Testing, which happens every 7 days.
 
 ## [2.0.5] - 2026-11-02
 

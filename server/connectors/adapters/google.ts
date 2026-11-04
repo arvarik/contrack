@@ -44,6 +44,16 @@ export const googleConfigSchema = z.object({
   ghostThreshold: z.coerce.number().int().min(1).max(10).default(3),
   maxMessagesPerRun: z.coerce.number().int().min(1).default(5000),
   aliases: z.array(z.string()).default([]),
+  /**
+   * The account's address, from sign-in. The connector is found by it again
+   * when its secret cannot be opened, so Reconnect fixes it in place.
+   */
+  accountEmail: z.string().optional(),
+  /**
+   * Whether Google granted gmail.readonly, which summaries need to read a
+   * body. Undefined for a connector made before this was recorded.
+   */
+  mailBodies: z.boolean().optional(),
 });
 
 export type GoogleConfig = z.infer<typeof googleConfigSchema>;
@@ -282,6 +292,11 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
   configSchema: googleConfigSchema,
   secretSchema: googleSecretSchema,
 
+  async revoke(secret: GoogleSecret) {
+    if (!secret?.refreshToken) return;
+    await createOAuth2Client(secret).revokeToken(secret.refreshToken);
+  },
+
   async test(_config: GoogleConfig, secret: GoogleSecret | null) {
     if (!secret?.refreshToken) {
       throw new ConnectorAuthError(
@@ -343,7 +358,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     ].filter(Boolean);
 
     let totalFetched = 0;
-    let summaryCount = 0;
+    let summaryTries = 0;
     let stagesSucceeded = 0;
     let stagesFailed = 0;
     let firstStageError: unknown = null;
@@ -740,13 +755,18 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           let summaryContent: string | undefined;
 
           // summariesAllowed before the body is fetched: with AI off for
-          // the instance or for the owner, the body is not needed at all.
+          // the instance or for the owner, the body is not needed at all. A
+          // token without gmail.readonly cannot read a body, so none is
+          // tried. The cap counts tries: counting only summaries made, a
+          // failing body or model let one run try every matching message.
           if (
             config.summaries &&
+            config.mailBodies !== false &&
             matchesContact &&
-            summaryCount < MAX_SUMMARIES_PER_RUN &&
+            summaryTries < MAX_SUMMARIES_PER_RUN &&
             summariesAllowed(ctx.accountId)
           ) {
+            summaryTries++;
             try {
               const full = await gmail.users.messages.get(
                 { userId: "me", id: msgId, format: "full" },
@@ -758,10 +778,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                   signal: ctx.signal,
                   accountId: ctx.accountId,
                 });
-                if (summary) {
-                  summaryContent = summary;
-                  summaryCount++;
-                }
+                if (summary) summaryContent = summary;
               }
             } catch (bodyErr) {
               ctx.log(

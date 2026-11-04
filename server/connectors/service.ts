@@ -29,6 +29,7 @@ import { buildContactMatcher } from "./matching.ts";
 import { ingestStream } from "./ingest.ts";
 import { canonicalEmailAddress, isAutomatedSender } from "./email/normalize.ts";
 import type { SyncContext, SyncEvent } from "./types.ts";
+import { parseServerTime } from "../../shared/dates.ts";
 
 interface RawConnectorRow {
   id: string;
@@ -426,6 +427,16 @@ export async function updateConnector(
       throw new AppError("Interval must be at least 5 minutes", 400);
     }
     nextInterval = updates.intervalMinutes;
+    // A shorter interval moves the next run up: from the last run, or from
+    // now when there was none. Changing weekly to 30 minutes kept the run a
+    // week away.
+    if (nextInterval !== existing.intervalMinutes && nextRunAt) {
+      const from = existing.lastRunAt
+        ? (parseServerTime(existing.lastRunAt)?.getTime() ?? Date.now())
+        : Date.now();
+      const sooner = new Date(from + nextInterval * 60_000).toISOString();
+      if (sooner < nextRunAt) nextRunAt = sooner;
+    }
   }
 
   if (updates.status !== undefined) {
@@ -495,6 +506,20 @@ export async function deleteConnector(
 
   if (!existing) {
     throw new AppError("Connector not found", 404);
+  }
+
+  // The sign-in's grant goes with the connector. Google revokes the whole
+  // grant of this client for the account, so the account's other connections
+  // through the same client stop too.
+  const adapter = getAdapter(existing.kind as ConnectorKind);
+  if (adapter?.revoke && existing.secret) {
+    try {
+      await adapter.revoke(JSON.parse(secretBox.open(existing.secret)));
+    } catch (err) {
+      log.warn("Connectors", `Could not revoke the access of connector ${id}`, {
+        error: err instanceof SyntaxError ? "The secret is not JSON" : err,
+      });
+    }
   }
 
   if (options.deleteImported) {
@@ -709,6 +734,27 @@ export async function runNow(
     selfEmails.push(userRow.email);
   }
   selfEmails.push(...connectorSelfEmails(config, secret));
+  // The addresses the owner's other connectors sign in to are the owner too:
+  // with two Google accounts, each one's mail to the other was a stranger.
+  for (const other of sqlite
+    .prepare(
+      `SELECT config, secret FROM connectors WHERE ownerId = ? AND id != ?`,
+    )
+    .all(scope.ownerId, connector.id) as Array<{
+    config: string | null;
+    secret: string | null;
+  }>) {
+    try {
+      selfEmails.push(
+        ...connectorSelfEmails(
+          other.config ? JSON.parse(other.config) : {},
+          other.secret ? JSON.parse(secretBox.open(other.secret)) : null,
+        ),
+      );
+    } catch {
+      // A connector whose secret the key no longer opens names no address.
+    }
+  }
 
   const selfPhones: string[] = [];
   if (Array.isArray(config.selfPhones)) {
@@ -981,7 +1027,13 @@ export async function runNow(
            SET status = 'needs_reauth', lastError = ?, lastRunAt = ?, updatedAt = ?
            WHERE id = ? AND ownerId = ?`,
         )
-        .run(errMsg, finishIso, finishIso, id, scope.ownerId);
+        .run(
+          reauthMessage(connector.kind, errMsg),
+          finishIso,
+          finishIso,
+          id,
+          scope.ownerId,
+        );
 
       auditService.record({
         actorUserId: scope.ownerId,
@@ -1064,6 +1116,17 @@ export function listRuns(
     .all(connectorId, scope.ownerId, limit) as RawRunRow[];
 
   return runRows.map(parseRunRow);
+}
+
+/**
+ * What the connector card says when a sign-in ends. Google answers
+ * "invalid_grant" for a revoked sign-in, and for every sign-in of an app
+ * still in Testing once a week has passed, the case a self-hosted client
+ * usually meets.
+ */
+function reauthMessage(kind: string, message: string): string {
+  if (kind !== "google" || !/invalid_grant/i.test(message)) return message;
+  return `${message}. Google ends the sign-ins of an app in Testing after 7 days: publish the app under Google Auth platform, Audience, then reconnect`;
 }
 
 /**

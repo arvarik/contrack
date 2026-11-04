@@ -302,8 +302,11 @@ export const dashboardService = {
         const rows = (
           sqlite
             .prepare(
+              // One row per event: an invite two of the owner's accounts
+              // both hold is stored once for each connector.
               `SELECT title, startsAt, endsAt, contactIds FROM upcoming_events
               WHERE ownerId = ? AND startsAt >= ? AND startsAt < ?
+              GROUP BY externalId, startsAt
               ORDER BY startsAt ASC`,
             )
             .all(

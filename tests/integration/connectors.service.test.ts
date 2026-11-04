@@ -253,4 +253,14 @@ describe("connector runs", () => {
     expect(read.get(doneId)).toMatchObject({ status: "ok" });
     expect(read.get(liveId)).toMatchObject({ status: "running" });
   });
+  it("moves the next run up when the interval gets shorter", async () => {
+    const id = connector(10080);
+    const weekAway = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    sqlite
+      .prepare("UPDATE connectors SET nextRunAt = ? WHERE id = ?")
+      .run(weekAway, id);
+    await updateConnector(scope, id, { intervalMinutes: 30 });
+    const next = new Date(row(id).nextRunAt!).getTime();
+    expect(next).toBeLessThanOrEqual(Date.now() + 30 * 60_000);
+  });
 });

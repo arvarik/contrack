@@ -137,4 +137,9 @@ export interface ConnectorAdapter<C = unknown, S = unknown> {
   }>;
   sync(ctx: SyncContext<C, S>): AsyncGenerator<SyncEvent, unknown | null>;
   push?(ctx: PushContext<C, S>): Promise<PushResult>;
+  /**
+   * Gives up the access a sign-in granted, when the connector is removed, so
+   * the account no longer lists Contrack. Best effort: a failure is logged.
+   */
+  revoke?(secret: S): Promise<void>;
 }

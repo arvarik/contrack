@@ -236,6 +236,49 @@ describe("connectors ingestStream", () => {
     );
   });
 
+  it("links the same event from another of the owner's connectors of its kind instead of logging it twice", async () => {
+    const otherId = "conn-" + crypto.randomUUID().slice(0, 8);
+    sqlite
+      .prepare(
+        `INSERT INTO connectors (id, ownerId, kind, name, status, config, createdAt, updatedAt)
+         VALUES (?, ?, 'ics', 'Second Calendar', 'active', '{}', datetime('now'), datetime('now'))`,
+      )
+      .run(otherId, ownerId);
+    const event: SyncEvent = {
+      kind: "interaction",
+      externalId: "shared-invite-1",
+      type: "meeting",
+      title: "Planning",
+      date: "2026-02-02T10:00:00Z",
+      participants: [{ email: "alice@example.com", name: "Alice" }],
+    };
+    const once = async (id: string) =>
+      ingestStream(
+        scope,
+        { id, ownerId, kind: "ics", config: {} },
+        (async function* (): AsyncGenerator<SyncEvent> {
+          yield event;
+        })(),
+        buildContactMatcher(scope),
+        { emails: ["me@example.com"], phones: [] },
+      );
+    await once(connectorId);
+    const second = await once(otherId);
+    expect(second.stats.interactions ?? 0).toBe(0);
+    expect(
+      sqlite
+        .prepare("SELECT COUNT(*) AS n FROM interactions WHERE ownerId = ?")
+        .get(ownerId),
+    ).toEqual({ n: 1 });
+    expect(
+      sqlite
+        .prepare(
+          "SELECT COUNT(DISTINCT localId) AS n FROM connector_links WHERE ownerId = ? AND externalId = 'shared-invite-1'",
+        )
+        .get(ownerId),
+    ).toEqual({ n: 1 });
+  });
+
   it("promotes unknown correspondents to ghost contacts when crossing ghostThreshold", async () => {
     const matcher = buildContactMatcher(scope);
     const selfAddresses = { emails: ["me@example.com"], phones: [] };

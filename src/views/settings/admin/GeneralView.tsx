@@ -826,7 +826,8 @@ export const GoogleRow = () => {
               <p>
                 While the app is in Testing, add each Google account that
                 connects under Test users, or Google answers &ldquo;Access
-                blocked&rdquo;
+                blocked&rdquo;. A test user&rsquo;s sign-in still ends after 7
+                days, so publish the app
               </p>
               <p>
                 At sign-in Google shows &ldquo;Google hasn&rsquo;t verified this

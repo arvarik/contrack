@@ -191,7 +191,11 @@ describe("Google Workspace Connector & OAuth Integration", () => {
      * exchange that hands out `refreshToken` (Google sends none on a repeat
      * consent).
      */
-    async function signInWithGoogle(email: string, refreshToken?: string) {
+    async function signInWithGoogle(
+      email: string,
+      refreshToken?: string,
+      scope = FULL_SCOPE,
+    ) {
       const state = crypto.randomUUID();
       sqlite
         .prepare(
@@ -206,7 +210,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
               access_token: `access-${email}`,
               refresh_token: refreshToken,
               expiry_date: Date.now() + 3600 * 1000,
-              scope: "https://www.googleapis.com/auth/gmail.readonly",
+              scope,
             },
           });
           setCredentials = vi.fn();
@@ -228,6 +232,86 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       ).toBeUndefined();
       return res;
     }
+
+    /** Everything the connect button asks for, with summaries on. */
+    const FULL_SCOPE = [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/contacts.readonly",
+      "https://www.googleapis.com/auth/calendar.events.readonly",
+      "https://www.googleapis.com/auth/gmail.readonly",
+    ].join(" ");
+
+    /** Removes a test's Google connector, so later tests see only their own. */
+    const dropGoogleConnector = (email: string) =>
+      sqlite
+        .prepare("DELETE FROM connectors WHERE ownerId = ? AND name = ?")
+        .run(memberActor.user.id, `Google (${email})`);
+
+    it("connects on a server east of UTC, and turns off a stage whose scope was not granted", async () => {
+      // SQLite stores the state's time in UTC. Read as local time in Berlin,
+      // a state made a second ago was an hour old, and every sign-in expired.
+      const tz = process.env.TZ;
+      process.env.TZ = "Europe/Berlin";
+      try {
+        const res = await signInWithGoogle(
+          "east-of-utc@example.com",
+          "east-refresh",
+          "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.metadata",
+        );
+        expect(res.headers.location).toBe(
+          "/settings/connectors?connected=google",
+        );
+      } finally {
+        process.env.TZ = tz;
+      }
+      const conn = listConnectors(memberActor.scope).find(
+        (c) => c.name === "Google (east-of-utc@example.com)",
+      );
+      expect(conn?.config).toMatchObject({
+        syncContacts: false,
+        syncEmail: true,
+        syncCalendar: false,
+        summaries: false,
+        mailBodies: false,
+        accountEmail: "east-of-utc@example.com",
+      });
+      dropGoogleConnector("east-of-utc@example.com");
+    });
+
+    it("signs a connector whose secret the key no longer opens in again, in place", async () => {
+      await signInWithGoogle("lost-key@example.com", "old-refresh");
+      sqlite
+        .prepare(
+          "UPDATE connectors SET secret = 'not-a-sealed-secret' WHERE ownerId = ? AND name = ?",
+        )
+        .run(memberActor.user.id, "Google (lost-key@example.com)");
+      await signInWithGoogle("lost-key@example.com", "new-refresh");
+      expect(
+        listConnectors(memberActor.scope).filter(
+          (c) => c.name === "Google (lost-key@example.com)",
+        ),
+      ).toHaveLength(1);
+      expect(googleAccounts()["lost-key@example.com"]).toBe("new-refresh");
+      dropGoogleConnector("lost-key@example.com");
+    });
+
+    it("gives up the access at Google when the connector is removed", async () => {
+      await signInWithGoogle("removed@example.com", "removed-refresh");
+      const conn = listConnectors(memberActor.scope).find(
+        (c) => c.name === "Google (removed@example.com)",
+      )!;
+      const revoke = vi
+        .spyOn(googleAdapter, "revoke")
+        .mockRejectedValue(new Error("network down"));
+      const res = await request(server)
+        .delete(`/api/connectors/${conn.id}`)
+        .set("Cookie", memberActor.cookie);
+      // A failed revoke does not keep the connector.
+      expect(res.status).toBe(204);
+      expect(revoke).toHaveBeenCalledWith(
+        expect.objectContaining({ refreshToken: "removed-refresh" }),
+      );
+    });
 
     /** Each Google connector's account and refresh token, by address. */
     const googleAccounts = () =>

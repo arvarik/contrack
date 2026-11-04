@@ -214,6 +214,8 @@ steps, with the redirect address to copy.
    review. For personal Gmail choose External, then **Publish app**: while
    the app stays in testing, every sign-in stops after a week, and Google
    answers "Access blocked" to any account not listed under **Test users**.
+   Even a test user's sign-in ends after a week, and the connector asks to
+   reconnect, so publish the app.
    At sign-in, Google shows "Google hasn't verified this app", which is
    normal for your own server: choose **Continue**. An unverified app takes
    up to 100 people.
