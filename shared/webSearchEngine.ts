@@ -10,31 +10,22 @@
 // chooses its own (the `webSearchEngine` preference). A start that names no
 // strategy uses the account's engine. An engine that cannot run, such as
 // SearXNG with no address, gives way to one that can.
-
-import { z } from "zod";
-
-export const webSearchEngineSchema = z.enum([
-  "provider",
-  "searxng",
-  "combined",
-]);
-
-export type WebSearchEngine = z.infer<typeof webSearchEngineSchema>;
+//
+// No zod here: the browser loads this on the first page. The schemas are in
+// `contracts/common.ts`.
 
 /** The engines in the order a choice lists them: the default first. */
-export const WEB_SEARCH_ENGINES: readonly WebSearchEngine[] =
-  webSearchEngineSchema.options;
+export const WEB_SEARCH_ENGINES = ["provider", "searxng", "combined"] as const;
+
+export type WebSearchEngine = (typeof WEB_SEARCH_ENGINES)[number];
 
 /** The instance's engine before an admin chooses. */
 export const DEFAULT_WEB_SEARCH_ENGINE: WebSearchEngine = "provider";
 
 /** An account's choice: the instance's engine, or one of its own. */
-export const engineChoiceSchema = z.enum([
-  "default",
-  ...webSearchEngineSchema.options,
-]);
+export const ENGINE_CHOICES = ["default", ...WEB_SEARCH_ENGINES] as const;
 
-export type EngineChoice = z.infer<typeof engineChoiceSchema>;
+export type EngineChoice = (typeof ENGINE_CHOICES)[number];
 
 /** The engine an account's choice runs: its own, or the instance's. */
 export function engineFor(

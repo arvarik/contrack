@@ -49,9 +49,9 @@ import {
 } from "../services/research/index.ts";
 import {
   DEFAULT_RESEARCH_DEPTH,
-  researchDepthSchema,
   type ResearchDepth,
 } from "../../shared/researchDepth.ts";
+import { researchDepthSchema } from "../../shared/contracts/common.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { AVATAR_MIME_EXTENSIONS } from "../utils/avatarProcessor.ts";
 

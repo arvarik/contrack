@@ -6,7 +6,6 @@
 // not to rely on them.
 
 import { z } from "zod";
-import { researchDepthSchema } from "../researchDepth.ts";
 import { MAX_CADENCE_DAYS } from "../cadence.ts";
 import { route } from "./route.ts";
 import {
@@ -17,6 +16,7 @@ import {
   INTERNAL,
   phoneSchema,
   queryText,
+  researchDepthSchema,
   stringToBool,
 } from "./common.ts";
 

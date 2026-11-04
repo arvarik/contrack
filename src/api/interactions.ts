@@ -2,7 +2,8 @@
 import { refreshContact } from "./contactCache";
 import { apiJson, jsonBody } from "./client";
 import { INTERACTION_SEARCH_KEY } from "./search";
-import { interactionRoutes } from "../../shared/contracts/interactions";
+import { loadSanitizer } from "../lib/sanitize";
+import type { interactionRoutes } from "../../shared/contracts/interactions";
 import {
   queryOptions,
   useQuery,
@@ -24,14 +25,24 @@ function invalidateInteractionSearch(client: QueryClient): void {
   void client.invalidateQueries({ queryKey: [...INTERACTION_SEARCH_KEY] });
 }
 
-/** One contact's timeline, as the contact page reads it. */
+/**
+ * One contact's timeline, as the contact page reads it. DOMPurify loads
+ * beside the first one, so its notes draw with their entries.
+ */
 export const timelineQuery = (contactId: string) =>
   queryOptions({
     queryKey: ["timeline", contactId],
-    queryFn: ({ signal }): Promise<Interaction[]> =>
-      apiJson(interactionRoutes.timeline, `/contacts/${contactId}/timeline`, {
-        signal,
-      }),
+    queryFn: async ({ signal }): Promise<Interaction[]> => {
+      const [entries] = await Promise.all([
+        apiJson<typeof interactionRoutes.timeline>(
+          "GET",
+          `/contacts/${contactId}/timeline`,
+          { signal },
+        ),
+        loadSanitizer(),
+      ]);
+      return entries;
+    },
     staleTime: STALE_TIMES.timeline,
   });
 
@@ -48,8 +59,8 @@ export const useAddInteraction = () => {
       contactId: string;
       data: Partial<Interaction>;
     }): Promise<Interaction> =>
-      apiJson(
-        interactionRoutes.create,
+      apiJson<typeof interactionRoutes.create>(
+        "POST",
         `/contacts/${contactId}/interactions`,
         jsonBody(data),
       ),
@@ -67,7 +78,7 @@ export const useDeleteInteraction = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }: { id: string; contactId: string }) =>
-      apiJson(interactionRoutes.delete, `/interactions/${id}`),
+      apiJson<typeof interactionRoutes.delete>("DELETE", `/interactions/${id}`),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       void refreshContact(queryClient, contactId);
@@ -87,7 +98,11 @@ export const useUpdateInteraction = () => {
       contactId: string;
       data: { title?: string; content?: string | null };
     }): Promise<Interaction> =>
-      apiJson(interactionRoutes.update, `/interactions/${id}`, jsonBody(data)),
+      apiJson<typeof interactionRoutes.update>(
+        "PATCH",
+        `/interactions/${id}`,
+        jsonBody(data),
+      ),
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       void refreshContact(queryClient, contactId);
@@ -108,8 +123,8 @@ export const useAddAttachment = () => {
     }): Promise<Interaction> => {
       const formData = new FormData();
       formData.append("attachment", file);
-      return apiJson(
-        interactionRoutes.attach,
+      return apiJson<typeof interactionRoutes.attach>(
+        "POST",
         `/contacts/${contactId}/attachments`,
         { body: formData },
       );
@@ -126,8 +141,8 @@ export const useGenerateBriefing = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (contactId: string): Promise<string[]> => {
-      const data = await apiJson(
-        interactionRoutes.briefing,
+      const data = await apiJson<typeof interactionRoutes.briefing>(
+        "POST",
         `/contacts/${contactId}/briefing`,
       );
       return data.points;
@@ -143,8 +158,8 @@ export const usePromoteGhost = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (contactId: string): Promise<Contact> =>
-      (await apiJson(
-        interactionRoutes.promote,
+      (await apiJson<typeof interactionRoutes.promote>(
+        "POST",
         `/contacts/${contactId}/promote`,
       )) as Contact,
     onSuccess: (contact) => {

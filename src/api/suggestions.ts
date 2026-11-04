@@ -8,7 +8,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type { PersistedDedupeSuggestion, MergeLogEntry } from "../types";
-import { dedupeRoutes } from "../../shared/contracts/dedupe";
+import type { dedupeRoutes } from "../../shared/contracts/dedupe";
 import type { ResponseOf } from "../../shared/contracts/route";
 
 /** What one undo answers: the contact it restored, and what changed since. */
@@ -115,8 +115,8 @@ export const useRestoreSuggestion = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (suggestionId: string) =>
-      apiJson(
-        dedupeRoutes.restore,
+      apiJson<typeof dedupeRoutes.restore>(
+        "POST",
         `/dedupe/suggestions/${encodeURIComponent(suggestionId)}/restore`,
       ),
     onSuccess: () => refreshDuplicates(qc),
@@ -132,8 +132,8 @@ function undoMerge(
   mergeLogId: string,
   keepSeparate: boolean,
 ): Promise<UndoMergeResponse> {
-  return apiJson(
-    dedupeRoutes.undo,
+  return apiJson<typeof dedupeRoutes.undo>(
+    "POST",
     `/dedupe/merge-log/${encodeURIComponent(mergeLogId)}/undo`,
     jsonBody({ keepSeparate }),
   );
@@ -183,8 +183,8 @@ export type MergedInto = NonNullable<
 export const fetchMergedInto = async (
   contactId: string,
 ): Promise<MergedInto | null> => {
-  const data = await apiJson(
-    dedupeRoutes.mergedInto,
+  const data = await apiJson<typeof dedupeRoutes.mergedInto>(
+    "GET",
     `/dedupe/merged-into/${encodeURIComponent(contactId)}`,
   );
   return data.merge;

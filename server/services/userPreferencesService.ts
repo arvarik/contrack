@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { sqlite } from "../db.ts";
 import { CADENCE_DAYS } from "../../shared/cadence.ts";
-import { engineChoiceSchema } from "../../shared/webSearchEngine.ts";
+import { engineChoiceSchema } from "../../shared/contracts/common.ts";
 
 // The shape
 

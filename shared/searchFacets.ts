@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { parseServerTime } from "./dates.ts";
 import { haversineKm, isValidLatLng } from "./geo.ts";
 import { contactScore } from "./scoreBand.ts";
@@ -69,49 +68,6 @@ export interface FacetContact {
   lat?: number | null;
   lng?: number | null;
 }
-
-/**
- * The facets a search request may carry, as `GET /api/search` and
- * `POST /api/search/semantic` accept them: at most 8. A `near:` facet
- * carries its resolved `point`. Fields the palette keeps for itself, such as
- * `resolving`, are dropped.
- */
-export const facetFiltersSchema = z
-  .array(
-    z
-      .object({
-        field: z.enum(FACET_FIELDS),
-        value: z.string().trim().min(1).max(100),
-        operator: z.enum([">", "<"]).optional(),
-        km: z.number().positive().max(20_000).optional(),
-        point: z
-          .object({
-            lat: z.number().min(-90).max(90),
-            lng: z.number().min(-180).max(180),
-            km: z.number().positive().max(20_000),
-          })
-          .optional(),
-      })
-      .transform((f) => {
-        if (
-          !f.operator &&
-          (f.field === "score" ||
-            f.field === "updated" ||
-            f.field === "added" ||
-            f.field === "contacted") &&
-          (f.value.startsWith(">") || f.value.startsWith("<")) &&
-          f.value.length > 1
-        ) {
-          return {
-            ...f,
-            operator: f.value[0] as ">" | "<",
-            value: f.value.slice(1).trim(),
-          };
-        }
-        return f;
-      }),
-  )
-  .max(8);
 
 /**
  * The value a text facet looks for: lower case, one pair of quotes removed.

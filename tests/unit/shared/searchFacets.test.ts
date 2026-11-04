@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  facetFiltersSchema,
   matchesFacet,
   unknownFacetValue,
   type FacetContact,
 } from "../../../shared/searchFacets.ts";
+import { facetFiltersSchema } from "../../../shared/searchSchemas.ts";
 
 describe("searchFacets matchesFacet", () => {
   describe("missing: facet", () => {
