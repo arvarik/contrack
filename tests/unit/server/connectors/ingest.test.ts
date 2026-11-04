@@ -170,6 +170,20 @@ describe("connectors ingestStream", () => {
     expect(links2[0].seenCount).toBe(2);
   });
 
+  it("counts a failed stage as an error and keeps its message", async () => {
+    const res = await ingestStream(
+      scope,
+      { id: connectorId, ownerId, kind: "ics", config: {} },
+      (async function* (): AsyncGenerator<SyncEvent> {
+        yield { kind: "stage_failed", message: "Error syncing Gmail: x" };
+      })(),
+      buildContactMatcher(scope),
+      { emails: [], phones: [] },
+    );
+    expect(res.stats.errors).toBe(1);
+    expect(res.failures).toEqual(["Error syncing Gmail: x"]);
+  });
+
   it("promotes unknown correspondents to ghost contacts when crossing ghostThreshold", async () => {
     const matcher = buildContactMatcher(scope);
     const selfAddresses = { emails: ["me@example.com"], phones: [] };
