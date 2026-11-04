@@ -443,8 +443,9 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       let nextSyncToken: string | undefined;
       let labels: Map<string, string> | undefined;
       /**
-       * The owner's labels by resource name, read once a card has one. System
-       * groups such as myContacts and starred are not labels.
+       * The owner's labels by resource name, read once a card has one. Of the
+       * system groups, Google Contacts shows only friends, family and
+       * coworkers as labels, so myContacts and starred are left out.
        */
       const labelNames = async () => {
         if (!labels) {
@@ -456,12 +457,16 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           );
           labels = new Map();
           for (const group of res.data.contactGroups ?? []) {
+            const name = group.formattedName || group.name;
             if (
-              group.groupType === "USER_CONTACT_GROUP" &&
               group.resourceName &&
-              group.name
+              name &&
+              (group.groupType === "USER_CONTACT_GROUP" ||
+                /^contactGroups\/(friends|family|coworkers)$/.test(
+                  group.resourceName,
+                ))
             ) {
-              labels.set(group.resourceName, group.name);
+              labels.set(group.resourceName, name);
             }
           }
         }

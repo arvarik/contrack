@@ -1420,6 +1420,11 @@ describe("Google Workspace Connector & OAuth Integration", () => {
                     contactGroupResourceName: "contactGroups/starred",
                   },
                 },
+                {
+                  contactGroupMembership: {
+                    contactGroupResourceName: "contactGroups/1a2b3c",
+                  },
+                },
               ],
             },
           ],
@@ -1430,13 +1435,21 @@ describe("Google Workspace Connector & OAuth Integration", () => {
           contactGroups: [
             {
               resourceName: "contactGroups/friends",
-              name: "Friends",
-              groupType: "USER_CONTACT_GROUP",
+              name: "friends",
+              formattedName: "Friends",
+              groupType: "SYSTEM_CONTACT_GROUP",
             },
             {
               resourceName: "contactGroups/starred",
               name: "starred",
+              formattedName: "Starred",
               groupType: "SYSTEM_CONTACT_GROUP",
+            },
+            {
+              resourceName: "contactGroups/1a2b3c",
+              name: "Book club",
+              formattedName: "Book club",
+              groupType: "USER_CONTACT_GROUP",
             },
           ],
         },
@@ -1470,7 +1483,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
               { url: "https://analee.example" },
               { url: "https://www.linkedin.com/in/analee" },
             ],
-            tags: ["Friends"],
+            tags: ["Friends", "Book club"],
           },
         },
       ]);

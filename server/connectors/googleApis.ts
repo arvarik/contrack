@@ -177,6 +177,7 @@ export const google = {
           contactGroups?: {
             resourceName?: string;
             name?: string;
+            formattedName?: string;
             groupType?: string;
           }[];
         }>(
