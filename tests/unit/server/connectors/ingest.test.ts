@@ -719,6 +719,40 @@ describe("connectors ingestStream", () => {
       (r) => Object.values(r)[0],
     );
 
+  it("caps a synced person like the API caps one", async () => {
+    await ingest([
+      card("huge", "N".repeat(1_000), "huge@example.com", {
+        about: "A".repeat(30_000),
+        emails: Array.from({ length: 300 }, (_, i) => ({
+          email: `e${i}@huge.example`,
+        })),
+        tags: Array.from({ length: 300 }, (_, i) => `${i}`.padEnd(150, "t")),
+      }),
+    ]);
+    const [id] = column(
+      "SELECT id FROM contacts WHERE ownerId = ? AND name LIKE 'NNN%'",
+      ownerId,
+    );
+    expect(
+      column("SELECT length(name) FROM contacts WHERE id = ?", id),
+    ).toEqual([300]);
+    expect(
+      column("SELECT length(about) FROM contacts WHERE id = ?", id),
+    ).toEqual([20_000]);
+    expect(
+      column("SELECT COUNT(*) FROM contact_emails WHERE contactId = ?", id),
+    ).toEqual([100]);
+    expect(
+      column("SELECT COUNT(*) FROM contact_tags WHERE contactId = ?", id),
+    ).toEqual([100]);
+    expect(
+      column(
+        "SELECT MAX(length(tag)) FROM contact_tags WHERE contactId = ?",
+        id,
+      ),
+    ).toEqual([100]);
+  });
+
   it("merges a synced person into the contact it was linked to by a shared address", async () => {
     // The local contact and a Google card share one address, so the card
     // binds to the contact. A later sync of that card must not rename the
@@ -955,6 +989,55 @@ describe("connectors ingestStream", () => {
         connectorId,
       ),
     ).toEqual([0]);
+  });
+
+  it("links a connector added back to the contacts it made, and only fills them in", async () => {
+    const solo = (name: string): SyncEvent => ({
+      kind: "contact",
+      externalId: "people/solo",
+      contact: { name, emails: [], phones: [], company: "Acme" },
+    });
+    await ingest([solo("Name Only")]);
+    // Removed, which drops the links, and added back later.
+    sqlite
+      .prepare("DELETE FROM connector_links WHERE connectorId = ?")
+      .run(connectorId);
+    sqlite
+      .prepare(
+        "UPDATE connectors SET createdAt = datetime('now', '+1 minute') WHERE id = ?",
+      )
+      .run(connectorId);
+
+    await ingest([solo("Renamed In Google")]);
+    expect(
+      column(
+        "SELECT name FROM contacts WHERE ownerId = ? AND company = 'Acme'",
+        ownerId,
+      ),
+    ).toEqual(["Name Only"]);
+  });
+
+  it("links a card whose UID names a merged-away contact to the one it was merged into", async () => {
+    const dupId = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, ownerId, name, canonicalId, addedAt, updatedAt)
+         VALUES (?, ?, 'Old Alice', ?, datetime('now'), datetime('now'))`,
+      )
+      .run(dupId, ownerId, contactId);
+    await ingest([
+      {
+        kind: "contact",
+        externalId: `book/${dupId}.vcf`,
+        contact: { uid: dupId, name: "Alice Card", emails: [], phones: [] },
+      },
+    ]);
+    expect(
+      column(
+        "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact'",
+        connectorId,
+      ),
+    ).toEqual([contactId]);
   });
 
   it("records contact.created for a promoted ghost, and gives it a phonetic hash", async () => {

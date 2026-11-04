@@ -584,6 +584,8 @@ export const contactSources = sqliteTable("contact_sources", {
   connectedOn: text("connectedOn"),
   importedAt: text("importedAt").default(sql`(CURRENT_TIMESTAMP)`),
   rawData: text("rawData"),
+  /** 'push' when Contrack uploaded the contact, NULL when the source made it. */
+  origin: text("origin"),
 });
 
 /** Rebuildable search evidence. Offsets refer to the exact source text. */

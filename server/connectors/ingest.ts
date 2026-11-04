@@ -279,7 +279,43 @@ export const MAX_SYNCED_TITLE = 300;
 export const MAX_SYNCED_CONTENT = 20_000;
 const MAX_SYNCED_NAME = 200;
 
+/** A list the API caps at 100 items, as `childRecordsSchema` does. */
+const MAX_SYNCED_ITEMS = 100;
+/** A tag, as the API caps one. */
+const MAX_SYNCED_TAG = 100;
+
+/**
+ * A synced person within the API's limits: a card is the server's, and one
+ * card held 40,000 addresses. A name keeps 300 characters, another field
+ * 20,000, and a list 100 items.
+ */
+function cappedContact(contact: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(contact)) {
+    if (typeof value === "string") {
+      out[key] = value.slice(
+        0,
+        key === "name" ? MAX_SYNCED_TITLE : MAX_SYNCED_CONTENT,
+      );
+    } else if (Array.isArray(value)) {
+      const items = value.slice(0, MAX_SYNCED_ITEMS);
+      out[key] =
+        key === "tags"
+          ? items.map((t) =>
+              typeof t === "string" ? t.slice(0, MAX_SYNCED_TAG) : t,
+            )
+          : items;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 function capped(event: SyncEvent): SyncEvent {
+  if (event.kind === "contact") {
+    return { ...event, contact: cappedContact(event.contact) };
+  }
   if (event.kind !== "interaction" && event.kind !== "upcoming") return event;
   const participants = event.participants.map((p) =>
     p.name && p.name.length > MAX_SYNCED_NAME
@@ -350,12 +386,29 @@ export async function ingestStream(
       { localId: string | null } | undefined;
   }
 
+  /** When this connector was made: a source row from before is another's. */
+  const connectorCreatedAt =
+    (
+      sqlite
+        .prepare(
+          `SELECT createdAt FROM connectors WHERE id = ? AND ownerId = ?`,
+        )
+        .get(connector.id, scope.ownerId) as { createdAt: string } | undefined
+    )?.createdAt ?? null;
+
   /**
    * Whether this source owns the contact's details for this external id: its
-   * source row names the connector's kind and the id, the pull or the push
-   * made it. Not when the contact took in another one by a merge, which moves
-   * the duplicate's source row to it, and not when another link also feeds
-   * it. Then the contact is the owner's, and the source only fills it in.
+   * source row names the connector's kind and the id, and this connector's
+   * pull or push made it. Not a row from before the connector: a connector
+   * removed and added back finds its old contacts the owner's. Not when the
+   * contact took in another one by a merge, which moves the duplicate's
+   * source row to it. Then the contact is the owner's, and the source only
+   * fills it in. Another link also decides it:
+   * - A card the source brought in (origin NULL) stops writing only when
+   *   another card that brought the contact in feeds it. A card that only
+   *   shares an address with it, or a copy Contrack uploaded, does not count.
+   * - A card Contrack uploaded (origin 'push') writes only while no other card
+   *   feeds the contact, so two uploaded copies never write over it.
    */
   function madeBySync(contactId: string, externalId: string): boolean {
     return Boolean(
@@ -363,24 +416,110 @@ export async function ingestStream(
         .prepare(
           `SELECT 1 FROM contact_sources s
            WHERE s.contactId = ? AND s.platform = ? AND s.externalId = ?
+             AND (? IS NULL OR
+               julianday(COALESCE(s.connectedOn, s.importedAt)) >= julianday(?))
              AND NOT EXISTS (
                SELECT 1 FROM dedupe_merge_log m
                WHERE m.ownerId = ? AND m.primaryId = s.contactId AND m.undoneAt IS NULL)
              AND NOT EXISTS (
                SELECT 1 FROM connector_links l
                WHERE l.ownerId = ? AND l.kind = 'contact' AND l.localId = s.contactId
-                 AND NOT (l.connectorId = ? AND l.externalId = ?))`,
+                 AND NOT (l.connectorId = ? AND l.externalId = ?)
+                 AND (s.origin IS 'push' OR EXISTS (
+                   SELECT 1 FROM contact_sources o
+                   WHERE o.contactId = l.localId AND o.externalId = l.externalId
+                     AND o.origin IS NOT 'push')))`,
         )
         .get(
           contactId,
           connector.kind,
           externalId,
+          connectorCreatedAt,
+          connectorCreatedAt,
           scope.ownerId,
           scope.ownerId,
           connector.id,
           externalId,
         ),
     );
+  }
+
+  /**
+   * The contact a card with no link already made: a connector removed and
+   * added back finds its old contacts by their source rows, and a card that
+   * Contrack uploaded carries the contact's id as its UID, when the run
+   * stopped before it saved the link. Matching them keeps the card from
+   * coming in a second time.
+   */
+  function knownCardContact(
+    externalId: string,
+    uid: unknown,
+  ): { id: string; byUid: boolean } | null {
+    const row = sqlite
+      .prepare(
+        `SELECT id FROM contacts
+         WHERE ownerId = ? AND deletedAt IS NULL AND (
+           id = ? OR id IN (
+             SELECT contactId FROM contact_sources
+             WHERE platform = ? AND externalId = ?))
+         ORDER BY id = ? DESC
+         LIMIT 1`,
+      )
+      .get(
+        scope.ownerId,
+        typeof uid === "string" ? uid : null,
+        connector.kind,
+        externalId,
+        typeof uid === "string" ? uid : null,
+      ) as { id: string } | undefined;
+    return row ? { id: survivor(row.id), byUid: row.id === uid } : null;
+  }
+
+  /** The contact a merge kept in place of `contactId`, or the contact. */
+  function survivor(contactId: string): string {
+    let id = contactId;
+    for (let depth = 0; depth < 10; depth++) {
+      const row = sqlite
+        .prepare(
+          `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
+        )
+        .get(id, scope.ownerId) as { canonicalId: string | null } | undefined;
+      if (!row?.canonicalId || row.canonicalId === id) break;
+      id = row.canonicalId;
+    }
+    return id;
+  }
+
+  /**
+   * A card with no photo takes back the photo an earlier sync saved from a
+   * card: a copy the sync makes is named `import-` or `remote-`, and a photo
+   * the owner chose has another name. Never for a card Contrack uploaded: it
+   * is written without the photo, which may be one the owner imported.
+   */
+  function dropSavedPhoto(contactId: string, externalId: string) {
+    const uploaded = sqlite
+      .prepare(
+        `SELECT 1 FROM contact_sources
+         WHERE contactId = ? AND platform = ? AND externalId = ? AND origin = 'push'`,
+      )
+      .get(contactId, connector.kind, externalId);
+    if (uploaded) return;
+    const row = sqlite
+      .prepare(
+        `SELECT name, pronouns, avatarUrl FROM contacts WHERE id = ? AND ownerId = ?`,
+      )
+      .get(contactId, scope.ownerId) as
+      | { name: string; pronouns: string | null; avatarUrl: string | null }
+      | undefined;
+    const saved = `/uploads/u/${scope.ownerId}/avatars/`;
+    if (
+      row?.avatarUrl?.startsWith(`${saved}import-`) ||
+      row?.avatarUrl?.startsWith(`${saved}remote-`)
+    ) {
+      contactService.updateContact(scope, contactId, {
+        avatarUrl: defaultAvatarUrl(row.name, row.pronouns),
+      });
+    }
   }
 
   /**
@@ -515,6 +654,7 @@ export async function ingestStream(
     remote: ContactPayload,
     externalId: string,
     placeholderUrl?: string,
+    noPhoto?: boolean,
   ): void {
     try {
       if (placeholderUrl) restoreDrawnAvatar(contactId, placeholderUrl);
@@ -524,6 +664,7 @@ export async function ingestStream(
           contactId,
           withLocalTagsAndLinks(contactId, remote),
         );
+        if (noPhoto) dropSavedPhoto(contactId, externalId);
         return;
       }
       const local = contactService.getContactById(scope, contactId);
@@ -1043,18 +1184,7 @@ export async function ingestStream(
       }
 
       if (existingLink && existingLink.localId) {
-        let targetLocalId = existingLink.localId;
-        for (let depth = 0; depth < 10; depth++) {
-          const canonRow = sqlite
-            .prepare(
-              `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
-            )
-            .get(targetLocalId, scope.ownerId) as
-            { canonicalId: string | null } | undefined;
-          if (!canonRow?.canonicalId || canonRow.canonicalId === targetLocalId)
-            break;
-          targetLocalId = canonRow.canonicalId;
-        }
+        const targetLocalId = survivor(existingLink.localId);
 
         const prevAvatarRow = cPayload.avatarUrl
           ? (sqlite
@@ -1071,6 +1201,7 @@ export async function ingestStream(
           cPayload,
           event.externalId,
           event.defaultPhotoUrl,
+          event.noPhoto,
         );
 
         if (
@@ -1112,8 +1243,33 @@ export async function ingestStream(
             event.externalId,
           );
       } else {
-        let matchedContactId: string | null = null;
-        for (const em of cEmails) {
+        const known = knownCardContact(event.externalId, cPayload.uid);
+        let matchedContactId = known?.id ?? null;
+        if (known?.byUid) {
+          // The card this connector's push made, when the run stopped before
+          // it saved the source row: saved now, so later edits on the server
+          // apply. A card an earlier connector uploaded keeps its old row,
+          // and a connector added back only fills its contact in.
+          sqlite
+            .prepare(
+              `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn, origin)
+               SELECT ?, ?, ?, ?, ?, 'push'
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM contact_sources s JOIN contacts c ON c.id = s.contactId
+                 WHERE c.ownerId = ? AND s.platform = ? AND s.externalId = ?)`,
+            )
+            .run(
+              crypto.randomUUID(),
+              matchedContactId,
+              connector.kind,
+              event.externalId,
+              nowIso,
+              scope.ownerId,
+              connector.kind,
+              event.externalId,
+            );
+        }
+        for (const em of matchedContactId ? [] : cEmails) {
           matchedContactId = matcher.resolveContactId({ email: em });
           if (matchedContactId) break;
         }

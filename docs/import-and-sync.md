@@ -279,11 +279,13 @@ writes Google's details over a contact it created, its emails and phones
 included. Change those details in Google, not in Contrack. A contact that
 existed before and was linked keeps its name and its details: the sync only
 fills in what is empty and adds the addresses it learns. So does a
-contact you merged, and one that two connectors link. When you delete a
-contact in Google, a contact the sync created moves to the Trash, and a
-linked one stays. A new contact from Google gets the same duplicate check as
-a contact you add, when **Check new contacts automatically** is on. A
-suggested person that you save in Google Contacts becomes a contact.
+contact you merged, and one that two connectors brought in. A CardDAV
+connector that only uploaded the contact does not count, so Google's edits
+still apply. When you delete a contact in Google, a contact the sync created
+moves to the Trash, and a linked one stays. A new contact from Google gets the
+same duplicate check as a contact you add, when **Check new contacts
+automatically** is on. A suggested person that you save in Google Contacts
+becomes a contact.
 
 Google Calendar meetings with your contacts become meetings on their
 timelines after they end. The next 60 days of meetings with someone besides
@@ -310,15 +312,29 @@ Radicale, Baïkal, or any other RFC 6352 CardDAV server over `https://`.
 
 In two-way mode, Contrack only pushes active contacts created or edited after
 you connect the server (existing contacts from earlier imports and archived
-contacts are not uploaded unless you edit them). When updating a linked card,
-Contrack fetches the server's card first and updates only the properties
-Contrack manages, preserving server-side fields such as `PHOTO`, `NICKNAME`,
-structured `ADR` components, Apple labels, and `X-*` properties. If a card
-changed on the CardDAV server since the last sync, the server's version wins.
-Deleting a contact on your CardDAV server unlinks it in Contrack without moving
-the contact to the Trash (editing the contact in Contrack later uploads it
-again as a new card), and moving a contact to the Trash in Contrack never
-deletes the contact on your CardDAV server.
+contacts are not uploaded unless you edit them). Only an edit to a card field
+counts: a meeting, a note, or a briefing does not upload a contact. After a
+switch from **Pull only** to **Two-way sync**, Contrack uploads the contacts
+you edit from then on. When updating a linked card, Contrack fetches the
+server's card first and writes only the fields you changed in Contrack since
+the last sync, so a change made on the server to another field stays. It
+preserves server-side fields such as `PHOTO`, `NICKNAME`, structured `ADR`
+components, Apple labels, `X-*` properties, and the card's vCard version. If a
+card changed on the CardDAV server since the last sync, the server's version
+wins. A contact that existed in Contrack before you connected keeps its name
+and its details: the card only fills in what is empty. A contact that two
+cards share, such as a family's email address, is written to the card that
+made it. A card that Contrack cannot read, or a contact that the server
+refuses to save, shows as an error on the connector and in its run history.
+Contrack tries it again on the next sync, a card too large to read once it
+changes on the server, and a contact the server refused once you edit it
+again. Contrack keeps at most 300 characters of a card's name, 20,000 of
+another field, and 100 items of a list, and an edit in Contrack writes the
+shortened value back to the card. Deleting a contact on your CardDAV server
+unlinks it in Contrack without moving the contact to the Trash (editing the
+contact in Contrack later uploads it again as a new card), and moving a
+contact to the Trash in Contrack never deletes the contact on your CardDAV
+server.
 
 ### Sync options
 
@@ -389,7 +405,9 @@ when each started, how long it took, what it brought in, and any error.
 **Remove** stops the connector and keeps what it brought in. To delete that
 too, tick "Also delete the interactions it brought in, and the people it found
 who are not contacts". The contacts that a Google or CardDAV connector brought
-in stay either way.
+in stay either way. Add the connector back, and it links them again instead
+of adding them twice. It then only fills them in, permanently, as it does a
+contact you had before you connected: it never writes over them again.
 
 ### What connectors read and store
 

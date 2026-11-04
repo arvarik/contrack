@@ -16,6 +16,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   images, so an account photo or a remote logo or photo in AVIF is refused.
 - A name or a mail sender's name with a long run of dashes or apostrophes no
   longer stalls the server. One of 40,000 dashes took 0.6 seconds.
+- With `CONNECTORS_ALLOW_PRIVATE_HOSTS`, the CardDAV connector accepts a
+  plain `http://` address only on the private network, so the password never
+  crosses the internet in cleartext.
 
 ### Added
 
@@ -54,6 +57,41 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - People at a mail provider or a university, such as `mail.ru` or
   `email.arizona.edu`, can be suggested again.
 - Mail moved in from another mailbox keeps the date it was sent.
+- Switching a CardDAV connector from Pull only to Two-way sync uploads only
+  the contacts you edit afterwards. It uploaded almost every contact that a
+  meeting or a briefing had touched, and so did a first sync that came days
+  after connecting.
+- A CardDAV push writes only the fields you changed in Contrack, so a change
+  made on the server to another field stays. An edit to a contact that existed
+  before connecting wrote its old name and phone back over the server's.
+- A CardDAV address book of more than about 15,000 cards syncs. Every sync of
+  one failed.
+- A CardDAV card that cannot be read, or a contact that the server refuses,
+  shows as a sync error. The run passed before, and the change could be lost.
+  It is tried again on the next sync, a card too large to read once it
+  changes, and a refused contact once you edit it again.
+- A CardDAV card deleted on the server is unlinked even when the upload of
+  that sync failed.
+- Removing a Google or CardDAV connector and adding it back links its
+  contacts again. It added the contacts without an email address twice. A
+  card that a stopped CardDAV upload saved is linked, not imported twice.
+- A CardDAV card keeps updating its contact when a second card shares its
+  email address, and Contrack writes the contact to the card that made it.
+- A contact that Google or a CardDAV book brought in keeps taking that
+  source's edits after a CardDAV connector uploads it to another book. Both
+  sources stopped updating it.
+- A vCard 4.0 card stays 4.0 when Contrack updates it, and a `tel:` number is
+  read without its `tel:` prefix.
+- A birthday written as a date-time, such as 19850514T000000Z, reads as the
+  day written in every time zone. A year alone or text such as "circa 1950"
+  no longer becomes January 1, and a CardDAV upload keeps such a birthday as
+  the card had it.
+- A vCard photo of type `image/jpeg` is saved, and a photo removed on the
+  CardDAV server is removed from the contact.
+- A vCard with thousands of addresses no longer stalls the server, and a
+  synced contact is capped like one made in the app.
+- vCards: every CATEGORIES line becomes tags, a card has one primary email,
+  phone and address, and a custom label such as "old work" keeps its spaces.
 - A Google connector signed in with AI summaries off syncs Gmail. Every sync of
   its mail failed before, and the run still showed no error.
 - A contact deleted in Google is moved to the trash in Contrack on the next

@@ -15,7 +15,7 @@
 //   4. Encoding: `ENCODING=QUOTED-PRINTABLE`, common in older Android and
 //      Outlook exports.
 
-import { vcardBirthdayLine } from "./birthday.ts";
+import { birthdayValue, parseBirthday, vcardBirthdayLine } from "./birthday.ts";
 
 // The shape a parsed card takes
 
@@ -326,15 +326,26 @@ export function groupLabel(
   group: string | null,
 ): string | null {
   if (!group) return null;
-  const found = card.properties.find(
-    (p) => p.group === group && p.name === "X-ABLABEL",
-  );
-  if (!found) return null;
-  const label = unescapeValue(found.value)
+  // Indexed once per card: a search per property was quadratic.
+  let labels = groupLabels.get(card);
+  if (!labels) {
+    labels = new Map();
+    for (const p of card.properties) {
+      if (p.group && p.name === "X-ABLABEL" && !labels.has(p.group)) {
+        labels.set(p.group, p.value);
+      }
+    }
+    groupLabels.set(card, labels);
+  }
+  const found = labels.get(group);
+  if (found === undefined) return null;
+  const label = unescapeValue(found)
     .replace(/_\$!<|>!\$_/g, "")
     .trim();
   return label || null;
 }
+
+const groupLabels = new WeakMap<ParsedVCard, Map<string, string>>();
 
 // Writing
 
@@ -443,9 +454,34 @@ function typeParam(label: string | null | undefined): string {
   return cleaned ? `;TYPE=${cleaned}` : "";
 }
 
-/** `PREF` marks the primary value: in 3.0 another TYPE, not 4.0's `PREF=1`. */
-function prefParam(isPrimary: boolean | undefined): string {
-  return isPrimary ? ";TYPE=PREF" : "";
+/** `PREF` marks the primary value: in 3.0 another TYPE, in 4.0 `PREF=1`. */
+function prefParam(isPrimary: boolean | undefined, v4 = false): string {
+  if (!isPrimary) return "";
+  return v4 ? ";PREF=1" : ";TYPE=PREF";
+}
+
+/**
+ * Writes an email, phone or address line with its label. A label TYPE cannot
+ * carry, such as "old work", goes in Apple's `itemN.X-ABLabel`, which Apple,
+ * Nextcloud and DAVx5 read. `item` is the last group number the card uses.
+ */
+function labeledWriter(push: (line: string) => void, item = 0) {
+  return (
+    prefix: string,
+    label: string | null | undefined,
+    fallback: string,
+    pref: string,
+    value: string,
+  ) => {
+    const text = (label ?? "").trim();
+    if (!text || /^[A-Za-z0-9-]+$/.test(text)) {
+      push(`${prefix}${typeParam(text) || fallback}${pref}:${value}`);
+      return;
+    }
+    const group = `item${++item}`;
+    push(`${group}.${prefix}${fallback}${pref}:${value}`);
+    push(`${group}.X-ABLabel:${escapeValue(text)}`);
+  };
 }
 
 /**
@@ -480,17 +516,26 @@ export function serializeVCard(contact: VCardInput): string {
   if (birthday) push(birthday);
   if (contact.about) push(`NOTE:${escapeValue(contact.about)}`);
 
+  const write = labeledWriter(push);
   for (const email of contact.emails ?? []) {
     if (!email.email) continue;
-    push(
-      `EMAIL;TYPE=INTERNET${typeParam(email.label)}${prefParam(email.isPrimary)}:${escapeValue(email.email)}`,
+    write(
+      "EMAIL;TYPE=INTERNET",
+      email.label,
+      "",
+      prefParam(email.isPrimary),
+      escapeValue(email.email),
     );
   }
 
   for (const phone of contact.phones ?? []) {
     if (!phone.phone) continue;
-    push(
-      `TEL${typeParam(phone.label) || ";TYPE=VOICE"}${prefParam(phone.isPrimary)}:${escapeValue(phone.phone)}`,
+    write(
+      "TEL",
+      phone.label,
+      ";TYPE=VOICE",
+      prefParam(phone.isPrimary),
+      escapeValue(phone.phone),
     );
   }
 
@@ -498,8 +543,12 @@ export function serializeVCard(contact: VCardInput): string {
     if (!address.address) continue;
     // One free-text address goes in the street slot. Readers show the joined
     // value, and a round trip returns the same string.
-    push(
-      `ADR${typeParam(address.label)}${prefParam(address.isPrimary)}:;;${escapeValue(address.address)};;;;`,
+    write(
+      "ADR",
+      address.label,
+      "",
+      prefParam(address.isPrimary),
+      `;;${escapeValue(address.address)};;;;`,
     );
   }
 
@@ -644,37 +693,73 @@ function joinAddress(value: string): string {
     .join(", ");
 }
 
-const MANAGED_VCARD_NAMES = new Set([
+/** The properties of each contact field, for a patch of some fields. */
+export const VCARD_FIELDS = {
+  name: ["N", "FN"],
+  company: ["ORG"],
+  role: ["TITLE"],
+  birthday: ["BDAY"],
+  about: ["NOTE"],
+  emails: ["EMAIL"],
+  phones: ["TEL"],
+  addresses: ["ADR"],
+  web: ["URL", "X-SOCIALPROFILE"],
+  tags: ["CATEGORIES"],
+} as const;
+
+export type VCardField = keyof typeof VCARD_FIELDS;
+
+const MANAGED_VCARD_NAMES = new Set<string>([
   "BEGIN",
   "END",
   "VERSION",
   "UID",
-  "N",
-  "FN",
-  "ORG",
-  "TITLE",
-  "BDAY",
-  "NOTE",
-  "EMAIL",
-  "TEL",
-  "ADR",
-  "URL",
-  "X-SOCIALPROFILE",
-  "CATEGORIES",
   "REV",
+  ...Object.values(VCARD_FIELDS).flat(),
 ]);
+
+/** A TEL value without 4.0's `tel:` scheme. */
+function telValue(property: VCardProperty): string {
+  return unescapeValue(property.value).trim().replace(/^tel:/i, "");
+}
+
+/** One primary value: the first marked PREF, or else the first. */
+function onePrimary<T extends { isPrimary?: boolean }>(items: T[]): T[] {
+  const primary = Math.max(
+    0,
+    items.findIndex((item) => item.isPrimary),
+  );
+  items.forEach((item, index) => (item.isPrimary = index === primary));
+  return items;
+}
+
+/** The same birthday: the same text, or the same day read from both. */
+function sameBirthday(a: string, b: string): boolean {
+  if (a.trim() === b.trim()) return true;
+  const x = parseBirthday(a);
+  const y = parseBirthday(b);
+  return Boolean(
+    x && y && x.year === y.year && x.month === y.month && x.day === y.day,
+  );
+}
 
 /**
  * Update an existing vCard with the fields Contrack manages while keeping
  * properties Contrack does not own (`PHOTO`, `NICKNAME`, structured `ADR`
  * components, Apple `itemN.X-ABLabel` labels, `UID`, and every `X-*` property).
+ * The card keeps its version, and a value that did not change keeps its own
+ * line. With `fields`, only those fields are written, and the card keeps the
+ * others as they are.
  */
-export function patchVCard(existingVCard: string, contact: VCardInput): string {
+export function patchVCard(
+  existingVCard: string,
+  contact: VCardInput,
+  fields?: ReadonlySet<VCardField>,
+): string {
   const existingCard = parseVCards(existingVCard)[0];
   if (!existingCard) return serializeVCard(contact);
 
-  const unfoldedLines: Array<{ rawLine: string; prop: VCardProperty | null }> =
-    [];
+  const entries: Array<{ rawLine: string; prop: VCardProperty }> = [];
   let inCard = false;
   for (const line of unfold(existingVCard.replace(/^\uFEFF/, ""))) {
     const trimmed = line.trim();
@@ -686,29 +771,94 @@ export function patchVCard(existingVCard: string, contact: VCardInput): string {
     if (/^END:VCARD$/i.test(trimmed)) {
       break;
     }
-    if (!inCard) continue;
-    unfoldedLines.push({ rawLine: line, prop: parseContentLine(line) });
+    const prop = inCard ? parseContentLine(line) : null;
+    if (prop) entries.push({ rawLine: line, prop });
   }
 
-  if (unfoldedLines.length === 0) return serializeVCard(contact);
+  if (entries.length === 0) return serializeVCard(contact);
+
+  const writes = (field: VCardField) => !fields || fields.has(field);
+  const v4 = (firstValue(existingCard, "VERSION") ?? "").trim() === "4.0";
+  const pref = (isPrimary: boolean | undefined) => prefParam(isPrimary, v4);
 
   const groupLabelLines = new Map<string, string>();
   const managedGroups = new Set<string>();
-  for (const { rawLine, prop } of unfoldedLines) {
-    if (!prop) continue;
+  let lastItem = 0;
+  /** The card's lines by property and a key of their value, in card order. */
+  const byKey = new Map<string, number[]>();
+  /** The line of each property that extraction reads as the primary one. */
+  const primaryLine = new Map<string, number>();
+  const keyOf = (prop: VCardProperty): string | null => {
+    switch (prop.name) {
+      case "EMAIL":
+      case "URL":
+        return unescapeValue(prop.value).trim().toLowerCase();
+      case "TEL":
+        return telValue(prop);
+      case "ADR":
+        return joinAddress(prop.value);
+      case "X-SOCIALPROFILE": {
+        const platform = (prop.params.TYPE?.[0] ?? "other").toLowerCase();
+        const { url } = resolveSocialProfile(
+          platform,
+          unescapeValue(prop.value).trim(),
+        );
+        return `${platform}\0${url.trim().toLowerCase()}`;
+      }
+      default:
+        return null;
+    }
+  };
+  const firstPref = new Map<string, number>();
+  entries.forEach(({ rawLine, prop }, index) => {
     if (prop.name === "X-ABLABEL" && prop.group) {
       groupLabelLines.set(prop.group, rawLine);
     } else if (prop.group && MANAGED_VCARD_NAMES.has(prop.name)) {
       managedGroups.add(prop.group);
     }
-  }
+    const item = /^item(\d+)$/i.exec(prop.group ?? "");
+    if (item) lastItem = Math.max(lastItem, Number(item[1]));
+    const key = keyOf(prop);
+    if (!key) return;
+    const slot = `${prop.name}\0${key}`;
+    const list = byKey.get(slot);
+    if (list) list.push(index);
+    else byKey.set(slot, [index]);
+    if (!primaryLine.has(prop.name)) primaryLine.set(prop.name, index);
+    if (isPreferred(prop) && !firstPref.has(prop.name)) {
+      firstPref.set(prop.name, index);
+    }
+  });
+  for (const [name, index] of firstPref) primaryLine.set(name, index);
 
-  const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
+  const lines: string[] = ["BEGIN:VCARD", `VERSION:${v4 ? "4.0" : "3.0"}`];
   const push = (line: string) => lines.push(foldLine(line));
+  const write = labeledWriter(push, lastItem);
+  const pushGroupLabel = (group: string | null) => {
+    if (group && groupLabelLines.has(group)) {
+      push(groupLabelLines.get(group)!);
+    }
+  };
+  /** The card's own line, with its Apple label. */
+  const keep = (index: number) => {
+    push(entries[index]!.rawLine);
+    pushGroupLabel(entries[index]!.prop.group);
+  };
+  /** Every line of a field Contrack does not write, as the card has it. */
+  const keepField = (field: VCardField) => {
+    const names: readonly string[] = VCARD_FIELDS[field];
+    entries.forEach(({ prop }, index) => {
+      if (names.includes(prop.name)) keep(index);
+    });
+  };
+  /** The next line of `name` whose value has this key, or -1. */
+  const take = (name: string, key: string): number => {
+    return byKey.get(`${name}\0${key}`)?.shift() ?? -1;
+  };
 
   // Preserve the server card's existing UID if present
-  const existingUidEntry = unfoldedLines.find(
-    (e) => e.prop?.name === "UID" && unescapeValue(e.prop.value).trim(),
+  const existingUidEntry = entries.find(
+    (e) => e.prop.name === "UID" && unescapeValue(e.prop.value).trim(),
   );
   if (existingUidEntry) {
     push(existingUidEntry.rawLine);
@@ -716,26 +866,32 @@ export function patchVCard(existingVCard: string, contact: VCardInput): string {
     push(`UID:${escapeValue(contact.uid)}`);
   }
 
-  // N: preserve middle name, prefix, and suffix from the existing card when present
-  const guessed =
-    contact.firstName || contact.lastName
-      ? {
-          given: contact.firstName ?? "",
-          family: contact.lastName ?? "",
-          suffix: "",
-        }
-      : splitDisplayName(contact.name);
-  const existingNRaw = firstRaw(existingCard, "N");
-  const nParts = existingNRaw !== null ? splitComponents(existingNRaw) : [];
-  const additional = nParts[2] ?? "";
-  const prefix = nParts[3] ?? "";
-  const suffix = guessed.suffix || (nParts[4] ?? "");
-  push(
-    `N:${escapeValue(guessed.family)};${escapeValue(guessed.given)};${escapeValue(additional)};${escapeValue(prefix)};${escapeValue(suffix)}`,
-  );
-  push(`FN:${escapeValue(contact.name)}`);
+  if (writes("name")) {
+    // N: preserve middle name, prefix, and suffix from the existing card
+    const guessed =
+      contact.firstName || contact.lastName
+        ? {
+            given: contact.firstName ?? "",
+            family: contact.lastName ?? "",
+            suffix: "",
+          }
+        : splitDisplayName(contact.name);
+    const existingNRaw = firstRaw(existingCard, "N");
+    const nParts = existingNRaw !== null ? splitComponents(existingNRaw) : [];
+    const additional = nParts[2] ?? "";
+    const prefix = nParts[3] ?? "";
+    const suffix = guessed.suffix || (nParts[4] ?? "");
+    push(
+      `N:${escapeValue(guessed.family)};${escapeValue(guessed.given)};${escapeValue(additional)};${escapeValue(prefix)};${escapeValue(suffix)}`,
+    );
+    push(`FN:${escapeValue(contact.name)}`);
+  } else {
+    keepField("name");
+  }
 
-  if (contact.company) {
+  if (!writes("company")) {
+    keepField("company");
+  } else if (contact.company) {
     const existingOrgRaw = firstRaw(existingCard, "ORG");
     const orgParts =
       existingOrgRaw !== null ? splitComponents(existingOrgRaw) : [];
@@ -748,203 +904,188 @@ export function patchVCard(existingVCard: string, contact: VCardInput): string {
       push(`ORG:${escapeValue(contact.company)}`);
     }
   }
-  if (contact.role) push(`TITLE:${escapeValue(contact.role)}`);
-  const birthday = contact.birthday && vcardBirthdayLine(contact.birthday);
-  if (birthday) push(birthday);
-  if (contact.about) push(`NOTE:${escapeValue(contact.about)}`);
+  if (!writes("role")) keepField("role");
+  else if (contact.role) push(`TITLE:${escapeValue(contact.role)}`);
 
-  const usedIndices = new Set<number>();
-  const pushGroupLabel = (group: string | null) => {
-    if (group && groupLabelLines.has(group)) {
-      push(groupLabelLines.get(group)!);
+  if (!writes("birthday")) {
+    keepField("birthday");
+  } else if (contact.birthday) {
+    // The card's own line when it says the same day, so a form the parser
+    // cannot read ("1985", "---14", a date-time) is not dropped or redrawn.
+    const own = entries.findIndex((e) => e.prop.name === "BDAY");
+    const parsed = parseBirthday(contact.birthday);
+    if (
+      own >= 0 &&
+      sameBirthday(unescapeValue(entries[own]!.prop.value), contact.birthday)
+    ) {
+      keep(own);
+    } else if (v4 && parsed && parsed.year === null) {
+      push(`BDAY:--${birthdayValue(parsed).replace("-", "")}`);
+    } else {
+      const birthday = vcardBirthdayLine(contact.birthday);
+      if (birthday) push(birthday);
     }
+  }
+  if (!writes("about")) keepField("about");
+  else if (contact.about) push(`NOTE:${escapeValue(contact.about)}`);
+
+  /** The card's line for a value: kept, relabeled in its group, or null. */
+  const reuse = (
+    name: string,
+    key: string,
+    label: string,
+    fallbackLabel: string,
+    isPrimary: boolean | undefined,
+    relabeled: (group: string, prop: VCardProperty) => string,
+  ): boolean => {
+    const index = take(name, key);
+    if (index < 0) return false;
+    const prop = entries[index]!.prop;
+    const sameLabel =
+      labelFor(existingCard, prop, fallbackLabel) === label.toLowerCase();
+    const samePref = (primaryLine.get(name) === index) === Boolean(isPrimary);
+    if (sameLabel && samePref) {
+      keep(index);
+      return true;
+    }
+    if (sameLabel && prop.group && groupLabelLines.has(prop.group)) {
+      push(relabeled(prop.group, prop));
+      pushGroupLabel(prop.group);
+      return true;
+    }
+    return false;
   };
 
-  for (const email of contact.emails ?? []) {
-    if (!email.email) continue;
-    const matchIdx = unfoldedLines.findIndex(
-      (e, idx) =>
-        !usedIndices.has(idx) &&
-        e.prop?.name === "EMAIL" &&
-        unescapeValue(e.prop.value).trim().toLowerCase() ===
-          email.email.trim().toLowerCase(),
-    );
-    if (matchIdx >= 0) {
-      usedIndices.add(matchIdx);
-      const entry = unfoldedLines[matchIdx]!;
-      const prop = entry.prop!;
-      const sameLabel =
-        labelFor(existingCard, prop, "personal") ===
-        (email.label || "personal").toLowerCase();
-      const samePref = isPreferred(prop) === Boolean(email.isPrimary);
-      if (sameLabel && samePref) {
-        push(entry.rawLine);
-        pushGroupLabel(prop.group);
-        continue;
-      }
-      if (sameLabel && prop.group && groupLabelLines.has(prop.group)) {
-        push(
-          `${prop.group}.EMAIL;TYPE=INTERNET${prefParam(email.isPrimary)}:${escapeValue(email.email)}`,
-        );
-        pushGroupLabel(prop.group);
-        continue;
-      }
+  if (!writes("emails")) {
+    keepField("emails");
+  } else {
+    for (const email of contact.emails ?? []) {
+      if (!email.email) continue;
+      const reused = reuse(
+        "EMAIL",
+        email.email.trim().toLowerCase(),
+        email.label || "personal",
+        "personal",
+        email.isPrimary,
+        (group) =>
+          `${group}.EMAIL;TYPE=INTERNET${pref(email.isPrimary)}:${escapeValue(email.email)}`,
+      );
+      if (reused) continue;
+      write(
+        "EMAIL;TYPE=INTERNET",
+        email.label,
+        "",
+        pref(email.isPrimary),
+        escapeValue(email.email),
+      );
     }
-    push(
-      `EMAIL;TYPE=INTERNET${typeParam(email.label)}${prefParam(email.isPrimary)}:${escapeValue(email.email)}`,
-    );
   }
 
-  for (const phone of contact.phones ?? []) {
-    if (!phone.phone) continue;
-    const matchIdx = unfoldedLines.findIndex(
-      (e, idx) =>
-        !usedIndices.has(idx) &&
-        e.prop?.name === "TEL" &&
-        unescapeValue(e.prop.value).trim() === phone.phone.trim(),
-    );
-    if (matchIdx >= 0) {
-      usedIndices.add(matchIdx);
-      const entry = unfoldedLines[matchIdx]!;
-      const prop = entry.prop!;
-      const sameLabel =
-        labelFor(existingCard, prop, "mobile") ===
-        (phone.label || "mobile").toLowerCase();
-      const samePref = isPreferred(prop) === Boolean(phone.isPrimary);
-      if (sameLabel && samePref) {
-        push(entry.rawLine);
-        pushGroupLabel(prop.group);
-        continue;
-      }
-      if (sameLabel && prop.group && groupLabelLines.has(prop.group)) {
-        push(
-          `${prop.group}.TEL;TYPE=VOICE${prefParam(phone.isPrimary)}:${escapeValue(phone.phone)}`,
-        );
-        pushGroupLabel(prop.group);
-        continue;
-      }
+  if (!writes("phones")) {
+    keepField("phones");
+  } else {
+    for (const phone of contact.phones ?? []) {
+      if (!phone.phone) continue;
+      const reused = reuse(
+        "TEL",
+        phone.phone.trim(),
+        phone.label || "mobile",
+        "mobile",
+        phone.isPrimary,
+        (group) =>
+          `${group}.TEL;TYPE=VOICE${pref(phone.isPrimary)}:${escapeValue(phone.phone)}`,
+      );
+      if (reused) continue;
+      write(
+        "TEL",
+        phone.label,
+        ";TYPE=VOICE",
+        pref(phone.isPrimary),
+        escapeValue(phone.phone),
+      );
     }
-    push(
-      `TEL${typeParam(phone.label) || ";TYPE=VOICE"}${prefParam(phone.isPrimary)}:${escapeValue(phone.phone)}`,
-    );
   }
 
-  for (const address of contact.addresses ?? []) {
-    if (!address.address) continue;
-    const matchIdx = unfoldedLines.findIndex(
-      (e, idx) =>
-        !usedIndices.has(idx) &&
-        e.prop?.name === "ADR" &&
-        joinAddress(e.prop.value) === address.address.trim(),
-    );
-    if (matchIdx >= 0) {
-      usedIndices.add(matchIdx);
-      const entry = unfoldedLines[matchIdx]!;
-      const prop = entry.prop!;
-      const sameLabel =
-        labelFor(existingCard, prop, "home") ===
-        (address.label || "home").toLowerCase();
-      const samePref = isPreferred(prop) === Boolean(address.isPrimary);
-      if (sameLabel && samePref) {
-        push(entry.rawLine);
-        pushGroupLabel(prop.group);
-        continue;
-      }
-      if (sameLabel && prop.group && groupLabelLines.has(prop.group)) {
-        push(`${prop.group}.ADR${prefParam(address.isPrimary)}:${prop.value}`);
-        pushGroupLabel(prop.group);
-        continue;
-      }
+  if (!writes("addresses")) {
+    keepField("addresses");
+  } else {
+    for (const address of contact.addresses ?? []) {
+      if (!address.address) continue;
+      const key = address.address.trim();
+      const before = byKey.get(`ADR\0${key}`)?.[0];
+      const reused = reuse(
+        "ADR",
+        key,
+        address.label || "home",
+        "home",
+        address.isPrimary,
+        (group, prop) => `${group}.ADR${pref(address.isPrimary)}:${prop.value}`,
+      );
+      if (reused) continue;
       // Keep the structured ADR components even when label or primary changed
+      write(
+        "ADR",
+        address.label,
+        "",
+        pref(address.isPrimary),
+        before !== undefined
+          ? entries[before]!.prop.value
+          : `;;${escapeValue(address.address)};;;;`,
+      );
+    }
+  }
+
+  if (!writes("web")) {
+    keepField("web");
+  } else {
+    const emittedWebsite = contact.website?.trim().toLowerCase() ?? null;
+    if (contact.website) {
+      const index = take("URL", emittedWebsite!);
+      if (index >= 0) keep(index);
+      else push(`URL:${escapeValue(contact.website)}`);
+    }
+
+    for (const link of contact.socialLinks ?? []) {
+      if (!link.url) continue;
+      const normUrl = link.url.trim().toLowerCase();
+      const platform = (link.platform || "other").toLowerCase();
+      if (
+        (platform === "website" || platform === "homepage") &&
+        emittedWebsite === normUrl
+      ) {
+        continue;
+      }
+      let index = take("X-SOCIALPROFILE", `${platform}\0${normUrl}`);
+      if (index < 0) index = take("URL", normUrl);
+      if (index >= 0) {
+        keep(index);
+        continue;
+      }
       push(
-        `ADR${typeParam(address.label)}${prefParam(address.isPrimary)}:${prop.value}`,
+        `X-SOCIALPROFILE;TYPE=${escapeValue(link.platform || "other")}:${escapeValue(link.url)}`,
       );
-      continue;
     }
-    push(
-      `ADR${typeParam(address.label)}${prefParam(address.isPrimary)}:;;${escapeValue(address.address)};;;;`,
-    );
-  }
-
-  const emittedWebsite = contact.website?.trim().toLowerCase() ?? null;
-  if (contact.website) {
-    const matchIdx = unfoldedLines.findIndex(
-      (e, idx) =>
-        !usedIndices.has(idx) &&
-        e.prop?.name === "URL" &&
-        unescapeValue(e.prop.value).trim().toLowerCase() === emittedWebsite,
-    );
-    if (matchIdx >= 0) {
-      usedIndices.add(matchIdx);
-      const entry = unfoldedLines[matchIdx]!;
-      push(entry.rawLine);
-      pushGroupLabel(entry.prop!.group);
-    } else {
-      push(`URL:${escapeValue(contact.website)}`);
-    }
-  }
-
-  for (const link of contact.socialLinks ?? []) {
-    if (!link.url) continue;
-    const normUrl = link.url.trim().toLowerCase();
-    const platform = (link.platform || "other").toLowerCase();
-    if (
-      (platform === "website" || platform === "homepage") &&
-      emittedWebsite === normUrl
-    ) {
-      continue;
-    }
-
-    const socialMatchIdx = unfoldedLines.findIndex((e, idx) => {
-      if (usedIndices.has(idx) || e.prop?.name !== "X-SOCIALPROFILE")
-        return false;
-      const existingPlatform = (
-        e.prop.params.TYPE?.[0] ?? "other"
-      ).toLowerCase();
-      const resolved = resolveSocialProfile(
-        existingPlatform,
-        unescapeValue(e.prop.value).trim(),
-      );
-      return (
-        existingPlatform === platform &&
-        resolved.url.trim().toLowerCase() === normUrl
-      );
-    });
-    if (socialMatchIdx >= 0) {
-      usedIndices.add(socialMatchIdx);
-      const entry = unfoldedLines[socialMatchIdx]!;
-      push(entry.rawLine);
-      pushGroupLabel(entry.prop!.group);
-      continue;
-    }
-
-    const urlMatchIdx = unfoldedLines.findIndex(
-      (e, idx) =>
-        !usedIndices.has(idx) &&
-        e.prop?.name === "URL" &&
-        unescapeValue(e.prop.value).trim().toLowerCase() === normUrl,
-    );
-    if (urlMatchIdx >= 0) {
-      usedIndices.add(urlMatchIdx);
-      const entry = unfoldedLines[urlMatchIdx]!;
-      push(entry.rawLine);
-      pushGroupLabel(entry.prop!.group);
-      continue;
-    }
-
-    push(
-      `X-SOCIALPROFILE;TYPE=${escapeValue(link.platform || "other")}:${escapeValue(link.url)}`,
-    );
   }
 
   const tags = (contact.tags ?? []).filter(Boolean);
-  if (tags.length > 0) {
+  const cardTags = valuesOf(existingCard, "CATEGORIES").flatMap((p) =>
+    splitList(p.value)
+      .map((t) => t.trim())
+      .filter(Boolean),
+  );
+  const sorted = (list: string[]) => JSON.stringify([...list].sort());
+  if (
+    !writes("tags") ||
+    (tags.length > 0 && sorted(tags) === sorted(cardTags))
+  ) {
+    // Every CATEGORIES line the card has, when the tags are the same.
+    keepField("tags");
+  } else if (tags.length > 0) {
     push(`CATEGORIES:${tags.map(escapeValue).join(",")}`);
   }
 
   // Keep every property that Contrack does not manage (PHOTO, NICKNAME, X-*, etc.)
-  for (const { rawLine, prop } of unfoldedLines) {
-    if (!prop) continue;
+  for (const { rawLine, prop } of entries) {
     if (MANAGED_VCARD_NAMES.has(prop.name)) continue;
     if (
       prop.name === "X-ABLABEL" &&
@@ -1011,26 +1152,26 @@ export function extractVCardContacts(vcardData: string): {
     if (!name) continue;
 
     const emails: ExtractedVCardContact["emails"] = [];
+    const seenEmails = new Set<string>();
     for (const property of valuesOf(card, "EMAIL")) {
       const email = unescapeValue(property.value).trim();
-      if (!email) continue;
-      if (emails.some((e) => e.email.toLowerCase() === email.toLowerCase()))
-        continue;
+      if (!email || seenEmails.has(email.toLowerCase())) continue;
+      seenEmails.add(email.toLowerCase());
       emails.push({
         email,
         label: labelFor(card, property, "personal"),
-        isPrimary: isPreferred(property) || emails.length === 0,
+        isPrimary: isPreferred(property),
       });
     }
 
     const phones: ExtractedVCardContact["phones"] = [];
     for (const property of valuesOf(card, "TEL")) {
-      const phone = unescapeValue(property.value).trim();
+      const phone = telValue(property);
       if (!phone) continue;
       phones.push({
         phone,
         label: labelFor(card, property, "mobile"),
-        isPrimary: isPreferred(property) || phones.length === 0,
+        isPrimary: isPreferred(property),
       });
     }
 
@@ -1041,9 +1182,12 @@ export function extractVCardContacts(vcardData: string): {
       addresses.push({
         address,
         label: labelFor(card, property, "home"),
-        isPrimary: isPreferred(property) || addresses.length === 0,
+        isPrimary: isPreferred(property),
       });
     }
+    onePrimary(emails);
+    onePrimary(phones);
+    onePrimary(addresses);
 
     const socialLinks: ExtractedVCardContact["socialLinks"] = [];
     for (const property of valuesOf(card, "X-SOCIALPROFILE")) {
@@ -1058,11 +1202,11 @@ export function extractVCardContacts(vcardData: string): {
       });
     }
 
+    const seenUrls = new Set(socialLinks.map((s) => s.url.toLowerCase()));
     for (const property of valuesOf(card, "URL")) {
       const url = unescapeValue(property.value).trim();
-      if (!url) continue;
-      if (socialLinks.some((s) => s.url.toLowerCase() === url.toLowerCase()))
-        continue;
+      if (!url || seenUrls.has(url.toLowerCase())) continue;
+      seenUrls.add(url.toLowerCase());
       const label = labelFor(card, property, "website");
       socialLinks.push({
         platform: label === "homepage" ? "website" : label,
@@ -1080,7 +1224,14 @@ export function extractVCardContacts(vcardData: string): {
       if (value.startsWith("data:") || /^https?:/i.test(value)) {
         avatarUrl = value;
       } else if (value) {
-        const type = (photo.params.TYPE?.[0] ?? "jpeg").toLowerCase();
+        // 3.0 says JPEG, and some servers image/jpeg, the media type 4.0 has.
+        const type = (
+          photo.params.MEDIATYPE?.[0] ??
+          photo.params.TYPE?.[0] ??
+          "jpeg"
+        )
+          .toLowerCase()
+          .replace(/^image\//, "");
         avatarUrl = `data:image/${type};base64,${value}`;
       }
     }
@@ -1091,12 +1242,16 @@ export function extractVCardContacts(vcardData: string): {
         (s) => s.platform === "website" || s.platform === "homepage",
       )?.url ?? null;
 
-    const categories = firstRaw(card, "CATEGORIES");
-    const tags = categories
-      ? splitList(categories)
-          .map((t) => t.trim())
-          .filter(Boolean)
-      : [];
+    // Every CATEGORIES line: a card can have more than one.
+    const tags = [
+      ...new Set(
+        valuesOf(card, "CATEGORIES").flatMap((p) =>
+          splitList(p.value)
+            .map((t) => t.trim())
+            .filter(Boolean),
+        ),
+      ),
+    ];
 
     contacts.push({
       uid: (firstValue(card, "UID") ?? "").trim() || null,

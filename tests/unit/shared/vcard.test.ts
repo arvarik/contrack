@@ -523,12 +523,13 @@ describe("serializeVCard", () => {
     expect(lines[1]).toContain("PREF");
   });
 
-  it("drops a label that would break the parameter syntax", () => {
+  it("writes a label the parameter syntax cannot carry as an Apple label", () => {
     const card = serializeVCard({
       name: "X",
       phones: [{ phone: "+1", label: "at home; really" }],
     });
-    expect(card).toContain("TEL;TYPE=ATHOMEREALLY:+1");
+    expect(card).toContain("item1.TEL;TYPE=VOICE:+1");
+    expect(card).toContain("item1.X-ABLabel:at home\\; really");
   });
 
   it("writes UID when provided for CardDAV resources", () => {
@@ -567,9 +568,105 @@ describe("extractVCardContacts", () => {
     expect(contacts).toHaveLength(1);
     expect(contacts[0].name).toBe("Margaret Hamilton");
     expect(contacts[0].emails).toEqual([
-      { email: "margaret@home.example", label: "home", isPrimary: true },
+      { email: "margaret@home.example", label: "home", isPrimary: false },
       { email: "margaret@mit.edu", label: "work", isPrimary: true },
     ]);
+  });
+});
+
+describe("cards from a CardDAV server", () => {
+  const v4 = [
+    "BEGIN:VCARD",
+    "VERSION:4.0",
+    "KIND:individual",
+    "FN:Ann Lee",
+    "TEL;VALUE=uri;PREF=1:tel:+1-555-0100",
+    "PHOTO:data:image/png;base64,iVBORw0KGgo=",
+    "END:VCARD",
+  ].join("\r\n");
+
+  it("reads a tel: URI as the number and patches a 4.0 card as 4.0", () => {
+    const [ann] = extractVCardContacts(v4).contacts;
+    expect(ann.phones).toEqual([
+      { phone: "+1-555-0100", label: "mobile", isPrimary: true },
+    ]);
+    const patched = patchVCard(v4, {
+      ...ann,
+      emails: [{ email: "ann@lee.example", isPrimary: true }],
+    });
+    expect(patched).toContain("VERSION:4.0");
+    expect(patched).not.toContain("VERSION:3.0");
+    // The number is the card's own line, and the new address uses 4.0's PREF.
+    expect(patched).toContain("TEL;VALUE=uri;PREF=1:tel:+1-555-0100");
+    expect(patched).toContain("EMAIL;TYPE=INTERNET;PREF=1:ann@lee.example");
+  });
+
+  it("keeps a birthday the parser cannot read as the card wrote it", () => {
+    for (const bday of ["19850514T000000Z", "---14", "1985", "circa 1950"]) {
+      const card = `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\nBDAY:${bday}\r\nEND:VCARD\r\n`;
+      const [x] = extractVCardContacts(card).contacts;
+      expect(patchVCard(card, x), bday).toContain(`BDAY:${bday}`);
+    }
+    // And invents no day for a new card.
+    expect(serializeVCard({ name: "X", birthday: "1985" })).not.toContain(
+      "BDAY",
+    );
+  });
+
+  it("reads a photo whose type is a media type", () => {
+    const [x] = extractVCardContacts(
+      "BEGIN:VCARD\r\nFN:X\r\nPHOTO;ENCODING=b;TYPE=image/jpeg:/9j/4A==\r\nEND:VCARD\r\n",
+    ).contacts;
+    expect(x.avatarUrl).toBe("data:image/jpeg;base64,/9j/4A==");
+  });
+
+  it("reads every CATEGORIES line and marks one value primary", () => {
+    const card = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "FN:X",
+      "EMAIL:a@x.example",
+      "EMAIL;TYPE=PREF:b@x.example",
+      "TEL:+1 555 0100",
+      "TEL:+1 555 0101",
+      "CATEGORIES:Friends,Climbing",
+      "CATEGORIES:Work",
+      "END:VCARD",
+    ].join("\r\n");
+    const [x] = extractVCardContacts(card).contacts;
+    expect(x.tags).toEqual(["Friends", "Climbing", "Work"]);
+    expect(x.emails.map((e) => e.isPrimary)).toEqual([false, true]);
+    expect(x.phones.map((p) => p.isPrimary)).toEqual([true, false]);
+    // Unchanged, the card keeps its own lines: no PREF added to the first.
+    const patched = patchVCard(card, x);
+    expect(patched).toContain("\r\nTEL:+1 555 0100\r\n");
+    expect(patched).toContain("\r\nEMAIL:a@x.example\r\n");
+  });
+
+  it("keeps a custom label with its spaces", () => {
+    const card = serializeVCard({
+      name: "X",
+      phones: [{ phone: "+1", label: "old work" }],
+    });
+    const [x] = extractVCardContacts(card).contacts;
+    expect(x.phones[0].label).toBe("old work");
+    const [y] = extractVCardContacts(patchVCard(card, x)).contacts;
+    expect(y.phones[0].label).toBe("old work");
+  });
+
+  it("reads and patches a card with 40,000 addresses in linear time", () => {
+    const card = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "FN:Big",
+      ...Array.from({ length: 40_000 }, (_, i) => `EMAIL:u${i}@x.example`),
+      "END:VCARD",
+    ].join("\r\n");
+    const started = performance.now();
+    const [big] = extractVCardContacts(card).contacts;
+    patchVCard(card, big);
+    expect(big.emails).toHaveLength(40_000);
+    expect(performance.now() - started).toBeLessThan(2_000);
   });
 });
 

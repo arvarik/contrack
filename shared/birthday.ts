@@ -54,7 +54,7 @@ function isValidDay(month: number, day: number, year: number | null): boolean {
 
 /**
  * Parses a birthday into year, month and day, or null:
- * - "1990-05-14", "1990/05/14", "19900514"
+ * - "1990-05-14", "1990/05/14", "19900514", and the date-time "19900514T000000Z"
  * - "05-14", "05/14", "--0514", "--05-14", and Apple's "1604-05-14"
  * - "May 14", "May 14, 1990", "14 May", "14 May 1990", "May 14th"
  */
@@ -64,6 +64,13 @@ export function parseBirthday(
   if (!raw || typeof raw !== "string") return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
+
+  // A vCard date-time, "19850514T000000Z": the day as written. A time zone
+  // would move it.
+  const dateTime = trimmed.match(/^(\d{4}-?\d{2}-?\d{2})T/i);
+  if (dateTime) return parseBirthday(dateTime[1]);
+  // A year, or a year and a month, has no day to invent.
+  if (/^\d{4}(-\d{2})?$/.test(trimmed)) return null;
 
   // 1. YYYY-MM-DD, YYYY/MM/DD or vCard's YYYYMMDD. Apple's address books
   //    write a birthday with no year in the year 1604.
@@ -118,7 +125,10 @@ export function parseBirthday(
     }
   }
 
-  // 5. Try new Date parse if standard
+  // 5. Other text Date reads, such as "05/14/1990", as local time, so the day
+  //    stays. Only with a day besides the year: Date makes January 1 of
+  //    "circa 1950" and the first of "May 1990".
+  if (!/(^|\D)\d{1,2}(\D|$)/.test(trimmed.replace(/\d{4}/, " "))) return null;
   try {
     const d = new Date(trimmed);
     if (!isNaN(d.getTime())) {

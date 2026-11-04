@@ -22,6 +22,25 @@ describe("pulse.birthdays parseBirthday", () => {
     expect(parseBirthday(text)).toEqual({ year, month: 5, day: 14 });
   });
 
+  it("reads a vCard date-time as the day written, in any time zone", () => {
+    // The server's zone moved 1985-05-14T00:00:00Z to May 13 west of UTC.
+    for (const text of ["19850514T000000Z", "1985-05-14T00:00:00Z"]) {
+      expect(parseBirthday(text)).toEqual({ year: 1985, month: 5, day: 14 });
+    }
+  });
+
+  it("invents no month or day for a year, a month or text", () => {
+    for (const text of ["1985", "circa 1950", "May 1990", "---14"]) {
+      expect(parseBirthday(text), text).toBeNull();
+    }
+    // A US date with a day still reads.
+    expect(parseBirthday("05/14/1990")).toEqual({
+      year: 1990,
+      month: 5,
+      day: 14,
+    });
+  });
+
   it("ignores unparseable strings", () => {
     expect(parseBirthday("not-a-date")).toBeNull();
     expect(parseBirthday("")).toBeNull();

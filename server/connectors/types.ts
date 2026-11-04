@@ -21,6 +21,11 @@ export type SyncEvent =
       contact: Record<string, unknown>;
       photoUrl?: string;
       /**
+       * The card has no photo: a photo an earlier sync saved from it goes
+       * back to the drawn avatar, on a contact the sync writes.
+       */
+      noPhoto?: boolean;
+      /**
        * The source's placeholder image for a card with no photo, such as
        * Google's letter tile. Ingest never saves it. It only takes back a
        * copy of it that an earlier sync saved as the contact's photo.
@@ -112,7 +117,8 @@ export interface PushContext<C = unknown, S = unknown> {
     isArchived?: boolean;
     vcardInput: VCardInput;
   }>;
-  links: Array<{ externalId: string; localId: string | null }>;
+  /** `made`: the card made the contact, by the pull or the push. */
+  links: Array<{ externalId: string; localId: string | null; made?: boolean }>;
   ingestedContactIds: ReadonlySet<string>;
   signal: AbortSignal;
   log: (msg: string) => void;
@@ -121,6 +127,8 @@ export interface PushContext<C = unknown, S = unknown> {
 export interface PushResult {
   cursor: unknown | null;
   pushed: number;
+  /** What could not be written, counted as errors like `stage_failed`. */
+  errors?: string[];
   newLinks: Array<{ externalId: string; localId: string }>;
   removedExternalIds?: string[];
 }

@@ -683,6 +683,15 @@ ${itemResponses.join("\n")}
     } finally {
       process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";
     }
+    // With private hosts on, plain http:// still goes only to one.
+    await expect(
+      testConnector(
+        scope,
+        "carddav",
+        { url: "http://192.0.2.10/dav/", username: VALID_USER },
+        { password: VALID_PASS },
+      ),
+    ).rejects.toThrow(/https:\/\//i);
   });
 
   it("keeps Authorization on same-origin redirects and strips it on cross-host or sibling-host redirects", async () => {
@@ -884,11 +893,13 @@ ${itemResponses.join("\n")}
     expect(run4.status).toBe("ok");
     expect(run4.stats.contacts).toBe(1); // René Descartes pulled
     expect(run4.stats.pushed).toBeUndefined(); // 403 skipped safely
+    expect(run4.stats.errors).toBe(1); // and reported
     const connAfter403 = getConnector(scope, connector.id);
     expect(connAfter403?.status).toBe("active");
     forceStatusOnPutHref = null;
 
-    // Run 5: Weak ETag on remote card -> PUT omits If-Match so strong comparison does not 412
+    // Run 5: the refused edit waits for the next edit, made on a card whose
+    // ETag is weak now -> PUT omits If-Match so strong comparison does not 412
     putRequests.length = 0;
     const adaCard = cards.get("/dav/addressbooks/alice/default/ada.vcf")!;
     cards.set("/dav/addressbooks/alice/default/ada.vcf", {
@@ -896,9 +907,8 @@ ${itemResponses.join("\n")}
       vcard: adaCard.vcard,
     });
     currentSyncToken = "http://sabredav.org/ns/sync/3";
-    // Pull the weak ETag first, then edit Ada
-    await runNow(scope, connector.id, "manual");
-    putRequests.length = 0;
+    expect((await runNow(scope, connector.id, "manual")).stats.errors).toBe(0);
+    expect(putRequests).toHaveLength(0);
     contactService.updateContact(scope, adaRow!.id, {
       role: "Weak ETag Architect",
     });
@@ -907,6 +917,7 @@ ${itemResponses.join("\n")}
     expect(run5.stats.pushed).toBe(1);
     expect(putRequests).toHaveLength(1);
     expect(putRequests[0]!.ifMatch).toBeUndefined();
+    expect(putRequests[0]!.body).toContain("TITLE:Weak ETag Architect");
 
     // Run 6: Merge Ada (duplicate) into a canonical survivor contact -> link re-points to survivor,
     // updating /dav/addressbooks/alice/default/ada.vcf instead of creating a duplicate card!
@@ -1074,6 +1085,12 @@ ${itemResponses.join("\n")}
         put401: boolean;
         failPutPrefix: string | null;
         homeSetOverride: string | null;
+        multigetFails: boolean;
+        putStatus: number | null;
+        editOnGet: boolean;
+        padListing: boolean;
+        /** A report names a deletion once, as the token then moves past it. */
+        tombstonesOnce: boolean;
       };
       puts: Array<{
         path: string;
@@ -1121,6 +1138,11 @@ ${itemResponses.join("\n")}
         put401: false,
         failPutPrefix: null,
         homeSetOverride: null,
+        multigetFails: false,
+        putStatus: null,
+        editOnGet: false,
+        padListing: false,
+        tombstonesOnce: false,
       };
       const puts: MiniDav["puts"] = [];
       const bookOf = (p: string) =>
@@ -1189,6 +1211,10 @@ ${itemResponses.join("\n")}
           );
         }
         const book = books[p];
+        // A listing past the 5 MB that a single card may take.
+        const pad = flags.padListing
+          ? `<d:response><d:href>${p}pad/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype><d:displayname>${"x".repeat(6 * 1024 * 1024)}</d:displayname></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
+          : "";
         if (book && m === "PROPFIND") {
           const asksSyncToken = body.includes("sync-token");
           const truncPropstat =
@@ -1217,7 +1243,7 @@ ${itemResponses.join("\n")}
                     ),
                 ]
               : [];
-          return sendXml(207, multiStatusXml([self, ...items].join("\n")));
+          return sendXml(207, multiStatusXml([self, ...items, pad].join("\n")));
         }
         if (book && m === "REPORT" && body.includes("sync-collection")) {
           const tok =
@@ -1240,18 +1266,25 @@ ${itemResponses.join("\n")}
               (h) =>
                 `<d:response><d:href>${h}</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response>`,
             );
+          if (flags.tombstonesOnce) tombstones.clear();
           return sendXml(
             207,
             multiStatusXml(
               [
                 ...live,
                 ...dead,
+                pad,
                 `<d:sync-token>${prefix}${rev}</d:sync-token>`,
               ].join("\n"),
             ),
           );
         }
         if (book && m === "REPORT" && body.includes("addressbook-multiget")) {
+          if (flags.multigetFails) {
+            res.writeHead(500);
+            res.end();
+            return;
+          }
           const hrefs = [...body.matchAll(/<d:href>([^<]+)<\/d:href>/g)].map(
             (mm) => normalizeHrefPath(mm[1]!, "http://127.0.0.1"),
           );
@@ -1285,11 +1318,24 @@ ${itemResponses.join("\n")}
             res.end();
             return;
           }
-          const c = books[bp]!.get(p);
+          let c = books[bp]!.get(p);
           if (!c) {
             res.writeHead(404);
             res.end();
             return;
+          }
+          if (flags.editOnGet) {
+            // Somebody edits the card on the server after the pull.
+            flags.editOnGet = false;
+            c = {
+              etag: `"e-${crypto.randomUUID().slice(0, 8)}"`,
+              vcard: c.vcard.replace(
+                "END:VCARD",
+                "NOTE:Server note\r\nEND:VCARD",
+              ),
+            };
+            books[bp]!.set(p, c);
+            rev++;
           }
           const headers: Record<string, string> = {
             "Content-Type": "text/vcard",
@@ -1315,6 +1361,11 @@ ${itemResponses.join("\n")}
           const ifNoneMatch = req.headers["if-none-match"] as
             string | undefined;
           puts.push({ path: p, body, ifMatch, ifNoneMatch });
+          if (flags.putStatus) {
+            res.writeHead(flags.putStatus);
+            res.end();
+            return;
+          }
           const ex = books[bp]!.get(p);
           if (
             (ifMatch && (!ex || ex.etag !== ifMatch)) ||
@@ -1840,23 +1891,166 @@ ${itemResponses.join("\n")}
         true,
       );
 
-      // 6. Oversized > 5 MB card is not recorded in cursor.etags so it retries when shrunk
+      // 6. An oversized > 5 MB card is reported once and read again when its
+      // ETag changes
       const bigPadding = "X".repeat(5 * 1024 * 1024 + 500);
       dav.books["/dav/ab/a/"]!.set("/dav/ab/a/huge.vcf", {
         etag: '"huge-1"',
         vcard: miniVcard("Huge Card", [`NOTE:${bigPadding}`]),
       });
       dav.flags.rejectSync = true;
-      await runNow(s, conn.id, "manual");
+      expect((await runNow(s, conn.id, "manual")).stats.errors).toBe(1);
       expect(named(s, "Huge Card")).toHaveLength(0);
+      expect((await runNow(s, conn.id, "manual")).stats.errors ?? 0).toBe(0);
 
-      // Shrink card while keeping the same ETag '"huge-1"' -> next sync fetches it!
       dav.books["/dav/ab/a/"]!.set("/dav/ab/a/huge.vcf", {
-        etag: '"huge-1"',
+        etag: '"huge-2"',
         vcard: miniVcard("Huge Card", ["NOTE:Normal size"]),
       });
       await runNow(s, conn.id, "manual");
       expect(named(s, "Huge Card")).toHaveLength(1);
+    });
+
+    it("reports a card it could not read and reads it on the next sync", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      const book = dav.books["/dav/ab/a/"]!;
+      book.set("/dav/ab/a/one.vcf", {
+        etag: '"o1"',
+        vcard: miniVcard("Card One"),
+      });
+      const conn = await connect(s, dav.url, { syncDirection: "pull_only" });
+      await runNow(s, conn.id, "manual");
+
+      book.set("/dav/ab/a/two.vcf", {
+        etag: '"t1"',
+        vcard: miniVcard("Card Two"),
+      });
+      dav.flags.multigetFails = true;
+      dav.flags.getFails = true;
+      const failed = await runNow(s, conn.id, "manual");
+      expect(failed.stats.errors).toBe(1);
+      expect(named(s, "Card Two")).toHaveLength(0);
+
+      dav.flags.multigetFails = false;
+      dav.flags.getFails = false;
+      await runNow(s, conn.id, "manual");
+      expect(named(s, "Card Two")).toHaveLength(1);
+    });
+
+    it("reports a write the server refused, tries it again, and writes over the card it just read", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      const book = dav.books["/dav/ab/a/"]!;
+      book.set("/dav/ab/a/kim.vcf", {
+        etag: '"k1"',
+        vcard: miniVcard("Kim Lee", ["EMAIL:kim@lee.example"]),
+      });
+      const conn = await connect(s, dav.url);
+      await runNow(s, conn.id, "manual");
+      const [kim] = named(s, "Kim Lee");
+      contactService.updateContact(s, kim!.id, { company: "Lee Labs" });
+
+      const errors = async () =>
+        (await runNow(s, conn.id, "manual")).stats.errors ?? 0;
+      // A server error is tried again on every run.
+      dav.flags.putStatus = 503;
+      expect([await errors(), await errors()]).toEqual([1, 1]);
+      // A refusal is reported once, and tried again after the next edit.
+      dav.flags.putStatus = 403;
+      expect([await errors(), await errors()]).toEqual([1, 0]);
+      dav.puts.length = 0;
+      await errors();
+      expect(dav.puts).toHaveLength(0);
+
+      dav.flags.putStatus = null;
+      dav.flags.editOnGet = true;
+      contactService.updateContact(s, kim!.id, { company: "Lee Labs 2" });
+      expect(await errors()).toBe(0);
+      // The ETag of the card the GET read, not the pull's "k1".
+      expect(dav.puts.at(-1)!.ifMatch).toMatch(/^"e-/);
+      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain("ORG:Lee Labs 2");
+      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain(
+        "NOTE:Server note",
+      );
+      // The next pull reads the server's edit that the PUT carried.
+      await runNow(s, conn.id, "manual");
+      expect(contactService.getContactById(s, kim!.id)!.about).toBe(
+        "Server note",
+      );
+    });
+
+    it("takes a baseline of an earlier version as it is, without writing every field", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/leo.vcf", {
+        etag: '"l1"',
+        vcard: miniVcard("Leo Park", ["EMAIL:leo@park.example"]),
+      });
+      const conn = await connect(s, dav.url);
+      await runNow(s, conn.id, "manual");
+      const [leo] = named(s, "Leo Park");
+      // A whole-card hash the earlier version saved, which the current
+      // writer does not reproduce.
+      const row = sqlite
+        .prepare("SELECT cursor FROM connectors WHERE id = ?")
+        .get(conn.id) as { cursor: string };
+      const cursor = JSON.parse(row.cursor);
+      cursor.pushedHashes[leo!.id] = "0123456789abcdef";
+      sqlite
+        .prepare("UPDATE connectors SET cursor = ? WHERE id = ?")
+        .run(JSON.stringify(cursor), conn.id);
+
+      dav.puts.length = 0;
+      await runNow(s, conn.id, "manual");
+      expect(dav.puts).toHaveLength(0);
+      contactService.updateContact(s, leo!.id, { role: "Chef" });
+      await runNow(s, conn.id, "manual");
+      expect(dav.puts).toHaveLength(1);
+    });
+
+    it("unlinks a card deleted on the server when the push of that run failed", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      const book = dav.books["/dav/ab/a/"]!;
+      book.set("/dav/ab/a/one.vcf", {
+        etag: '"o1"',
+        vcard: miniVcard("Card One"),
+      });
+      book.set("/dav/ab/a/two.vcf", {
+        etag: '"t1"',
+        vcard: miniVcard("Card Two"),
+      });
+      const conn = await connect(s, dav.url);
+      await runNow(s, conn.id, "manual");
+
+      book.delete("/dav/ab/a/two.vcf");
+      dav.tombstones.add("/dav/ab/a/two.vcf");
+      dav.flags.tombstonesOnce = true;
+      contactService.updateContact(s, named(s, "Card One")[0]!.id, {
+        company: "Edited",
+      });
+      dav.flags.put401 = true;
+      expect((await runNow(s, conn.id, "manual")).status).toBe("error");
+      dav.flags.put401 = false;
+      await runNow(s, conn.id, "manual");
+      expect(linkIds(conn.id)).toEqual(["/dav/ab/a/one.vcf"]);
+    });
+
+    it("syncs a book whose listing is larger than 5 MB", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/one.vcf", {
+        etag: '"o1"',
+        vcard: miniVcard("Card One"),
+      });
+      dav.flags.padListing = true;
+      const conn = await connect(s, dav.url, { syncDirection: "pull_only" });
+      // A full listing, then a sync-collection report.
+      for (let run = 0; run < 2; run++) {
+        expect((await runNow(s, conn.id, "manual")).status).toBe("ok");
+      }
+      expect(named(s, "Card One")).toHaveLength(1);
     });
   });
 });
