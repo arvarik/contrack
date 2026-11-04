@@ -64,6 +64,9 @@ export function normalizeEmailAddress(
   return email.trim().toLowerCase();
 }
 
+/** Brackets, quotes, list punctuation and spaces around an address. */
+const STRAY = /[<>"',;\s]/;
+
 /**
  * The mailbox an address reaches, so that two spellings of one mailbox are one
  * person: lower case, without stray brackets, quotes or list punctuation,
@@ -74,10 +77,14 @@ export function normalizeEmailAddress(
 export function canonicalEmailAddress(
   email: string | null | undefined,
 ): string {
-  const address = normalizeEmailAddress(email).replace(
-    /^[<"'\s]+|[>"',;\s]+$/g,
-    "",
-  );
+  // Two loops, not a regex: `[...]+$` retries a long run of tabs from each of
+  // its positions, which is quadratic on a hostile header.
+  const raw = normalizeEmailAddress(email);
+  let start = 0;
+  let end = raw.length;
+  while (start < end && STRAY.test(raw[start]!)) start++;
+  while (end > start && STRAY.test(raw[end - 1]!)) end--;
+  const address = raw.slice(start, end);
   const at = address.lastIndexOf("@");
   if (at <= 0) return address;
   let local = address.slice(0, at);
