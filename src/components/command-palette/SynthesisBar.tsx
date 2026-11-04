@@ -96,6 +96,9 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
 
     // zod loads with the first brief, beside the request.
     const schemas = import("../../api/streamSchemas");
+    // The try awaits it. This stops an unhandled rejection when the request
+    // fails before that and the download fails too.
+    schemas.catch(() => {});
     try {
       const payload = {
         query,

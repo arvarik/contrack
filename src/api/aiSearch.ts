@@ -110,31 +110,35 @@ export const useAISearchStream = (
   useEffect(() => {
     if (!batchId) return;
     // The stream opens once the schema is here, so each event is checked as
-    // it lands. The poll covers the wait.
+    // it lands. The poll covers the wait, and a failed download, which opens
+    // no stream.
     let source: EventSource | undefined;
     let stopped = false;
-    void batchSchema().then((schema) => {
-      if (stopped) return;
-      const stream = new EventSource(
-        `${API_BASE}/ai-search/stream?batchId=${encodeURIComponent(batchId)}`,
-      );
-      source = stream;
-      stream.onmessage = (event) => {
-        const parsed = schema.safeParse(safeJson(event.data));
-        if (!parsed.success || parsed.data.id !== batchId) {
+    void batchSchema()
+      .catch(() => null)
+      .then((schema) => {
+        if (!schema) return;
+        if (stopped) return;
+        const stream = new EventSource(
+          `${API_BASE}/ai-search/stream?batchId=${encodeURIComponent(batchId)}`,
+        );
+        source = stream;
+        stream.onmessage = (event) => {
+          const parsed = schema.safeParse(safeJson(event.data));
+          if (!parsed.success || parsed.data.id !== batchId) {
+            stream.close();
+            return;
+          }
+          queryClient.setQueryData(["ai-search-status", batchId], parsed.data);
+          if (parsed.data.status !== "processing") stream.close();
+        };
+        stream.onerror = () => {
           stream.close();
-          return;
-        }
-        queryClient.setQueryData(["ai-search-status", batchId], parsed.data);
-        if (parsed.data.status !== "processing") stream.close();
-      };
-      stream.onerror = () => {
-        stream.close();
-        void queryClient.invalidateQueries({
-          queryKey: ["ai-search-status", batchId],
-        });
-      };
-    });
+          void queryClient.invalidateQueries({
+            queryKey: ["ai-search-status", batchId],
+          });
+        };
+      });
     return () => {
       stopped = true;
       source?.close();

@@ -77,6 +77,9 @@ export const useSemanticSearch = () => {
       let complete = false;
       // zod loads with the first question, beside the request.
       const schemas = import("./streamSchemas");
+      // The try awaits it. This stops an unhandled rejection when the request
+      // fails before that and the download fails too.
+      schemas.catch(() => {});
       try {
         const response = await apiFetch("/search/semantic", {
           method: "POST",
