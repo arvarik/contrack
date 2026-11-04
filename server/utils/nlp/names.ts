@@ -1,5 +1,6 @@
 // Name Tokenization & Similarity
 
+import { trimChars } from "../helpers.ts";
 import { jaroWinkler, damerauLevenshtein } from "./distances.ts";
 import { areNicknameEquivalent } from "./nicknames.ts";
 import { doubleMetaphone } from "./phonetics.ts";
@@ -63,7 +64,7 @@ export function tokenizeName(name: string): string[] {
     .replace(/[''`]/g, "'")
     .replace(/[^\w\s'-]/g, " ")
     .split(/\s+/)
-    .map((t) => t.replace(/^[.\\-]+|[.\\-]+$/g, ""))
+    .map((t) => trimChars(t, /[.\\-]/))
     .filter(
       (t) =>
         t.length > 0 && !TITLE_SUFFIXES.has(t) && !TITLE_SUFFIXES.has(t + "."),

@@ -14,6 +14,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Running from source needs Node.js 26.13.0 or later. Until the image library
   ships the libheif security fixes, the server does not read HEIF or AVIF
   images, so an account photo or a remote logo or photo in AVIF is refused.
+- A name or a mail sender's name with a long run of dashes or apostrophes no
+  longer stalls the server. One of 40,000 dashes took 0.6 seconds.
 
 ### Added
 

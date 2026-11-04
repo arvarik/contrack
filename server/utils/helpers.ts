@@ -14,10 +14,25 @@ export function contactSlug(name: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    // The line above leaves no two dashes in a row, so one dash is the run.
+    .replace(/^-|-$/g, "")
     .slice(0, 32)
-    .replace(/-+$/g, "");
+    .replace(/-$/, "");
   return slug || "contact";
+}
+
+/**
+ * `text` without the leading and trailing characters that `strip` matches.
+ * Linear, where a `[...]+$` regex retries a long run from each of its
+ * positions (quadratic, a ReDoS on a hostile name or header). `strip` tests
+ * one character and has no `g` flag.
+ */
+export function trimChars(text: string, strip: RegExp): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && strip.test(text[start]!)) start++;
+  while (end > start && strip.test(text[end - 1]!)) end--;
+  return text.slice(start, end);
 }
 
 /**

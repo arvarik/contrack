@@ -10,6 +10,7 @@
  */
 
 import type { Participant } from "../../../shared/connectors.ts";
+import { trimChars } from "../../utils/helpers.ts";
 
 export interface NormalizedEmail {
   externalId: string;
@@ -77,14 +78,7 @@ const STRAY = /[<>"',;\s]/;
 export function canonicalEmailAddress(
   email: string | null | undefined,
 ): string {
-  // Two loops, not a regex: `[...]+$` retries a long run of tabs from each of
-  // its positions, which is quadratic on a hostile header.
-  const raw = normalizeEmailAddress(email);
-  let start = 0;
-  let end = raw.length;
-  while (start < end && STRAY.test(raw[start]!)) start++;
-  while (end > start && STRAY.test(raw[end - 1]!)) end--;
-  const address = raw.slice(start, end);
+  const address = trimChars(normalizeEmailAddress(email), STRAY);
   const at = address.lastIndexOf("@");
   if (at <= 0) return address;
   let local = address.slice(0, at);
