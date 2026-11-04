@@ -600,11 +600,14 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               // Without `q` the list is the whole mailbox, newest first, and
               // the last mail on a page dates it: a page newer than the window
               // is passed over, and the page that reaches past its start is
-              // the last. The loop below drops the mail outside it.
+              // the last. The loop below drops the mail outside it. A backfill
+              // bound is the second after the oldest mail already taken, so a
+              // page that ends in that second was taken too: counting it
+              // filled the cap with known mail, and every other run was lost.
               const last = await internalDateMs(ids[ids.length - 1]);
               if (
                 dateWindow.before !== undefined &&
-                last >= dateWindow.before * 1000
+                last >= (dateWindow.before - 1) * 1000
               ) {
                 ids = [];
               } else if (last < dateWindow.since * 1000) {

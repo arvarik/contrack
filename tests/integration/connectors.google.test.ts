@@ -1019,14 +1019,16 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       ]);
       expect(first.cursor.gmailHistoryId).toBe("H-now");
 
-      // A backfill passes over a page newer than its bound.
+      // A backfill after a run that took m1 and m2 starts from the second
+      // after m2. It passes over the page that ends with m2: counting that
+      // page again filled the cap with mail already taken.
       list.mockClear();
       const backfill = await run(
         { syncEmail: true },
         {
           gmailBackfill: {
             since: 1769904000,
-            before: Math.floor(dates.m2 / 1000),
+            before: Math.floor(dates.m2 / 1000) + 1,
             historyId: "H0",
           },
         },
