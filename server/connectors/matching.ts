@@ -1,8 +1,9 @@
 /**
  * Participant matching for connectors. Per run, two queries build in-memory
- * maps from normalized email and phone to contact id. It applies the
- * self-address exclusion, gives the interaction to the primary contact (the
- * first match that is not the owner), and records other matches as mentions.
+ * maps from mailbox (see canonicalEmailAddress) and normalized phone to
+ * contact id. It applies the self-address exclusion, gives the interaction to
+ * the primary contact (the first match that is not the owner), and records
+ * other matches as mentions.
  *
  * @module server/connectors/matching
  */
@@ -41,27 +42,20 @@ export interface ContactMatcher {
  * Creates a ContactMatcher seeded from database rows owned by `scope`.
  */
 export function buildContactMatcher(scope: Scope): ContactMatcher {
-  const emailMap = new Map<string, string>();
-  const phoneMap = new Map<string, string>();
+  const matcher = createMatcherFromMaps(new Map(), new Map());
 
-  // Load all emails for this owner
   const emailRows = sqlite
     .prepare(
-      `SELECT ce.contactId, LOWER(ce.email) AS email
+      `SELECT ce.contactId, ce.email
        FROM contact_emails ce
        JOIN contacts c ON c.id = ce.contactId
        WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND ce.email IS NOT NULL`,
     )
     .all(scope.ownerId) as Array<{ contactId: string; email: string }>;
-
   for (const row of emailRows) {
-    const trimmed = row.email.trim();
-    if (trimmed && !emailMap.has(trimmed)) {
-      emailMap.set(trimmed, row.contactId);
-    }
+    matcher.registerContact(row.contactId, [row.email]);
   }
 
-  // Load all phones for this owner
   const phoneRows = sqlite
     .prepare(
       `SELECT cp.contactId, cp.phone
@@ -70,19 +64,17 @@ export function buildContactMatcher(scope: Scope): ContactMatcher {
        WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND cp.phone IS NOT NULL`,
     )
     .all(scope.ownerId) as Array<{ contactId: string; phone: string }>;
-
   for (const row of phoneRows) {
-    const normalized = normalizePhone(row.phone);
-    if (normalized && !phoneMap.has(normalized)) {
-      phoneMap.set(normalized, row.contactId);
-    }
+    matcher.registerContact(row.contactId, [], [row.phone]);
   }
 
-  return createMatcherFromMaps(emailMap, phoneMap);
+  return matcher;
 }
 
 /**
- * Creates a ContactMatcher from existing maps (useful for unit tests with mocked data).
+ * Creates a ContactMatcher from existing maps (useful for unit tests with
+ * mocked data). The email map is keyed by mailbox (`canonicalEmailAddress`),
+ * so "ana.lee+news@gmail.com" finds the contact with "analee@gmail.com".
  */
 export function createMatcherFromMaps(
   emailMap: Map<string, string>,
@@ -90,8 +82,7 @@ export function createMatcherFromMaps(
 ): ContactMatcher {
   function resolveContactId(participant: Participant): string | null {
     if (participant.email) {
-      const lower = participant.email.trim().toLowerCase();
-      const id = emailMap.get(lower);
+      const id = emailMap.get(canonicalEmailAddress(participant.email));
       if (id) return id;
     }
     if (participant.phone) {
@@ -169,9 +160,9 @@ export function createMatcherFromMaps(
       phones: string[] = [],
     ): void {
       for (const email of emails) {
-        const lower = email.trim().toLowerCase();
-        if (lower && !emailMap.has(lower)) {
-          emailMap.set(lower, contactId);
+        const mailbox = canonicalEmailAddress(email);
+        if (mailbox && !emailMap.has(mailbox)) {
+          emailMap.set(mailbox, contactId);
         }
       }
       for (const phone of phones) {
