@@ -13,9 +13,9 @@
 
 import {
   google,
-  type gmail_v1,
-  type people_v1,
-  type calendar_v3,
+  type CalendarEventsQuery,
+  type GmailMessagePart,
+  type PeopleConnectionsQuery,
 } from "../googleApis.ts";
 import { z } from "zod";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
@@ -171,7 +171,7 @@ export function createOAuth2Client(secret: GoogleSecret) {
  * a research page is, so a style sheet or a script is not taken for text.
  */
 export function extractGmailBody(
-  payload?: gmail_v1.Schema$MessagePart,
+  payload?: GmailMessagePart,
 ): string | undefined {
   if (!payload) return undefined;
   const decode = (data: string) =>
@@ -233,8 +233,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
     try {
       // Test credentials by fetching user info
-      const oauth2 = google.oauth2({ version: "v2", auth });
-      const res = await oauth2.userinfo.get({}, callOptions());
+      const res = await google.oauth2(auth).userinfo.get(callOptions());
       const email = res.data.email || secret.email || "user";
       return {
         ok: true as const,
@@ -288,14 +287,14 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
     // 1. Contacts (People API)
     if (config.syncContacts !== false) {
-      const people = google.people({ version: "v1", auth });
+      const people = google.people(auth);
       let pageToken: string | undefined;
       let nextSyncToken: string | undefined;
 
       try {
         do {
           signal.throwIfAborted();
-          const params: people_v1.Params$Resource$People$Connections$List = {
+          const params: PeopleConnectionsQuery = {
             resourceName: "people/me",
             personFields:
               "names,emailAddresses,phoneNumbers,organizations,photos",
@@ -422,7 +421,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     // 2. Email (Gmail API)
     let gmailBackfill = cursor.gmailBackfill;
     if (config.syncEmail !== false) {
-      const gmail = google.gmail({ version: "v1", auth });
+      const gmail = google.gmail(auth);
       const maxMessages = config.maxMessagesPerRun ?? 5000;
 
       /** The mailbox's history id now, or undefined when the call fails. */
@@ -694,14 +693,14 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
     // 3. Calendar (Google Calendar API)
     if (config.syncCalendar !== false) {
-      const calendar = google.calendar({ version: "v3", auth });
+      const calendar = google.calendar(auth);
       let pageToken: string | undefined;
       let nextSyncToken: string | undefined;
 
       try {
         do {
           signal.throwIfAborted();
-          const params: calendar_v3.Params$Resource$Events$List = {
+          const params: CalendarEventsQuery = {
             calendarId: "primary",
             singleEvents: true,
             maxResults: 250,

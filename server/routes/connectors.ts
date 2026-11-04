@@ -312,13 +312,11 @@ connectorsRouter.get(
       return backToConnectors(res, "failed");
     }
 
-    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     let userEmail: string | undefined;
     try {
-      const userInfoRes = await oauth2.userinfo.get(
-        {},
-        { timeout: GOOGLE_CALL_TIMEOUT_MS },
-      );
+      const userInfoRes = await google
+        .oauth2(oauth2Client)
+        .userinfo.get({ timeout: GOOGLE_CALL_TIMEOUT_MS });
       userEmail = userInfoRes.data.email || undefined;
     } catch (userErr) {
       log.warn("Connectors", "Could not fetch user email in Google callback", {
