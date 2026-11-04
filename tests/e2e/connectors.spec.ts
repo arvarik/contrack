@@ -3,12 +3,16 @@
  * instance with CONNECTORS_ALLOW_PRIVATE_HOSTS, fed by an in-process server.
  *
  * Covers:
- * - The empty gallery, the Add connector sheet, and the Calendar, IMAP and
- *   CardDAV forms, each with an axe check
- * - A Calendar connector: test, save, sync ("1 meeting"), the "via Calendar"
- *   badge, Run history, and Remove with "delete what it imported"
+ * - The empty gallery, the Add connector sheet, and the Calendar, IMAP,
+ *   Google and CardDAV forms, each with an axe check
+ * - The Calendar form: the masked URL, a test with no URL and with a feed
+ *   that is not there, a missing name, and every option saved as chosen
+ * - A Calendar connector: edit, pause and resume, a cancelled Remove, sync
+ *   ("1 meeting"), a failed sync and Retry now, the "via Calendar" badge,
+ *   Run history, and Remove with "delete what it imported"
  * - A CardDAV connector: discover two address books, test each, pull a card,
- *   then push a local edit and a new contact with the card's own fields kept
+ *   push a local edit and a new contact with the card's own fields kept, and
+ *   a refused password that signs it out until Reconnect
  * - The Correspondents page, and the empty page on a phone
  *
  * @module tests/e2e/connectors.spec
@@ -41,8 +45,11 @@ const addressBook = (href: string, name: string, write: boolean) =>
 
 test.describe("Settings — Connectors & Calendar", () => {
   let fixtureServer: http.Server;
-  let icsUrl: string;
-  let carddavUrl: string;
+  let base: string;
+  /** The feed answers 404 while this is false. */
+  let feedUp = true;
+  /** The password the CardDAV server takes. */
+  let davPassword = "app-pass-e2e";
   const carddavCards = new Map([
     [
       `${BOOK}babbage.vcf`,
@@ -93,20 +100,20 @@ ATTENDEE;CN=Ada Lovelace:mailto:ada@example.com
 END:VEVENT
 END:VCALENDAR`;
 
-    const expectedAuth = `Basic ${Buffer.from("alice@example.com:app-pass-e2e").toString("base64")}`;
-
     fixtureServer = http.createServer(async (req, res) => {
       const { pathname } = new URL(req.url ?? "/", "http://127.0.0.1");
       const method = req.method ?? "GET";
 
-      if (pathname === "/feed.ics") {
-        res.writeHead(200, { "Content-Type": "text/calendar" });
-        res.end(fixture);
+      if (pathname.endsWith(".ics")) {
+        const up = pathname === "/feed.ics" && feedUp;
+        res.writeHead(up ? 200 : 404, { "Content-Type": "text/calendar" });
+        res.end(up ? fixture : "Not found");
         return;
       }
 
       // CardDAV endpoints require Basic Auth
-      if (req.headers.authorization !== expectedAuth) {
+      const auth = Buffer.from(`alice@example.com:${davPassword}`);
+      if (req.headers.authorization !== `Basic ${auth.toString("base64")}`) {
         res.writeHead(401, { "WWW-Authenticate": 'Basic realm="CardDAV"' });
         res.end("Unauthorized");
         return;
@@ -218,8 +225,7 @@ END:VCALENDAR`;
       fixtureServer.listen(0, "127.0.0.1", resolve),
     );
     const addr = fixtureServer.address() as AddressInfo;
-    icsUrl = `http://127.0.0.1:${addr.port}/feed.ics`;
-    carddavUrl = `http://127.0.0.1:${addr.port}/dav/`;
+    base = `http://127.0.0.1:${addr.port}`;
   });
 
   test.afterAll(async () => {
@@ -254,82 +260,160 @@ END:VCALENDAR`;
 
       const context = await browser.newContext({ baseURL: local.baseURL });
       const page = await context.newPage();
+      const cardOf = (name: string) =>
+        page.locator(".card").filter({ hasText: name });
+      const menu = async (name: string, item: string | RegExp) => {
+        await cardOf(name)
+          .getByRole("button", { name: `Actions for ${name}` })
+          .click();
+        await page.getByRole("menuitem", { name: item }).click();
+      };
+      const savedConnectors = async () =>
+        (
+          await local.api<{
+            connectors: Array<{
+              name: string;
+              intervalMinutes: number;
+              config: Record<string, unknown>;
+            }>;
+          }>("GET", "/connectors")
+        ).connectors;
 
       // 1. Navigate to Settings → Connectors
       await page.goto("/settings/connectors");
       await expect(
         page.getByRole("heading", { name: NAMES.connectors.title, level: 1 }),
       ).toBeVisible();
-
-      // Verify empty gallery
       await expectPageAccessible(page, testInfo, "connectors-empty");
 
-      // 2. Choose Calendar from empty state gallery
-      const connectBtn = page.getByRole("button", { name: "Connect" }).first();
-      await expect(connectBtn).toBeVisible();
-      await connectBtn.click();
-
-      // 3. Calendar form opens
+      // 2. The Calendar form, from the empty state gallery
+      await page.getByRole("button", { name: "Connect" }).first().click();
       const formDialog = page.getByRole("dialog", {
         name: /connect calendar/i,
       });
       await expect(formDialog).toBeVisible();
-
-      const urlInput = formDialog.locator("#connector-ics-url");
-      await urlInput.fill(icsUrl);
-
-      // Test connection
+      const formError = formDialog.getByRole("alert");
+      const testStatus = formDialog.getByRole("status");
       const testBtn = formDialog.getByRole("button", {
         name: /test connection/i,
       });
-      await testBtn.click();
-      await expect(formDialog.getByRole("status")).toContainText(
-        /connected successfully/i,
-      );
-
-      await expectPageAccessible(page, testInfo, "calendar-form");
-
-      // Save connector
       const saveBtn = formDialog.getByRole("button", {
         name: "Connect",
         exact: true,
       });
+
+      // The private URL is masked until shown.
+      const urlInput = formDialog.getByLabel("Private ICS calendar URL");
+      await expect(urlInput).toHaveAttribute("type", "password");
+      await formDialog.getByRole("button", { name: "Show URL" }).click();
+      await expect(urlInput).toHaveAttribute("type", "text");
+
+      // A test needs a URL, and a feed that is not there is not saved.
+      await testBtn.click();
+      await expect(formError).toHaveText(
+        "Enter an ICS calendar URL before testing",
+      );
+      await urlInput.fill(`${base}/missing.ics`);
+      await testBtn.click();
+      await expect(testStatus).toContainText("HTTP 404");
       await saveBtn.click();
+      await expect(formError).toContainText("HTTP 404");
 
-      // Form closes and card appears
+      // A connector needs a name.
+      const nameInput = formDialog.getByLabel("Connector name");
+      await nameInput.fill(" ");
+      await saveBtn.click();
+      await expect(formError).toHaveText("Enter a name for this connector");
+      await nameInput.fill("Personal Calendar");
+
+      const icsUrl = `${base}/feed.ics`;
+      await urlInput.fill(icsUrl);
+      await testBtn.click();
+      await expect(testStatus).toContainText(/connected successfully/i);
+      await expectPageAccessible(page, testInfo, "calendar-form");
+
+      // Every option is saved as chosen.
+      await formDialog.getByRole("radio", { name: "Hourly" }).click();
+      await formDialog.getByRole("radio", { name: "1 year" }).click();
+      await formDialog.getByLabel("Skip events with more than").fill("50");
+      await formDialog.getByLabel("Suggest a new person after").fill("7");
+      await formDialog
+        .getByLabel("Also treat these addresses as mine")
+        .fill("Me@Work.example; me@home.example");
+      await formDialog
+        .getByRole("switch", { name: "Include event descriptions" })
+        .click();
+      await saveBtn.click();
       await expect(formDialog).toBeHidden();
-      const card = page
-        .locator(".card")
-        .filter({ hasText: "Personal Calendar" });
-      await expect(card).toBeVisible();
+      const card = cardOf("Personal Calendar");
       await expect(card.getByText("Active")).toBeVisible();
+      expect(await savedConnectors()).toMatchObject([
+        {
+          intervalMinutes: 60,
+          config: {
+            url: icsUrl,
+            lookbackDays: 365,
+            maxAttendees: 50,
+            ghostThreshold: 7,
+            includeDescription: true,
+            aliases: ["me@work.example", "me@home.example"],
+          },
+        },
+      ]);
 
-      // 4. Test AddConnectorSheet gallery when connectors already exist
+      // Edit opens the saved values, and saves a change.
+      await menu("Personal Calendar", "Edit");
+      const editDialog = page.getByRole("dialog", {
+        name: "Edit Personal Calendar",
+      });
+      await expect(
+        editDialog.getByLabel("Private ICS calendar URL"),
+      ).toHaveValue(icsUrl);
+      await editDialog.getByRole("radio", { name: "30 min" }).click();
+      await editDialog.getByRole("button", { name: "Save changes" }).click();
+      await expect(editDialog).toBeHidden();
+      expect(await savedConnectors()).toMatchObject([
+        { intervalMinutes: 30, config: { maxAttendees: 50 } },
+      ]);
+
+      // Pause and resume, and a Remove that is cancelled keeps it.
+      await menu("Personal Calendar", "Pause");
+      await expect(card.getByText("Sync paused")).toBeVisible();
+      await expect(card.getByText("Paused", { exact: true })).toBeVisible();
+      await menu("Personal Calendar", "Resume");
+      await expect(card.getByText("Active")).toBeVisible();
+      await menu("Personal Calendar", "Remove");
+      const cancelRemove = page.getByRole("dialog", {
+        name: /remove personal calendar/i,
+      });
+      await cancelRemove.getByRole("button", { name: "Cancel" }).click();
+      await expect(cancelRemove).toBeHidden();
+      await expect(card).toBeVisible();
+
+      // 3. The Add connector sheet, when connectors already exist
       const addBtn = page.getByRole("button", { name: /add connector/i });
-      await expect(addBtn).toBeVisible();
       await addBtn.click();
-
       const galleryDialog = page.getByRole("dialog", {
         name: /add a connector/i,
       });
       await expect(galleryDialog).toBeVisible();
       await expectPageAccessible(page, testInfo, "add-connector-gallery");
 
-      // Select IMAP from gallery to test IMAP form opening
-      await galleryDialog
-        .getByRole("button", { name: /Mailbox \(IMAP\)/i })
-        .click();
-      const imapDialog = page.getByRole("dialog", {
-        name: /Connect Mailbox \(IMAP\)/i,
-      });
-      await expect(imapDialog).toBeVisible();
-      await expectPageAccessible(page, testInfo, "imap-form");
-      await imapDialog.getByRole("button", { name: "Cancel" }).click();
-      await expect(imapDialog).toBeHidden();
+      // The IMAP and Google forms open from it, and it opens again.
+      for (const [tile, form, snapshot] of [
+        [/Mailbox \(IMAP\)/i, /Connect Mailbox \(IMAP\)/i, "imap-form"],
+        [/Google Workspace/i, /Connect Google Workspace/i, "google-form"],
+      ] as const) {
+        await galleryDialog.getByRole("button", { name: tile }).click();
+        const dialog = page.getByRole("dialog", { name: form });
+        await expect(dialog).toBeVisible();
+        await expectPageAccessible(page, testInfo, snapshot);
+        await page.keyboard.press("Escape");
+        await expect(dialog).toBeHidden();
+        await addBtn.click();
+      }
 
-      // 4a. Connect CardDAV from the gallery, and test it on both address books
-      await addBtn.click();
-      await expect(galleryDialog).toBeVisible();
+      // 4. Connect CardDAV from the gallery, and test it on both address books
       await galleryDialog.getByRole("button", { name: /CardDAV/i }).click();
       const carddavDialog = page.getByRole("dialog", {
         name: /Connect CardDAV/i,
@@ -337,7 +421,7 @@ END:VCALENDAR`;
       await expect(carddavDialog).toBeVisible();
       await expectPageAccessible(page, testInfo, "carddav-form");
 
-      await carddavDialog.locator("#carddav-url").fill(carddavUrl);
+      await carddavDialog.locator("#carddav-url").fill(`${base}/dav/`);
       await carddavDialog
         .locator("#carddav-username")
         .fill("alice@example.com");
@@ -350,10 +434,11 @@ END:VCALENDAR`;
       await expect(carddavDialog.getByRole("status")).toContainText(
         "Connected to Personal Address Book",
       );
+      // The first book is chosen.
       const bookSelect = carddavDialog.getByLabel("Address book", {
         exact: true,
       });
-      await expect(bookSelect).toBeVisible();
+      await expect(bookSelect).toHaveValue(`${base}${BOOK}`);
 
       // Selecting another book and clicking Test connection again waits for the
       // second test response and keeps all discovered address books visible
@@ -372,19 +457,20 @@ END:VCALENDAR`;
         .getByRole("button", { name: "Connect", exact: true })
         .click();
       await expect(carddavDialog).toBeHidden();
-      const contactsCard = page
-        .locator(".card")
-        .filter({ hasText: "Personal Contacts" });
-      await expect(contactsCard).toBeVisible();
+      const contactsCard = cardOf("Personal Contacts");
       await expect(contactsCard.getByText("Active")).toBeVisible();
+      expect(
+        (await savedConnectors()).find((c) => c.name === "Personal Contacts")
+          ?.config,
+      ).toMatchObject({
+        url: `${base}/dav/`,
+        username: "alice@example.com",
+        syncDirection: "two_way",
+        addressBookUrl: `${base}${BOOK}`,
+      });
 
       // Sync now pulls Charles Babbage from the CardDAV server
-      const syncContacts = async () => {
-        await contactsCard
-          .getByRole("button", { name: /actions for personal contacts/i })
-          .click();
-        await page.getByRole("menuitem", { name: /sync now/i }).click();
-      };
+      const syncContacts = () => menu("Personal Contacts", /sync now/i);
       await syncContacts();
       await expect(contactsCard.getByText(/1 contact/i)).toBeVisible();
 
@@ -437,6 +523,19 @@ END:VCALENDAR`;
       expect(hopperPut!.body).toContain("FN:Grace Hopper");
       expect(hopperPut!.body).toContain("grace@navy.mil");
 
+      // A refused password signs the connector out, and Reconnect opens it.
+      davPassword = "changed-on-the-server";
+      await syncContacts();
+      await expect(contactsCard.getByText("Signed out")).toBeVisible();
+      await expect(contactsCard.getByText("Sign-in expired")).toBeVisible();
+      await contactsCard.getByRole("button", { name: "Reconnect" }).click();
+      const reconnect = page.getByRole("dialog", {
+        name: "Edit Personal Contacts",
+      });
+      await expect(reconnect).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(reconnect).toBeHidden();
+
       // 4b. Test Correspondents page
       await page.goto("/settings/connectors/people");
       await expect(
@@ -445,17 +544,19 @@ END:VCALENDAR`;
       await expectPageAccessible(page, testInfo, "correspondents-empty");
       await page.goto("/settings/connectors");
 
-      // 5. Trigger Sync now
-      const actionMenuTrigger = card.getByRole("button", {
-        name: /actions for personal calendar/i,
-      });
-      await actionMenuTrigger.click();
-
-      const syncMenuItem = page.getByRole("menuitem", { name: /sync now/i });
-      await syncMenuItem.click();
-
-      // Verify stats line on card
+      // 5. Sync now logs the meeting.
+      await menu("Personal Calendar", /sync now/i);
       await expect(card.getByText(/1 meeting/i)).toBeVisible();
+
+      // A feed that stops answering fails the sync, and Retry now runs it.
+      feedUp = false;
+      await menu("Personal Calendar", /sync now/i);
+      await expect(card.getByText("Last sync failed")).toBeVisible();
+      await expect(card.getByText(/HTTP 404/)).toBeVisible();
+      feedUp = true;
+      await card.getByRole("button", { name: "Retry now" }).click();
+      await expect(card.getByText("Active")).toBeVisible();
+      await expect(card.getByText("Last sync failed")).toBeHidden();
 
       // 6. View Contact Timeline for Ada Lovelace
       await page.goto(`/contact/${contact.id}`);
@@ -467,43 +568,24 @@ END:VCALENDAR`;
 
       // 7. Back to Connectors view and inspect Run History Drawer
       await page.goto("/settings/connectors");
-      const cardAgain = page
-        .locator(".card")
-        .filter({ hasText: "Personal Calendar" });
-      await cardAgain
-        .getByRole("button", { name: /actions for personal calendar/i })
-        .click();
-
-      await page.getByRole("menuitem", { name: /run history/i }).click();
+      await menu("Personal Calendar", /run history/i);
       const drawer = page.getByRole("dialog", { name: /run history/i });
       await expect(drawer).toBeVisible();
       await expectPageAccessible(page, testInfo, "run-history-drawer");
-
-      // Close drawer
       await drawer.getByRole("button", { name: "Close", exact: true }).click();
       await expect(drawer).toBeHidden();
 
       // 8. Delete connector with deleteImported=true
-      await cardAgain
-        .getByRole("button", { name: /actions for personal calendar/i })
-        .click();
-      await page.getByRole("menuitem", { name: /remove/i }).click();
-
+      await menu("Personal Calendar", /remove/i);
       const confirmDialog = page.getByRole("dialog", {
         name: /remove personal calendar/i,
       });
-      await expect(confirmDialog).toBeVisible();
-
-      const deleteImportedCheckbox = confirmDialog.getByRole("checkbox");
-      await deleteImportedCheckbox.check();
-
+      await confirmDialog.getByRole("checkbox").check();
       await confirmDialog
         .getByRole("button", { name: /remove connector/i })
         .click();
       await expect(confirmDialog).toBeHidden();
-      await expect(
-        page.locator(".card").filter({ hasText: "Personal Calendar" }),
-      ).toBeHidden();
+      await expect(card).toBeHidden();
 
       // 9. Navigate back to Ada Lovelace: imported meeting is gone
       await page.goto(`/contact/${contact.id}`);

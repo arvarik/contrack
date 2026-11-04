@@ -1,37 +1,22 @@
 /**
- * tests/integration/connectors.carddav.test.ts — End-to-end integration of the CardDAV adapter.
- *
- * Covers:
- * - RFC 6764 /.well-known/carddav redirect -> principal -> home-set -> address book discovery
- * - Root 401 fallback to /.well-known/carddav (iCloud style)
- * - Multiple address books: ranking writable Personal book over read-only "Recently contacted" and persisting addressBookUrl
- * - Plain http:// rejection when CONNECTORS_ALLOW_PRIVATE_HOSTS is not enabled
- * - Cross-host / sibling-host redirect stripping of Authorization header
- * - Two-way sync: skipping pre-existing & archived contacts on initial run, pulling remote cards, pushing new & edited contacts
- * - Preserving server-side properties (PHOTO, NICKNAME, structured ADR, Apple X-ABLabel, X-* fields, UID) via GET + patchVCard
- * - Gating push on vcardContentHash so trigger-bumped updatedAt (lastContactedAt, aiBriefing) produces zero PUTs
- * - SQLite space-formatted updatedAt timestamps vs ISO timestamps
- * - 403 and 412 on PUT: keeping connector active and preserving pull cursor
- * - Weak ETag handling (never sending W/"..." in If-Match)
- * - 507 Insufficient Storage pagination on sync-collection REPORT
- * - 200 non-XML response on sync-collection falling back to PROPFIND
- * - Multiget > 5 MB response cap halving batch and retrying
- * - Absolute and URL-encoded hrefs, missing getetag, and 404 entries in multiget
- * - Merged contacts (canonicalId) updating the existing card instead of creating a duplicate
+ * tests/integration/connectors.carddav.test.ts — the CardDAV connector against
+ * a stub server, for the answers Radicale in the connector lab
+ * (tests/lab/carddav.lab.test.ts, the main proof) cannot give: a root 401, a
+ * read-only book, another host, sabre's 403 and 507, weak and missing ETags, a
+ * report that is not XML, answers over 5 MB, refused and failed writes, and
+ * the cursor rules for what a failed run leaves to the next.
  */
 
 import crypto from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { sqlite } from "../../server/db.ts";
 import {
   canFollowDiscoveryRedirect,
-  formatEtagHeader,
-  isWeakEtag,
+  MAX_DAV_BYTES,
   normalizeHrefPath,
   parseTimestampMs,
-  vcardContentHash,
 } from "../../server/connectors/adapters/carddav.ts";
 import {
   createConnector,
@@ -41,2016 +26,572 @@ import {
   updateConnector,
 } from "../../server/connectors/service.ts";
 import { contactService } from "../../server/services/contactService.ts";
-import { mergeContacts } from "../../server/services/dedupe/merging.ts";
 import { safeFetch } from "../../server/utils/urlSafety.ts";
 import { scopeForOwnerId, type Scope } from "../../server/tenancy/scope.ts";
 
-interface RemoteCard {
-  etag: string | null;
+process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";
+
+const USER = "alice@example.com";
+const PASS = "app-secret-1234";
+const AUTH = `Basic ${Buffer.from(`${USER}:${PASS}`).toString("base64")}`;
+const A = "/dav/ab/a/";
+const B = "/dav/ab/b/";
+
+const vcf = (fn: string, ...lines: string[]) =>
+  ["BEGIN:VCARD", "VERSION:3.0", `FN:${fn}`, ...lines, "END:VCARD"].join(
+    "\r\n",
+  );
+/** One multistatus response: its properties, or a 404 when null. */
+const entry = (href: string, prop: string | null, extra = "") =>
+  `<d:response><d:href>${href}</d:href>${
+    prop === null
+      ? "<d:status>HTTP/1.1 404 Not Found</d:status>"
+      : `<d:propstat><d:prop>${prop}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>`
+  }${extra}</d:response>`;
+const BOOK_TYPE =
+  "<d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>";
+
+interface Card {
+  etag: string;
   vcard: string;
-  deleted?: boolean;
+  /** The change that wrote it, for sync-collection. */
+  rev: number;
 }
 
-describe("CardDAV Adapter Integration", () => {
-  let server: http.Server;
-  let baseUrl: string;
-
-  const ownerId = "carddav-test-owner-" + crypto.randomUUID().slice(0, 8);
-  const scope: Scope = scopeForOwnerId(ownerId);
-
-  const VALID_USER = "alice@example.com";
-  const VALID_PASS = "app-secret-1234";
-  const EXPECTED_AUTH = `Basic ${Buffer.from(`${VALID_USER}:${VALID_PASS}`).toString("base64")}`;
-
-  const cards = new Map<string, RemoteCard>();
-  const putRequests: Array<{
-    path: string;
-    ifMatch: string | undefined;
-    ifNoneMatch: string | undefined;
-    body: string;
-  }> = [];
-  let getRequestsCount = 0;
-  let discoveryCount = 0;
-  let reverseBookOrder = false;
-  let rootReturns401 = false;
-  let syncReportReturnsHtml200 = false;
-  let syncReportTruncate507Once = false;
-  let multigetOversizedWhenBatchGt1 = false;
-  let multigetExtra404Href: string | null = null;
-  let currentSyncToken = "http://sabredav.org/ns/sync/1";
-  let forceStatusOnPutHref: { href: string; status: number } | null = null;
-
-  function resetServerCards() {
-    cards.clear();
-    putRequests.length = 0;
-    getRequestsCount = 0;
-    discoveryCount = 0;
-    reverseBookOrder = false;
-    rootReturns401 = false;
-    syncReportReturnsHtml200 = false;
-    syncReportTruncate507Once = false;
-    multigetOversizedWhenBatchGt1 = false;
-    multigetExtra404Href = null;
-    currentSyncToken = "http://sabredav.org/ns/sync/1";
-    forceStatusOnPutHref = null;
-
-    cards.set("/dav/addressbooks/alice/default/ada.vcf", {
-      etag: '"etag-ada-v1"',
-      vcard: [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        "UID:remote-uid-ada-111",
-        "N:Lovelace;Ada;Augusta;Countess;",
-        "FN:Ada Lovelace",
-        "NICKNAME:Enchantress of Numbers",
-        "ORG:Analytical Engine Ltd;Research",
-        "TITLE:Chief Mathematician",
-        "EMAIL;TYPE=INTERNET,WORK,PREF:ada@analytical.org",
-        "item1.TEL;type=pref:+44 20 7946 0921",
-        "item1.X-ABLabel:_$!<Mobile>!$_",
-        "item2.ADR;type=HOME;type=pref:;;10 St James Square;London;Greater London;SW1Y 4LE;UK",
-        "item2.X-ABLabel:_$!<Home>!$_",
-        "CATEGORIES:pioneer,math",
-        "NOTE:Met at the London symposium",
-        "X-ABUID:550E8400-E29B-41D4-A716-446655440000:ABPerson",
-        "X-CUSTOM-PROP:preserve-me",
-        "END:VCARD",
-      ].join("\r\n"),
-    });
-
-    // Apple Contacts group vCard — must be skipped
-    cards.set("/dav/addressbooks/alice/default/group-vip.vcf", {
-      etag: '"etag-group-1"',
-      vcard: [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        "UID:remote-uid-group-999",
-        "FN:VIP Group",
-        "X-ADDRESSBOOKSERVER-KIND:group",
-        "END:VCARD",
-      ].join("\r\n"),
-    });
+const servers: http.Server[] = [];
+afterAll(() => {
+  for (const server of servers) {
+    server.closeAllConnections();
+    server.close();
   }
+});
 
-  beforeAll(async () => {
-    process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";
-    resetServerCards();
+/**
+ * A CardDAV server with books a and b, the flags that make it answer as
+ * another server would, and the PUTs it received.
+ */
+async function startDav() {
+  const books: Record<string, Map<string, Card>> = {
+    [A]: new Map(),
+    [B]: new Map(),
+  };
+  /** A card's book: b by its path, or a, which also has cards elsewhere. */
+  const bookOf = (href: string) => books[href.startsWith(B) ? B : A]!;
+  const tombstones = new Map<string, number>();
+  const prefix = `tok-${crypto.randomUUID().slice(0, 6)}-`;
+  let rev = 0;
+  const flags = {
+    rootDenied: false,
+    homeSet: "",
+    rejectSync: false,
+    htmlSync: false,
+    page507: false,
+    truncate507: false,
+    emptyListing: false,
+    padListing: false,
+    omitEtags: false,
+    bigMultiget: false,
+    multigetFails: false,
+    getStatus: 0,
+    editOnGet: false,
+    putStatus: 0,
+    dropPut: "",
+  };
+  const dav = {
+    url: "",
+    flags,
+    books,
+    puts: [] as Array<{ body: string; ifMatch?: string; ifNoneMatch?: string }>,
+    discoveries: 0,
+    /** Writes a card, as an edit on the server does. */
+    set(href: string, vcard: string, etag = `"e${rev + 1}"`) {
+      bookOf(href).set(href, { etag, vcard, rev: ++rev });
+    },
+    /** Deletes a card, which the next sync-collection reports. */
+    drop(href: string) {
+      bookOf(href).delete(href);
+      tombstones.set(href, ++rev);
+    },
+  };
 
-    server = http.createServer(async (req, res) => {
-      const reqUrl = new URL(req.url ?? "/", "http://127.0.0.1");
-      const pathname = normalizeHrefPath(reqUrl.pathname, "http://127.0.0.1");
-      const method = req.method ?? "GET";
-
-      // Redirect test endpoints
-      if (pathname === "/redirect-same-origin") {
-        res.writeHead(302, { Location: `${baseUrl}/echo-auth` });
-        res.end();
-        return;
-      }
-      if (pathname === "/redirect-other-port") {
-        res.writeHead(302, {
-          Location: `http://localhost:${(server.address() as AddressInfo).port}/echo-auth`,
-        });
-        res.end();
-        return;
-      }
-      if (pathname === "/echo-auth") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ auth: req.headers.authorization ?? null }));
-        return;
-      }
-
-      // Root / can simulate iCloud returning 401 on root before /.well-known/carddav
-      if (pathname === "/" && rootReturns401) {
-        res.writeHead(401, { "WWW-Authenticate": 'Basic realm="Root"' });
-        res.end("Unauthorized root");
-        return;
-      }
-
-      // Check Basic Auth on all DAV endpoints
-      if (req.headers.authorization !== EXPECTED_AUTH) {
-        res.writeHead(401, {
-          "WWW-Authenticate": 'Basic realm="CardDAV"',
-          "Content-Type": "text/plain",
-        });
-        res.end("Unauthorized");
-        return;
-      }
-
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      }
-      const body = Buffer.concat(chunks).toString("utf8");
-
-      // 1. /.well-known/carddav redirects to /dav/
-      if (pathname === "/.well-known/carddav") {
-        res.writeHead(301, { Location: `${baseUrl}/dav/` });
-        res.end();
-        return;
-      }
-
-      // 2. Root / returns plain HTML (simulating Nextcloud web root where DAV lives at /.well-known/carddav)
-      if (pathname === "/") {
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end("<html><body>Server root</body></html>");
-        return;
-      }
-
-      // 3. /dav/ returns current-user-principal
-      if (pathname === "/dav/" && method === "PROPFIND") {
-        discoveryCount++;
-        res.writeHead(207, {
-          "Content-Type": "application/xml; charset=utf-8",
-        });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:current-user-principal>
-          <d:href>/dav/principals/alice/</d:href>
-        </d:current-user-principal>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>`);
-        return;
-      }
-
-      // 4. /dav/principals/alice/ returns addressbook-home-set
-      if (pathname === "/dav/principals/alice/" && method === "PROPFIND") {
-        res.writeHead(207, {
-          "Content-Type": "application/xml; charset=utf-8",
-        });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/principals/alice/</d:href>
-    <d:propstat>
-      <d:prop>
-        <c:addressbook-home-set>
-          <d:href>/dav/addressbooks/alice/</d:href>
-        </c:addressbook-home-set>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>`);
-        return;
-      }
-
-      // 5. /dav/addressbooks/alice/ Depth: 1 lists multiple address books:
-      // a read-only "Recently contacted" book first, and writable "Personal Address Book" second
-      if (pathname === "/dav/addressbooks/alice/" && method === "PROPFIND") {
-        const readOnlyBook = `  <d:response>
-    <d:href>/dav/addressbooks/alice/z-server-generated--system/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>
-        <d:displayname>Recently contacted</d:displayname>
-        <d:current-user-privilege-set>
-          <d:privilege><d:read/></d:privilege>
-        </d:current-user-privilege-set>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`;
-        const personalBook = `  <d:response>
-    <d:href>/dav/addressbooks/alice/default/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>
-        <d:displayname>Personal Address Book</d:displayname>
-        <d:current-user-privilege-set>
-          <d:privilege><d:read/></d:privilege>
-          <d:privilege><d:write/></d:privilege>
-        </d:current-user-privilege-set>
-        <d:sync-token>${currentSyncToken}</d:sync-token>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`;
-
-        const booksXml = reverseBookOrder
-          ? `${personalBook}\n${readOnlyBook}`
-          : `${readOnlyBook}\n${personalBook}`;
-
-        res.writeHead(207, {
-          "Content-Type": "application/xml; charset=utf-8",
-        });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/addressbooks/alice/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype><d:collection/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-${booksXml}
-</d:multistatus>`);
-        return;
-      }
-
-      // 6. Address book PROPFIND (Depth 0 or Depth 1)
-      if (
-        pathname === "/dav/addressbooks/alice/default/" &&
-        method === "PROPFIND"
-      ) {
-        const depth = req.headers.depth ?? "0";
-        const itemResponses: string[] = [];
-        if (depth === "1") {
-          for (const [href, card] of cards.entries()) {
-            if (card.deleted) continue;
-            const etagProp = card.etag
-              ? `\n        <d:getetag>${card.etag}</d:getetag>`
-              : "";
-            // Return one href as a full URL to verify absolute/encoded href normalization
-            const wireHref = href.includes("Descartes")
-              ? `${baseUrl}${href.replaceAll("%C3%A9", "%c3%a9")}`
-              : href;
-            itemResponses.push(`  <d:response>
-    <d:href>${wireHref}</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype/>${etagProp}
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`);
-          }
-          if (multigetExtra404Href) {
-            itemResponses.push(`  <d:response>
-    <d:href>${multigetExtra404Href}</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype/>
-        <d:getetag>"etag-vanished"</d:getetag>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`);
-          }
-        }
-
-        res.writeHead(207, {
-          "Content-Type": "application/xml; charset=utf-8",
-        });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/addressbooks/alice/default/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>
-        <d:displayname>Personal Address Book</d:displayname>
-        <d:sync-token>${currentSyncToken}</d:sync-token>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-${itemResponses.join("\n")}
-</d:multistatus>`);
-        return;
-      }
-
-      // 7. Address book REPORT (sync-collection or addressbook-multiget)
-      if (
-        pathname === "/dav/addressbooks/alice/default/" &&
-        method === "REPORT"
-      ) {
-        if (body.includes("sync-collection")) {
-          if (syncReportReturnsHtml200) {
-            res.writeHead(200, { "Content-Type": "text/html" });
-            res.end("<html><body>Not a WebDAV report</body></html>");
-            return;
-          }
-
-          const allEntries = Array.from(cards.entries());
-          if (syncReportTruncate507Once && allEntries.length >= 2) {
-            syncReportTruncate507Once = false;
-            const [firstHref, firstCard] = allEntries[0]!;
-            res.writeHead(207, {
-              "Content-Type": "application/xml; charset=utf-8",
-            });
-            res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>${firstHref}</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:getetag>${firstCard.etag ?? ""}</d:getetag>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/dav/addressbooks/alice/default/</d:href>
-    <d:status>HTTP/1.1 507 Insufficient Storage</d:status>
-  </d:response>
-  <d:sync-token>${currentSyncToken}-page1</d:sync-token>
-</d:multistatus>`);
-            return;
-          }
-
-          const itemResponses: string[] = [];
-          for (const [href, card] of allEntries) {
-            if (card.deleted) {
-              itemResponses.push(`  <d:response>
-    <d:href>${href}</d:href>
-    <d:status>HTTP/1.1 404 Not Found</d:status>
-  </d:response>`);
-            } else {
-              const etagProp = card.etag
-                ? `<d:getetag>${card.etag}</d:getetag>`
-                : "";
-              itemResponses.push(`  <d:response>
-    <d:href>${href}</d:href>
-    <d:propstat>
-      <d:prop>
-        ${etagProp}
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`);
-            }
-          }
-
-          res.writeHead(207, {
-            "Content-Type": "application/xml; charset=utf-8",
-          });
-          res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-${itemResponses.join("\n")}
-  <d:sync-token>${currentSyncToken}</d:sync-token>
-</d:multistatus>`);
-          return;
-        }
-
-        if (body.includes("addressbook-multiget")) {
-          const hrefMatches = Array.from(
-            body.matchAll(/<[^:>]*:?href>([^<]+)<\/[^:>]*:?href>/g),
-          ).map((m) => normalizeHrefPath(m[1]!, baseUrl));
-
-          if (multigetOversizedWhenBatchGt1 && hrefMatches.length > 1) {
-            res.writeHead(207, {
-              "Content-Type": "application/xml; charset=utf-8",
-            });
-            // Stream > 5 MB to trigger the cap error on multi-item batch
-            const hugeChunk = "X".repeat(1024 * 1024);
-            for (let c = 0; c < 6; c++) {
-              res.write(hugeChunk);
-            }
-            res.end();
-            return;
-          }
-
-          const itemResponses: string[] = [];
-          for (const href of hrefMatches) {
-            if (href === multigetExtra404Href) {
-              itemResponses.push(`  <d:response>
-    <d:href>${href}</d:href>
-    <d:status>HTTP/1.1 404 Not Found</d:status>
-  </d:response>`);
-              continue;
-            }
-            const card = cards.get(href);
-            if (!card || card.deleted) continue;
-            const escapedVcard = card.vcard
-              .replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;");
-            const etagProp = card.etag
-              ? `\n        <d:getetag>${card.etag}</d:getetag>`
-              : "";
-            itemResponses.push(`  <d:response>
-    <d:href>${href}</d:href>
-    <d:propstat>
-      <d:prop>${etagProp}
-        <c:address-data>${escapedVcard}</c:address-data>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`);
-          }
-
-          res.writeHead(207, {
-            "Content-Type": "application/xml; charset=utf-8",
-          });
-          res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-${itemResponses.join("\n")}
-</d:multistatus>`);
-          return;
-        }
-      }
-
-      // 8. GET individual vCard
-      if (
-        pathname.startsWith("/dav/addressbooks/alice/default/") &&
-        method === "GET"
-      ) {
-        getRequestsCount++;
-        const card = cards.get(pathname);
-        if (!card || card.deleted) {
-          res.writeHead(404);
-          res.end("Not Found");
-          return;
-        }
-        const headers: Record<string, string> = {
-          "Content-Type": "text/vcard; charset=utf-8",
-        };
-        if (card.etag) headers.ETag = card.etag;
-        res.writeHead(200, headers);
-        res.end(card.vcard);
-        return;
-      }
-
-      // 9. PUT individual vCard
-      if (
-        pathname.startsWith("/dav/addressbooks/alice/default/") &&
-        method === "PUT"
-      ) {
-        const ifMatch = req.headers["if-match"] as string | undefined;
-        const ifNoneMatch = req.headers["if-none-match"] as string | undefined;
-        putRequests.push({ path: pathname, ifMatch, ifNoneMatch, body });
-
-        if (forceStatusOnPutHref && forceStatusOnPutHref.href === pathname) {
-          res.writeHead(forceStatusOnPutHref.status, {
-            "Content-Type": "text/plain",
-          });
-          res.end(`Forced HTTP ${forceStatusOnPutHref.status}`);
-          return;
-        }
-
-        const existing = cards.get(pathname);
-        // RFC 9110 strong comparison: weak ETags never match If-Match
-        if (ifMatch) {
-          if (
-            ifMatch.startsWith("W/") ||
-            existing?.etag?.startsWith("W/") ||
-            (existing?.etag && existing.etag !== ifMatch)
-          ) {
-            res.writeHead(412, { "Content-Type": "text/plain" });
-            res.end("Precondition Failed");
-            return;
-          }
-        }
-
-        const newEtag = `"etag-${crypto.randomUUID().slice(0, 8)}"`;
-        cards.set(pathname, { etag: newEtag, vcard: body });
-        res.writeHead(existing ? 204 : 201, { ETag: newEtag });
-        res.end();
-        return;
-      }
-
-      res.writeHead(404);
-      res.end("Not Found");
-    });
-
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
+  const server = http.createServer(async (req, res) => {
+    const p = normalizeHrefPath(
+      new URL(req.url!, "http://h").pathname,
+      "http://h",
     );
-    const addr = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${addr.port}`;
-
-    // Seed owner
-    sqlite
-      .prepare(
-        `INSERT OR IGNORE INTO users (id, email, username, passwordHash)
-         VALUES (?, ?, ?, 'hash')`,
-      )
-      .run(ownerId, VALID_USER, ownerId);
-  });
-
-  afterAll(async () => {
-    delete process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS;
-    if (server) {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+    const send = (status: number, body = "", headers = {}) => {
+      res.writeHead(status, headers);
+      res.end(body);
+    };
+    const xml = (...entries: string[]) =>
+      send(
+        207,
+        `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">${entries.join("")}</d:multistatus>`,
+        { "Content-Type": "application/xml" },
+      );
+    if (p === "/hop") {
+      const other = dav.url.replace("127.0.0.1", "localhost");
+      return send(302, "", { Location: `${other}/echo` });
     }
+    if (p === "/echo") return send(200, req.headers.authorization ?? "none");
+    if (req.headers.authorization !== AUTH) return send(401);
+    if (p === "/" && flags.rootDenied) return send(401);
+    let body = "";
+    for await (const chunk of req) body += chunk;
 
-    sqlite
-      .prepare("DELETE FROM connector_links WHERE ownerId = ?")
-      .run(ownerId);
-    sqlite.prepare("DELETE FROM connector_runs WHERE ownerId = ?").run(ownerId);
-    sqlite.prepare("DELETE FROM connectors WHERE ownerId = ?").run(ownerId);
-    sqlite
-      .prepare("DELETE FROM dedupe_merge_log WHERE ownerId = ?")
-      .run(ownerId);
-    sqlite
-      .prepare(
-        "DELETE FROM contact_emails WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)",
-      )
-      .run(ownerId);
-    sqlite
-      .prepare(
-        "DELETE FROM contact_phones WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)",
-      )
-      .run(ownerId);
-    sqlite
-      .prepare(
-        "DELETE FROM contact_addresses WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)",
-      )
-      .run(ownerId);
-    sqlite
-      .prepare(
-        "DELETE FROM contact_tags WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)",
-      )
-      .run(ownerId);
-    sqlite
-      .prepare(
-        "DELETE FROM contact_sources WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)",
-      )
-      .run(ownerId);
-    sqlite.prepare("DELETE FROM contacts WHERE ownerId = ?").run(ownerId);
-    sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(ownerId);
-    sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(ownerId);
-    sqlite.prepare("DELETE FROM users WHERE id = ?").run(ownerId);
+    const token = (at = rev) => `<d:sync-token>${prefix}${at}</d:sync-token>`;
+    const etag = (c: Card) =>
+      flags.omitEtags ? "" : `<d:getetag>${c.etag}</d:getetag>`;
+    // A listing past the 5 MB that a single card may take.
+    const pad = flags.padListing
+      ? entry(
+          `${p}pad/`,
+          `<d:resourcetype><d:collection/></d:resourcetype><d:displayname>${"x".repeat(6 << 20)}</d:displayname>`,
+        )
+      : "";
+    const book = books[p];
+    const card = bookOf(p).get(p);
+
+    if (p === "/" || p === "/.well-known/carddav") {
+      return send(301, "", { Location: "/dav/" });
+    }
+    if (p === "/dav/") {
+      dav.discoveries++;
+      return xml(
+        entry(
+          p,
+          "<d:current-user-principal><d:href>/dav/p/</d:href></d:current-user-principal>",
+        ),
+      );
+    }
+    if (p === "/dav/p/") {
+      return xml(
+        entry(
+          p,
+          `<c:addressbook-home-set><d:href>${flags.homeSet || "/dav/ab/"}</d:href></c:addressbook-home-set>`,
+        ),
+      );
+    }
+    if (p === "/dav/ab/") {
+      // Book b is read-only and listed first, as Nextcloud lists its
+      // "Recently contacted".
+      return xml(
+        ...[B, A].map((b) =>
+          entry(
+            b,
+            `${BOOK_TYPE}<d:displayname>Book ${b === A ? "a" : "b"}</d:displayname><d:current-user-privilege-set><d:privilege><d:read/></d:privilege>${b === A ? "<d:privilege><d:write/></d:privilege>" : ""}</d:current-user-privilege-set>`,
+          ),
+        ),
+      );
+    }
+    if (book && req.method === "PROPFIND") {
+      const listing = req.headers.depth === "1";
+      const truncated =
+        listing && flags.truncate507
+          ? "<d:propstat><d:prop/><d:status>HTTP/1.1 507 Insufficient Storage</d:status></d:propstat>"
+          : "";
+      const items =
+        listing && !flags.emptyListing
+          ? [...book].map(([h, c]) => entry(h, `<d:resourcetype/>${etag(c)}`))
+          : [];
+      return xml(entry(p, `${BOOK_TYPE}${token()}`, truncated), ...items, pad);
+    }
+    if (book && body.includes("sync-collection")) {
+      if (flags.htmlSync) return send(200, "<html>Not WebDAV</html>");
+      const since = /<d:sync-token>([^<]*)</.exec(body)?.[1] ?? "";
+      if (flags.rejectSync || !since.startsWith(prefix)) {
+        return send(
+          403,
+          '<d:error xmlns:d="DAV:"><d:valid-sync-token/></d:error>',
+        );
+      }
+      const after = Number(since.slice(prefix.length));
+      // Absolute hrefs, as some servers write them.
+      const changed = [...book]
+        .filter(([, c]) => c.rev > after)
+        .sort(([, x], [, y]) => x.rev - y.rev)
+        .map(([h, c]) => ({
+          xml: entry(`${dav.url}${h}`, etag(c)),
+          rev: c.rev,
+        }));
+      if (flags.page507 && changed.length > 1) {
+        // sabre's paging: one change, a 507, and the token to go on from.
+        return xml(
+          changed[0]!.xml,
+          `<d:response><d:href>${p}</d:href><d:status>HTTP/1.1 507 Insufficient Storage</d:status></d:response>`,
+          token(changed[0]!.rev),
+        );
+      }
+      const gone = [...tombstones]
+        .filter(([h, at]) => at > after && h.startsWith(p))
+        .map(([h]) => entry(h, null));
+      return xml(...changed.map((c) => c.xml), ...gone, pad, token());
+    }
+    if (book) {
+      // addressbook-multiget
+      if (flags.multigetFails) return send(500);
+      const hrefs = [...body.matchAll(/<d:href>([^<]+)</g)].map(([, h]) =>
+        normalizeHrefPath(h!, "http://h"),
+      );
+      if (flags.bigMultiget && hrefs.length > 1) {
+        return send(207, "x".repeat(6 << 20));
+      }
+      return xml(
+        ...hrefs.map((h) => {
+          const c = bookOf(h).get(h);
+          const data = c?.vcard
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          return entry(
+            h,
+            c ? `${etag(c)}<c:address-data>${data}</c:address-data>` : null,
+          );
+        }),
+      );
+    }
+    if (req.method === "GET") {
+      if (flags.getStatus || !card) return send(flags.getStatus || 404);
+      if (flags.editOnGet) {
+        // Somebody edits the card on the server after the pull.
+        flags.editOnGet = false;
+        const note = card.vcard.replace(
+          "END:VCARD",
+          "NOTE:Server note\r\nEND:VCARD",
+        );
+        dav.set(p, note, '"edited"');
+      }
+      const now = bookOf(p).get(p)!;
+      return send(200, now.vcard, flags.omitEtags ? {} : { ETag: now.etag });
+    }
+    if (req.method === "PUT") {
+      if (flags.dropPut && p.includes(flags.dropPut)) {
+        return void req.socket.destroy();
+      }
+      const ifMatch = req.headers["if-match"];
+      const ifNoneMatch = req.headers["if-none-match"];
+      dav.puts.push({ body, ifMatch, ifNoneMatch });
+      if (flags.putStatus) return send(flags.putStatus);
+      if (
+        (ifMatch && ifMatch !== card?.etag) ||
+        (ifNoneMatch === "*" && card)
+      ) {
+        return send(412);
+      }
+      dav.set(p, body);
+      const headers = flags.omitEtags ? {} : { ETag: bookOf(p).get(p)!.etag };
+      return send(card ? 204 : 201, "", headers);
+    }
+    send(404);
+  });
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  dav.url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  return dav;
+}
+
+function newOwner(): Scope {
+  const id = crypto.randomUUID();
+  sqlite
+    .prepare(
+      `INSERT INTO users (id, email, username, passwordHash) VALUES (?, ?, ?, 'h')`,
+    )
+    .run(id, `${id}@x.test`, id);
+  return scopeForOwnerId(id);
+}
+
+/** A CardDAV connector on `url`, two-way on book a unless `config` says otherwise. */
+const connect = (s: Scope, url: string, config: Record<string, unknown> = {}) =>
+  createConnector(s, {
+    kind: "carddav",
+    name: "dav",
+    config: { url, username: USER, addressBookUrl: `${url}${A}`, ...config },
+    secret: { password: PASS },
   });
 
-  it("discovers the writable address book (even when root returns 401 or a read-only book is listed first) and rejects plain http:// when private hosts are off", async () => {
-    rootReturns401 = true;
-    const okResult = await testConnector(
-      scope,
-      "carddav",
-      {
-        url: baseUrl,
-        username: VALID_USER,
-        syncDirection: "two_way",
-      },
-      { password: VALID_PASS },
+/** The cards a connector links to. */
+const linkIds = (connectorId: string) =>
+  sqlite
+    .prepare(
+      "SELECT externalId FROM connector_links WHERE connectorId = ? ORDER BY externalId",
+    )
+    .pluck()
+    .all(connectorId) as string[];
+
+/** The ids of the owner's contacts with this name. */
+const named = (s: Scope, name: string) =>
+  sqlite
+    .prepare("SELECT id FROM contacts WHERE ownerId = ? AND name = ?")
+    .pluck()
+    .all(s.ownerId, name) as string[];
+
+describe("CardDAV against a stub server", () => {
+  it("finds the writable book past a root 401, a read-only book and a home on another host, and keeps the password safe", async () => {
+    const s = newOwner();
+    const dav = await startDav();
+    const test = (config: Record<string, unknown>, password = PASS) =>
+      testConnector(s, "carddav", { username: USER, ...config }, { password });
+
+    // iCloud answers 401 at the root, and Nextcloud lists a read-only book.
+    dav.flags.rootDenied = true;
+    const found = await test({ url: dav.url });
+    expect(found.detail).toBe("Connected to Book a");
+    expect(found.addressBooks?.map((b) => b.readOnly)).toEqual([false, true]);
+    // A chosen book still lists them all.
+    const chosen = await test({
+      url: dav.url,
+      addressBookUrl: found.addressBooks![1]!.url,
+    });
+    expect([chosen.detail, chosen.addressBooks?.length]).toEqual([
+      "Connected to Book b",
+      2,
+    ]);
+    await expect(test({ url: dav.url }, "wrong")).rejects.toThrow(
+      /rejected the credentials/,
     );
-    rootReturns401 = false;
 
-    expect(okResult.ok).toBe(true);
-    expect(okResult.detail).toBe("Connected to Personal Address Book");
-    expect(okResult.addressBooks).toHaveLength(2);
-    expect(okResult.addressBooks?.[0]?.displayName).toBe(
-      "Personal Address Book",
+    // iCloud keeps the books on another host than the one signed in to.
+    const partition = dav.url.replace("127.0.0.1", "localhost");
+    dav.flags.homeSet = `${partition}/dav/ab/`;
+    dav.set(`${A}one.vcf`, vcf("Card One"));
+    const icloud = await connect(s, dav.url, {
+      addressBookUrl: `${partition}${A}`,
+    });
+    expect((await runNow(s, icloud.id)).stats.contacts).toBe(1);
+
+    // Plain http goes only to a private host, and only when that is allowed.
+    await expect(test({ url: "http://192.0.2.10/dav/" })).rejects.toThrow(
+      /https:\/\//,
     );
-    expect(okResult.addressBooks?.[1]?.readOnly).toBe(true);
-
-    // Passing a selected addressBookUrl on a subsequent test preserves the full list of address books
-    const secondBookUrl = okResult.addressBooks?.[1]?.url;
-    const selectedResult = await testConnector(
-      scope,
-      "carddav",
-      {
-        url: baseUrl,
-        username: VALID_USER,
-        addressBookUrl: secondBookUrl,
-        syncDirection: "pull_only",
-      },
-      { password: VALID_PASS },
-    );
-    expect(selectedResult.ok).toBe(true);
-    expect(selectedResult.detail).toBe("Connected to Recently contacted");
-    expect(selectedResult.addressBooks).toHaveLength(2);
-
-    await expect(
-      testConnector(
-        scope,
-        "carddav",
-        {
-          url: baseUrl,
-          username: VALID_USER,
-          syncDirection: "two_way",
-        },
-        { password: "wrong-password" },
-      ),
-    ).rejects.toThrow(/rejected the credentials/i);
-
-    // Rejects plain http:// when CONNECTORS_ALLOW_PRIVATE_HOSTS is not enabled
     process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "false";
     try {
-      await expect(
-        testConnector(
-          scope,
-          "carddav",
-          {
-            url: "http://example.com/dav/",
-            username: VALID_USER,
-            syncDirection: "two_way",
-          },
-          { password: VALID_PASS },
-        ),
-      ).rejects.toThrow(/https:\/\//i);
+      await expect(test({ url: dav.url })).rejects.toThrow(/https:\/\//);
     } finally {
       process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";
     }
-    // With private hosts on, plain http:// still goes only to one.
-    await expect(
-      testConnector(
-        scope,
-        "carddav",
-        { url: "http://192.0.2.10/dav/", username: VALID_USER },
-        { password: VALID_PASS },
-      ),
-    ).rejects.toThrow(/https:\/\//i);
-  });
 
-  it("keeps Authorization on same-origin redirects and strips it on cross-host or sibling-host redirects", async () => {
-    const sameOrigin = await safeFetch(`${baseUrl}/redirect-same-origin`, {
-      headers: { Authorization: "Basic secret-token" },
+    // A redirect to another host does not carry the password, and discovery
+    // follows one only to the same host or a subdomain, over https.
+    const hop = await safeFetch(`${dav.url}/hop`, {
+      headers: { Authorization: AUTH },
       allowPrivate: true,
     });
-    expect(await sameOrigin.response.json()).toEqual({
-      auth: "Basic secret-token",
-    });
-
-    const crossHost = await safeFetch(`${baseUrl}/redirect-other-port`, {
-      headers: { Authorization: "Basic secret-token" },
-      allowPrivate: true,
-    });
-    expect(await crossHost.response.json()).toEqual({ auth: null });
-
+    expect(await hop.response.text()).toBe("none");
     expect(
-      canFollowDiscoveryRedirect(
-        "https://me.github.io",
-        "https://evil.github.io/dav",
-      ),
-    ).toBe(false);
-    expect(
-      canFollowDiscoveryRedirect("https://a.co.uk", "https://b.co.uk/dav"),
-    ).toBe(false);
-    expect(
-      canFollowDiscoveryRedirect(
-        "https://example.com",
-        "http://example.com/dav",
-      ),
-    ).toBe(false);
-    expect(
-      canFollowDiscoveryRedirect(
-        "https://example.com",
-        "https://dav.example.com/dav",
-      ),
-    ).toBe(true);
-  });
-
-  it("performs two-way sync, preserves server-side properties on update, skips trigger-only updatedAt bumps, and handles 403/412/merges/caps", async () => {
-    resetServerCards();
-
-    // 1. Pre-existing contact created BEFORE connecting the CardDAV server
-    const preExisting = contactService.createContact(scope, {
-      name: "Charles Babbage",
-      firstName: "Charles",
-      lastName: "Babbage",
-      emails: [
-        { email: "charles@analytical.org", label: "work", isPrimary: true },
-      ],
-    });
-    sqlite
-      .prepare(
-        "UPDATE contacts SET addedAt = '2026-01-01 00:00:00', updatedAt = '2026-01-01 00:00:00' WHERE id = ?",
-      )
-      .run(preExisting!.id);
-
-    // Connect CardDAV in two-way mode
-    const connector = await createConnector(scope, {
-      kind: "carddav",
-      name: "Nextcloud Contacts",
-      config: {
-        url: baseUrl,
-        username: VALID_USER,
-        syncDirection: "two_way",
-      },
-      secret: { password: VALID_PASS },
-    });
-
-    // 2. Contact created AFTER connecting -> should be pushed
-    const grace = contactService.createContact(scope, {
-      name: "Grace Hopper",
-      firstName: "Grace",
-      lastName: "Hopper",
-      company: "US Navy",
-      emails: [{ email: "grace@navy.mil", label: "work", isPrimary: true }],
-    });
-    expect(grace).toBeTruthy();
-
-    discoveryCount = 0;
-
-    // Run 1: Initial sync
-    // Pulls Ada Lovelace (1 contact), skips VIP Group, skips pre-existing Charles Babbage, and pushes Grace Hopper (1 pushed)
-    const run1 = await runNow(scope, connector.id, "manual");
-    expect(run1.status).toBe("ok");
-    expect(run1.stats.contacts).toBe(1);
-    expect(run1.stats.pushed).toBe(1);
-    expect(discoveryCount).toBe(1);
-
-    const adaRow = sqlite
-      .prepare(
-        "SELECT id, name, company, role, about FROM contacts WHERE ownerId = ? AND name = 'Ada Lovelace'",
-      )
-      .get(ownerId) as
-      | {
-          id: string;
-          name: string;
-          company: string;
-          role: string;
-          about: string;
-        }
-      | undefined;
-    expect(adaRow).toBeDefined();
-    expect(adaRow?.company).toBe("Analytical Engine Ltd");
-
-    // Only Grace Hopper was PUT (Charles Babbage was not uploaded)
-    expect(putRequests).toHaveLength(1);
-    expect(putRequests[0]!.path).toBe(
-      `/dav/addressbooks/alice/default/${encodeURIComponent(grace!.id)}.vcf`,
-    );
-    expect(putRequests[0]!.ifNoneMatch).toBe("*");
-
-    // Run 2: Flip book order on server + bump Ada's updatedAt via non-card columns (lastContactedAt, aiBriefing)
-    // Address book URL is persisted in cursor (0 rediscoveries), and vcardContentHash gate prevents spurious PUTs!
-    reverseBookOrder = true;
-    putRequests.length = 0;
-    sqlite
-      .prepare(
-        `UPDATE contacts
-         SET lastContactedAt = datetime('now'),
-             aiBriefing = 'Updated AI briefing',
-             updatedAt = datetime('now', '+1 hour')
-         WHERE id = ? AND ownerId = ?`,
-      )
-      .run(adaRow!.id, ownerId);
-
-    const run2 = await runNow(scope, connector.id, "manual");
-    expect(run2.status).toBe("ok");
-    expect(run2.stats.contacts).toBe(0);
-    expect(run2.stats.pushed).toBeUndefined();
-    expect(putRequests).toHaveLength(0);
-    expect(discoveryCount).toBe(1); // Did not re-run discovery
-
-    // Run 3: Edit Ada's role locally with SQLite space-formatted updatedAt ('YYYY-MM-DD HH:MM:SS')
-    // Must GET the remote card and preserve NICKNAME, structured ADR, Apple labels, X-* properties, and server UID!
-    contactService.updateContact(scope, adaRow!.id, {
-      role: "Lead Architect",
-    });
-    const spaceTimestamp = new Date(Date.now() + 6 * 3600 * 1000)
-      .toISOString()
-      .replace("T", " ")
-      .slice(0, 19);
-    sqlite
-      .prepare("UPDATE contacts SET updatedAt = ? WHERE id = ? AND ownerId = ?")
-      .run(spaceTimestamp, adaRow!.id, ownerId);
-
-    const beforeGets = getRequestsCount;
-    const run3 = await runNow(scope, connector.id, "manual");
-    expect(run3.status).toBe("ok");
-    expect(run3.stats.pushed).toBe(1);
-    expect(getRequestsCount).toBeGreaterThan(beforeGets);
-    expect(putRequests).toHaveLength(1);
-    expect(putRequests[0]!.path).toBe(
-      "/dav/addressbooks/alice/default/ada.vcf",
-    );
-    expect(putRequests[0]!.ifMatch).toBe('"etag-ada-v1"');
-    const unfoldedBody = putRequests[0]!.body.replace(/\r\n[ \t]/g, "");
-    expect(unfoldedBody).toContain("UID:remote-uid-ada-111");
-    expect(unfoldedBody).toContain("TITLE:Lead Architect");
-    expect(unfoldedBody).toContain("NICKNAME:Enchantress of Numbers");
-    expect(unfoldedBody).toContain("N:Lovelace;Ada;Augusta;Countess;");
-    expect(unfoldedBody).toContain("ORG:Analytical Engine Ltd;Research");
-    expect(unfoldedBody).toContain("item1.TEL;type=pref:+44 20 7946 0921");
-    expect(unfoldedBody).toContain("item1.X-ABLabel:_$!<Mobile>!$_");
-    expect(unfoldedBody).toContain(
-      "item2.ADR;type=HOME;type=pref:;;10 St James Square;London;Greater London;SW1Y 4LE;UK",
-    );
-    expect(unfoldedBody).toContain("item2.X-ABLabel:_$!<Home>!$_");
-    expect(unfoldedBody).toContain(
-      "X-ABUID:550E8400-E29B-41D4-A716-446655440000:ABPerson",
-    );
-    expect(unfoldedBody).toContain("X-CUSTOM-PROP:preserve-me");
-
-    // Run 4: 403 Forbidden on PUT does NOT brick connector (stays active, not needs_reauth) and saves pull cursor
-    putRequests.length = 0;
-    cards.set("/dav/addressbooks/alice/default/descartes.vcf", {
-      etag: null, // missing getetag
-      vcard: [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        "UID:remote-uid-descartes",
-        "N:Descartes;René;;;",
-        "FN:René Descartes",
-        "EMAIL:rene@philosophy.fr",
-        "END:VCARD",
-      ].join("\r\n"),
-    });
-    currentSyncToken = "http://sabredav.org/ns/sync/2";
-    forceStatusOnPutHref = {
-      href: "/dav/addressbooks/alice/default/ada.vcf",
-      status: 403,
-    };
-    contactService.updateContact(scope, adaRow!.id, {
-      role: "Refused Role Change",
-    });
-
-    const run4 = await runNow(scope, connector.id, "manual");
-    expect(run4.status).toBe("ok");
-    expect(run4.stats.contacts).toBe(1); // René Descartes pulled
-    expect(run4.stats.pushed).toBeUndefined(); // 403 skipped safely
-    expect(run4.stats.errors).toBe(1); // and reported
-    const connAfter403 = getConnector(scope, connector.id);
-    expect(connAfter403?.status).toBe("active");
-    forceStatusOnPutHref = null;
-
-    // Run 5: the refused edit waits for the next edit, made on a card whose
-    // ETag is weak now -> PUT omits If-Match so strong comparison does not 412
-    putRequests.length = 0;
-    const adaCard = cards.get("/dav/addressbooks/alice/default/ada.vcf")!;
-    cards.set("/dav/addressbooks/alice/default/ada.vcf", {
-      etag: 'W/"weak-etag-ada-v2"',
-      vcard: adaCard.vcard,
-    });
-    currentSyncToken = "http://sabredav.org/ns/sync/3";
-    expect((await runNow(scope, connector.id, "manual")).stats.errors).toBe(0);
-    expect(putRequests).toHaveLength(0);
-    contactService.updateContact(scope, adaRow!.id, {
-      role: "Weak ETag Architect",
-    });
-    const run5 = await runNow(scope, connector.id, "manual");
-    expect(run5.status).toBe("ok");
-    expect(run5.stats.pushed).toBe(1);
-    expect(putRequests).toHaveLength(1);
-    expect(putRequests[0]!.ifMatch).toBeUndefined();
-    expect(putRequests[0]!.body).toContain("TITLE:Weak ETag Architect");
-
-    // Run 6: Merge Ada (duplicate) into a canonical survivor contact -> link re-points to survivor,
-    // updating /dav/addressbooks/alice/default/ada.vcf instead of creating a duplicate card!
-    putRequests.length = 0;
-    const canonicalAda = contactService.createContact(scope, {
-      name: "Augusta Ada King",
-      firstName: "Augusta",
-      lastName: "King",
-      role: "Countess of Lovelace",
-      emails: [
-        { email: "augusta@analytical.org", label: "work", isPrimary: true },
-      ],
-    });
-    mergeContacts(scope, canonicalAda!.id, adaRow!.id, "test-rid");
-
-    const run6 = await runNow(scope, connector.id, "manual");
-    expect(run6.status).toBe("ok");
-    expect(run6.stats.pushed).toBe(1);
-    expect(putRequests).toHaveLength(1);
-    expect(putRequests[0]!.path).toBe(
-      "/dav/addressbooks/alice/default/ada.vcf",
-    );
-    expect(putRequests[0]!.body).toContain("FN:Augusta Ada King");
-    expect(putRequests[0]!.body).toContain("UID:remote-uid-ada-111");
-
-    // Run 7: 507 Insufficient Storage truncation in sync-collection REPORT + multiget > 5 MB batch halving
-    putRequests.length = 0;
-    cards.set("/dav/addressbooks/alice/default/Ren%C3%A9%20Descartes.vcf", {
-      etag: '"etag-rene-encoded"',
-      vcard: [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        "UID:remote-uid-rene-2",
-        "N:Descartes;René;;;",
-        "FN:René Descartes II",
-        "EMAIL:rene2@philosophy.fr",
-        "END:VCARD",
-      ].join("\r\n"),
-    });
-    currentSyncToken = "http://sabredav.org/ns/sync/4";
-    syncReportTruncate507Once = true;
-    multigetOversizedWhenBatchGt1 = true;
-
-    const run7 = await runNow(scope, connector.id, "manual");
-    expect(run7.status).toBe("ok");
-    expect(run7.stats.contacts).toBeGreaterThanOrEqual(1);
-    multigetOversizedWhenBatchGt1 = false;
-
-    // Run 8: 200 OK non-XML response to sync-collection falls back to PROPFIND + handles 404 entry in multiget
-    syncReportReturnsHtml200 = true;
-    multigetExtra404Href = "/dav/addressbooks/alice/default/vanished.vcf";
-    cards.set("/dav/addressbooks/alice/default/noether.vcf", {
-      etag: '"etag-noether-1"',
-      vcard: [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        "UID:remote-uid-noether",
-        "N:Noether;Emmy;;;",
-        "FN:Emmy Noether",
-        "EMAIL:emmy@gottingen.de",
-        "END:VCARD",
-      ].join("\r\n"),
-    });
-
-    const run8 = await runNow(scope, connector.id, "manual");
-    expect(run8.status).toBe("ok");
-    expect(run8.stats.contacts).toBeGreaterThanOrEqual(1);
-    syncReportReturnsHtml200 = false;
-    multigetExtra404Href = null;
-
-    // Run 9: Switch to pull_only mode -> no PUT requests sent
-    await updateConnector(scope, connector.id, {
-      config: {
-        url: baseUrl,
-        username: VALID_USER,
-        syncDirection: "pull_only",
-      },
-    });
-    contactService.createContact(scope, {
-      name: "Alan Turing",
-      emails: [{ email: "alan@bletchley.org", label: "work", isPrimary: true }],
-    });
-
-    putRequests.length = 0;
-    const run9 = await runNow(scope, connector.id, "manual");
-    expect(run9.status).toBe("ok");
-    expect(run9.stats.pushed).toBeUndefined();
-    expect(putRequests).toHaveLength(0);
-
-    // Run 10: Deleting a card on the CardDAV server unlinks the contact without moving it to Trash
-    const noetherBefore = sqlite
-      .prepare(
-        "SELECT id, deletedAt FROM contacts WHERE ownerId = ? AND name = 'Emmy Noether'",
-      )
-      .get(ownerId) as { id: string; deletedAt: string | null } | undefined;
-    expect(noetherBefore).toBeDefined();
-    expect(noetherBefore?.deletedAt).toBeNull();
-
-    cards.set("/dav/addressbooks/alice/default/noether.vcf", {
-      etag: '"etag-noether-deleted"',
-      vcard: "",
-      deleted: true,
-    });
-    currentSyncToken = "http://sabredav.org/ns/sync/5";
-
-    const run10 = await runNow(scope, connector.id, "manual");
-    expect(run10.status).toBe("ok");
-    const noetherAfter = sqlite
-      .prepare("SELECT deletedAt FROM contacts WHERE id = ? AND ownerId = ?")
-      .get(noetherBefore!.id, ownerId) as
-      { deletedAt: string | null } | undefined;
-    expect(noetherAfter?.deletedAt).toBeNull();
-    const noetherLinkAfter = sqlite
-      .prepare(
-        "SELECT 1 FROM connector_links WHERE connectorId = ? AND externalId = '/dav/addressbooks/alice/default/noether.vcf'",
-      )
-      .get(connector.id);
-    expect(noetherLinkAfter).toBeUndefined();
-    const noetherSourceAfter = sqlite
-      .prepare(
-        "SELECT 1 FROM contact_sources WHERE contactId = ? AND platform = 'carddav' AND externalId = '/dav/addressbooks/alice/default/noether.vcf'",
-      )
-      .get(noetherBefore!.id);
-    expect(noetherSourceAfter).toBeDefined();
-  });
-
-  it("correctly parses SQLite and ISO timestamps, weak ETags, and vCard content hashes", () => {
-    const isoMs = parseTimestampMs("2026-10-16T12:00:00.000Z");
-    const sqliteLaterMs = parseTimestampMs("2026-10-16 18:00:00");
-    expect(sqliteLaterMs).toBeGreaterThan(isoMs);
-
-    expect(isWeakEtag('W/"123"')).toBe(true);
-    expect(isWeakEtag('w/"123"')).toBe(true);
-    expect(isWeakEtag('"123"')).toBe(false);
-    expect(formatEtagHeader('W/"123"')).toBe("");
-    expect(formatEtagHeader('"123"')).toBe('"123"');
-
-    const h1 = vcardContentHash({
-      name: "Ada Lovelace",
-      updatedAt: "2026-10-16T12:00:00.000Z",
-    });
-    const h2 = vcardContentHash({
-      name: "Ada Lovelace",
-      updatedAt: "2026-10-16 18:00:00",
-    });
-    expect(h1).toBe(h2);
-  });
-
-  describe("CardDAV hardening edge cases", () => {
-    interface MiniCard {
-      etag: string;
-      vcard: string;
-    }
-    interface MiniDav {
-      url: string;
-      books: Record<string, Map<string, MiniCard>>;
-      tombstones: Set<string>;
-      flags: {
-        rejectSync: boolean;
-        emptyListing: boolean;
-        truncate507: boolean;
-        omitEtags: boolean;
-        getFails: boolean;
-        false404OnGet: boolean;
-        put401: boolean;
-        failPutPrefix: string | null;
-        homeSetOverride: string | null;
-        multigetFails: boolean;
-        putStatus: number | null;
-        editOnGet: boolean;
-        padListing: boolean;
-        /** A report names a deletion once, as the token then moves past it. */
-        tombstonesOnce: boolean;
-      };
-      puts: Array<{
-        path: string;
-        body: string;
-        ifMatch?: string;
-        ifNoneMatch?: string;
-      }>;
-      close: () => Promise<void>;
-    }
-
-    const xmlEsc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const multiStatusXml = (inner: string) =>
-      `<?xml version="1.0" encoding="utf-8"?>\n<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">\n${inner}\n</d:multistatus>`;
-    const miniVcard = (fn: string, extra: string[] = []) =>
       [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        `FN:${fn}`,
-        `N:${fn.split(" ")[1] ?? ""};${fn.split(" ")[0]};;;`,
-        ...extra,
-        "END:VCARD",
-      ].join("\r\n");
+        ["https://me.github.io", "https://evil.github.io/dav"],
+        ["https://a.co.uk", "https://b.co.uk/dav"],
+        ["https://example.com", "http://example.com/dav"],
+        ["https://example.com", "https://dav.example.com/dav"],
+      ].map(([from, to]) => canFollowDiscoveryRedirect(from!, to!)),
+    ).toEqual([false, false, false, true]);
+  });
 
-    const miniServers: MiniDav[] = [];
-    afterAll(async () => {
-      for (const s of miniServers) await s.close();
-    });
+  it("pulls through sabre's 403 and 507, a report that is not XML, answers over 5 MB, and cards it could not read", async () => {
+    const s = newOwner();
+    const dav = await startDav();
+    dav.set(`${A}one.vcf`, vcf("Card One"));
+    // Outside the book's path, as behind a proxy.
+    dav.set("/cards/two.vcf", vcf("Card Two"));
+    Object.assign(dav.flags, { padListing: true, bigMultiget: true });
+    const conn = await connect(s, dav.url, { syncDirection: "pull_only" });
+    const run = () => runNow(s, conn.id);
+    const errors = async () => (await run()).stats.errors ?? 0;
 
-    async function startMiniDav(): Promise<MiniDav> {
-      const prefix = `tok-${crypto.randomUUID().slice(0, 6)}-`;
-      let rev = 1;
-      const books: MiniDav["books"] = {
-        "/dav/ab/a/": new Map(),
-        "/dav/ab/b/": new Map(),
-      };
-      const tombstones = new Set<string>();
-      const flags: MiniDav["flags"] = {
-        rejectSync: false,
-        emptyListing: false,
-        truncate507: false,
-        omitEtags: false,
-        getFails: false,
-        false404OnGet: false,
-        put401: false,
-        failPutPrefix: null,
-        homeSetOverride: null,
-        multigetFails: false,
-        putStatus: null,
-        editOnGet: false,
-        padListing: false,
-        tombstonesOnce: false,
-      };
-      const puts: MiniDav["puts"] = [];
-      const bookOf = (p: string) =>
-        Object.keys(books).find(
-          (b) => (p.startsWith(b) && p !== b) || books[b]!.has(p),
-        );
+    // A listing over 5 MB, by PROPFIND and then by sync-collection, and a
+    // multiget over 5 MB, halved until each answer fits.
+    expect([await errors(), await errors()]).toEqual([0, 0]);
+    expect(linkIds(conn.id)).toEqual(["/cards/two.vcf", `${A}one.vcf`]);
 
-      const srv = http.createServer(async (req, res) => {
-        const u = new URL(req.url ?? "/", "http://127.0.0.1");
-        const p = normalizeHrefPath(u.pathname, "http://127.0.0.1");
-        const m = req.method ?? "GET";
-        if ((p === "/avatar.png" || p === "/avatar2.png") && m === "GET") {
-          const png = Buffer.from(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-            "base64",
-          );
-          res.writeHead(200, { "Content-Type": "image/png" });
-          res.end(png);
-          return;
-        }
-        if (req.headers.authorization !== EXPECTED_AUTH) {
-          res.writeHead(401);
-          res.end();
-          return;
-        }
-        const chunks: Buffer[] = [];
-        for await (const c of req) chunks.push(c as Buffer);
-        const body = Buffer.concat(chunks).toString("utf8");
-        const sendXml = (s: number, xml: string) => {
-          res.writeHead(s, { "Content-Type": "application/xml" });
-          res.end(xml);
-        };
-        if (p === "/" || p === "/.well-known/carddav") {
-          res.writeHead(301, { Location: "/dav/" });
-          res.end();
-          return;
-        }
-        if (p === "/dav/" && m === "PROPFIND") {
-          return sendXml(
-            207,
-            multiStatusXml(
-              `<d:response><d:href>/dav/</d:href><d:propstat><d:prop><d:current-user-principal><d:href>/dav/p/</d:href></d:current-user-principal></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
-            ),
-          );
-        }
-        if (p === "/dav/p/" && m === "PROPFIND") {
-          const homeHref = flags.homeSetOverride ?? "/dav/ab/";
-          return sendXml(
-            207,
-            multiStatusXml(
-              `<d:response><d:href>/dav/p/</d:href><d:propstat><d:prop><c:addressbook-home-set><d:href>${homeHref}</d:href></c:addressbook-home-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
-            ),
-          );
-        }
-        if (p === "/dav/ab/" && m === "PROPFIND") {
-          return sendXml(
-            207,
-            multiStatusXml(
-              Object.keys(books)
-                .map(
-                  (b) =>
-                    `<d:response><d:href>${b}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:addressbook/></d:resourcetype><d:displayname>Book ${b}</d:displayname><d:current-user-privilege-set><d:privilege><d:write/></d:privilege></d:current-user-privilege-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
-                )
-                .join("\n"),
-            ),
-          );
-        }
-        const book = books[p];
-        // A listing past the 5 MB that a single card may take.
-        const pad = flags.padListing
-          ? `<d:response><d:href>${p}pad/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype><d:displayname>${"x".repeat(6 * 1024 * 1024)}</d:displayname></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
-          : "";
-        if (book && m === "PROPFIND") {
-          const asksSyncToken = body.includes("sync-token");
-          const truncPropstat =
-            req.headers.depth === "1" && flags.truncate507
-              ? `<d:propstat><d:prop/><d:status>HTTP/1.1 507 Insufficient Storage</d:status></d:propstat>`
-              : "";
-          const self = `<d:response><d:href>${p}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:addressbook/></d:resourcetype><d:displayname>Book ${p}</d:displayname><d:sync-token>${prefix}${rev}</d:sync-token></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>${truncPropstat}</d:response>`;
-          const items =
-            req.headers.depth === "1" && !flags.emptyListing
-              ? [
-                  ...[...book].map(([h, c]) => {
-                    const etagXml = flags.omitEtags
-                      ? ""
-                      : `<d:getetag>${c.etag}</d:getetag>`;
-                    // Emulate Nextcloud/Baïkal returning a 404 propstat for <d:sync-token/> on card items
-                    const missingSyncTokenPropstat = asksSyncToken
-                      ? `<d:propstat><d:prop><d:sync-token/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>`
-                      : "";
-                    return `<d:response><d:href>${h}</d:href><d:propstat><d:prop><d:resourcetype/>${etagXml}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>${missingSyncTokenPropstat}</d:response>`;
-                  }),
-                  ...[...tombstones]
-                    .filter((h) => h.startsWith(p))
-                    .map(
-                      (h) =>
-                        `<d:response><d:href>${h}</d:href><d:propstat><d:prop><d:resourcetype/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>`,
-                    ),
-                ]
-              : [];
-          return sendXml(207, multiStatusXml([self, ...items, pad].join("\n")));
-        }
-        if (book && m === "REPORT" && body.includes("sync-collection")) {
-          const tok =
-            /<d:sync-token>([^<]*)<\/d:sync-token>/.exec(body)?.[1] ?? "";
-          if (flags.rejectSync || !tok.startsWith(prefix)) {
-            return sendXml(
-              403,
-              `<?xml version="1.0"?><d:error xmlns:d="DAV:"><d:valid-sync-token/></d:error>`,
-            );
-          }
-          const live = [...book].map(([h, c]) => {
-            const etagXml = flags.omitEtags
-              ? ""
-              : `<d:getetag>${c.etag}</d:getetag>`;
-            return `<d:response><d:href>${h}</d:href><d:propstat><d:prop>${etagXml}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
-          });
-          const dead = [...tombstones]
-            .filter((h) => h.startsWith(p))
-            .map(
-              (h) =>
-                `<d:response><d:href>${h}</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response>`,
-            );
-          if (flags.tombstonesOnce) tombstones.clear();
-          return sendXml(
-            207,
-            multiStatusXml(
-              [
-                ...live,
-                ...dead,
-                pad,
-                `<d:sync-token>${prefix}${rev}</d:sync-token>`,
-              ].join("\n"),
-            ),
-          );
-        }
-        if (book && m === "REPORT" && body.includes("addressbook-multiget")) {
-          if (flags.multigetFails) {
-            res.writeHead(500);
-            res.end();
-            return;
-          }
-          const hrefs = [...body.matchAll(/<d:href>([^<]+)<\/d:href>/g)].map(
-            (mm) => normalizeHrefPath(mm[1]!, "http://127.0.0.1"),
-          );
-          return sendXml(
-            207,
-            multiStatusXml(
-              hrefs
-                .map((h) => {
-                  const c = book.get(h);
-                  if (!c) {
-                    return `<d:response><d:href>${h}</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response>`;
-                  }
-                  const etagXml = flags.omitEtags
-                    ? ""
-                    : `<d:getetag>${c.etag}</d:getetag>`;
-                  return `<d:response><d:href>${h}</d:href><d:propstat><d:prop>${etagXml}<c:address-data>${xmlEsc(c.vcard)}</c:address-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
-                })
-                .join("\n"),
-            ),
-          );
-        }
-        const bp = bookOf(p);
-        if (bp && m === "GET") {
-          if (flags.getFails) {
-            res.writeHead(503);
-            res.end();
-            return;
-          }
-          if (flags.false404OnGet) {
-            res.writeHead(404);
-            res.end();
-            return;
-          }
-          let c = books[bp]!.get(p);
-          if (!c) {
-            res.writeHead(404);
-            res.end();
-            return;
-          }
-          if (flags.editOnGet) {
-            // Somebody edits the card on the server after the pull.
-            flags.editOnGet = false;
-            c = {
-              etag: `"e-${crypto.randomUUID().slice(0, 8)}"`,
-              vcard: c.vcard.replace(
-                "END:VCARD",
-                "NOTE:Server note\r\nEND:VCARD",
-              ),
-            };
-            books[bp]!.set(p, c);
-            rev++;
-          }
-          const headers: Record<string, string> = {
-            "Content-Type": "text/vcard",
-          };
-          if (!flags.omitEtags) {
-            headers.ETag = c.etag;
-          }
-          res.writeHead(200, headers);
-          res.end(c.vcard);
-          return;
-        }
-        if (bp && m === "PUT") {
-          if (flags.put401) {
-            res.writeHead(401);
-            res.end();
-            return;
-          }
-          if (flags.failPutPrefix && p.startsWith(flags.failPutPrefix)) {
-            req.socket.destroy();
-            return;
-          }
-          const ifMatch = req.headers["if-match"] as string | undefined;
-          const ifNoneMatch = req.headers["if-none-match"] as
-            string | undefined;
-          puts.push({ path: p, body, ifMatch, ifNoneMatch });
-          if (flags.putStatus) {
-            res.writeHead(flags.putStatus);
-            res.end();
-            return;
-          }
-          const ex = books[bp]!.get(p);
-          if (
-            (ifMatch && (!ex || ex.etag !== ifMatch)) ||
-            (ifNoneMatch === "*" && ex)
-          ) {
-            res.writeHead(412);
-            res.end();
-            return;
-          }
-          const etag = `"e-${crypto.randomUUID().slice(0, 8)}"`;
-          books[bp]!.set(p, { etag, vcard: body });
-          tombstones.delete(p);
-          rev++;
-          res.writeHead(ex ? 204 : 201, flags.omitEtags ? {} : { ETag: etag });
-          res.end();
-          return;
-        }
-        res.writeHead(404);
-        res.end();
-      });
+    // sabre answers a long change list a page at a time.
+    dav.set(`${A}three.vcf`, vcf("Card Three"));
+    dav.set(`${A}four.vcf`, vcf("Card Four"));
+    dav.flags.page507 = true;
+    expect(await errors()).toBe(0);
+    expect(named(s, "Card Four")).toHaveLength(1);
 
-      await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
-      const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
-      const dav: MiniDav = {
-        url,
-        books,
-        tombstones,
-        flags,
-        puts,
-        close: () => new Promise<void>((r) => srv.close(() => r())),
-      };
-      miniServers.push(dav);
-      return dav;
+    // A 200 that is not XML falls back to a full listing.
+    Object.assign(dav.flags, { page507: false, htmlSync: true });
+    dav.set(`${A}five.vcf`, vcf("Card Five"));
+    expect(await errors()).toBe(0);
+    expect(named(s, "Card Five")).toHaveLength(1);
+
+    // After sabre's 403 valid-sync-token, a full listing finds a deleted
+    // card, but one truncated by a 507, or empty, deletes nothing.
+    Object.assign(dav.flags, { htmlSync: false, rejectSync: true });
+    dav.drop(`${A}five.vcf`);
+    for (const flag of ["truncate507", "emptyListing"] as const) {
+      dav.flags[flag] = true;
+      await run();
+      dav.flags[flag] = false;
+      expect(linkIds(conn.id)).toContain(`${A}five.vcf`);
     }
+    await run();
+    expect(linkIds(conn.id)).not.toContain(`${A}five.vcf`);
 
-    function newOwner(): Scope {
-      const id = crypto.randomUUID();
-      sqlite
-        .prepare(
-          `INSERT INTO users (id, email, username, passwordHash) VALUES (?, ?, ?, 'h')`,
-        )
-        .run(id, `${id}@x.test`, id);
-      return scopeForOwnerId(id);
+    // A card over 5 MB is reported once, and read again when it changes.
+    const huge = `${A}huge.vcf`;
+    dav.set(huge, vcf("Huge", `NOTE:${"x".repeat(MAX_DAV_BYTES)}`), '"h1"');
+    expect([await errors(), await errors()]).toEqual([1, 0]);
+    dav.set(huge, vcf("Huge"), '"h2"');
+    await run();
+    expect(named(s, "Huge")).toHaveLength(1);
+
+    // A card the server would not send is read on the next sync, which
+    // does not list it again.
+    Object.assign(dav.flags, {
+      rejectSync: false,
+      multigetFails: true,
+      getStatus: 503,
+    });
+    dav.set(`${A}six.vcf`, vcf("Card Six"));
+    expect(await errors()).toBe(1);
+    Object.assign(dav.flags, { multigetFails: false, getStatus: 0 });
+    await run();
+    expect(named(s, "Card Six")).toHaveLength(1);
+  });
+
+  it("pushes past a weak ETag, refusals, server errors, failed reads, a server edit and a dropped connection", async () => {
+    const s = newOwner();
+    const dav = await startDav();
+    const kim = `${A}kim.vcf`;
+    dav.set(kim, vcf("Kim Lee", "NICKNAME:Kiki"), 'W/"weak"');
+    const conn = await connect(s, dav.url);
+    const run = () => runNow(s, conn.id);
+    const errors = async () => (await run()).stats.errors ?? 0;
+    await run();
+    const [id] = named(s, "Kim Lee");
+    const edit = (company: string) =>
+      contactService.updateContact(s, id!, { company });
+    const lastPut = () => dav.puts.at(-1)!;
+    const stored = () => dav.books[A]!.get(kim)!.vcard;
+
+    // A weak ETag cannot guard a PUT.
+    edit("Weak");
+    expect(await errors()).toBe(0);
+    expect(lastPut().ifMatch).toBeUndefined();
+
+    // A server error is tried again on every run, and a refusal is reported
+    // once and tried again after the next edit, with the connector active.
+    edit("Refused");
+    dav.flags.putStatus = 503;
+    expect([await errors(), await errors()]).toEqual([1, 1]);
+    dav.flags.putStatus = 403;
+    expect(await errors()).toBe(1);
+    expect(getConnector(s, conn.id)?.status).toBe("active");
+    let tried = dav.puts.length;
+    expect(await errors()).toBe(0);
+    expect(dav.puts).toHaveLength(tried);
+
+    // A server edit after the pull: the PUT goes over the card it read, and
+    // the next pull takes the edit the PUT carried.
+    Object.assign(dav.flags, { putStatus: 0, editOnGet: true });
+    edit("Edited");
+    expect(await errors()).toBe(0);
+    expect(lastPut().ifMatch).toBe('"edited"');
+    await run();
+    expect(contactService.getContactById(s, id!)!.about).toBe("Server note");
+
+    // A card that cannot be read first is not written over.
+    edit("Unread");
+    dav.flags.getStatus = 503;
+    tried = dav.puts.length;
+    expect(await errors()).toBe(1);
+    expect(dav.puts).toHaveLength(tried);
+    // A false 404 writes only where nothing is, which the server refuses.
+    dav.flags.getStatus = 404;
+    expect(await errors()).toBe(1);
+    expect(lastPut().ifNoneMatch).toBe("*");
+    expect(stored()).toContain("NICKNAME:Kiki");
+    dav.flags.getStatus = 0;
+    expect(await errors()).toBe(0);
+    expect(stored()).toContain("ORG:Unread");
+
+    // A connection dropped mid-push keeps the cards already written.
+    const one = contactService.createContact(s, { name: "Aaa Local" })!;
+    const two = contactService.createContact(s, { name: "Bbb Local" })!;
+    const linked = () =>
+      [one.id, two.id].map((c) =>
+        linkIds(conn.id).includes(`${A}${encodeURIComponent(c)}.vcf`),
+      );
+    dav.flags.dropPut = two.id;
+    await run();
+    expect(linked()).toEqual([true, false]);
+    dav.flags.dropPut = "";
+    await run();
+    expect(linked()).toEqual([true, true]);
+  });
+
+  it("finishes a deletion and a book switch that a refused push left open, and discovers the book again only for another server", async () => {
+    const s = newOwner();
+    const dav = await startDav();
+    dav.set(`${A}one.vcf`, vcf("Card One"));
+    dav.set(`${A}two.vcf`, vcf("Card Two"));
+    dav.set(`${B}other.vcf`, vcf("Other Person"));
+    const conn = await connect(s, dav.url);
+    const run = () => runNow(s, conn.id);
+    await run();
+    const [one] = named(s, "Card One");
+    const edit = (company: string) =>
+      contactService.updateContact(s, one!, { company });
+
+    // The server reports a deletion once, in a run whose push it refuses.
+    dav.drop(`${A}two.vcf`);
+    edit("First");
+    dav.flags.putStatus = 401;
+    expect((await run()).status).toBe("error");
+    dav.flags.putStatus = 0;
+    await run();
+    expect(linkIds(conn.id)).toEqual([`${A}one.vcf`]);
+
+    // On a switch to book b, a listing that is empty or truncated, or a
+    // refused push, keeps a's links until a full listing of b, which an
+    // ETag-less server gives too.
+    await updateConnector(s, conn.id, {
+      config: {
+        url: dav.url,
+        username: USER,
+        addressBookUrl: `${dav.url}${B}`,
+      },
+    });
+    for (const flag of ["emptyListing", "truncate507"] as const) {
+      dav.flags[flag] = true;
+      await run();
+      dav.flags[flag] = false;
+      expect(linkIds(conn.id)).toContain(`${A}one.vcf`);
     }
+    edit("Second");
+    dav.flags.putStatus = 401;
+    expect((await run()).status).toBe("error");
+    Object.assign(dav.flags, { putStatus: 0, omitEtags: true });
+    await run();
+    expect(linkIds(conn.id)).toEqual([`${B}${one}.vcf`, `${B}other.vcf`]);
+    // A PUT answered without an ETag is not read back as a change.
+    const settled = await run();
+    expect([settled.stats.contacts, settled.stats.pushed]).toEqual([
+      0,
+      undefined,
+    ]);
 
-    /** A CardDAV connector for `url`, two-way on book a unless `config` says otherwise. */
-    const connect = (
-      s: Scope,
-      url: string,
-      config: Record<string, unknown> = {},
-    ) =>
-      createConnector(s, {
-        kind: "carddav",
-        name: "dav",
-        config: {
-          url,
-          username: VALID_USER,
-          syncDirection: "two_way",
-          addressBookUrl: `${url}/dav/ab/a/`,
-          ...config,
-        },
-        secret: { password: VALID_PASS },
-      });
-
-    /** The external ids a connector links to. */
-    const linkIds = (connectorId: string) =>
-      (
-        sqlite
-          .prepare(
-            "SELECT externalId FROM connector_links WHERE connectorId = ?",
-          )
-          .all(connectorId) as Array<{ externalId: string }>
-      ).map((l) => l.externalId);
-
-    /** The ids of the owner's contacts with this name. */
-    const named = (s: Scope, name: string) =>
-      sqlite
-        .prepare("SELECT id FROM contacts WHERE ownerId = ? AND name = ?")
-        .all(s.ownerId, name) as Array<{ id: string }>;
-
-    /** The id the connector links a local contact to, if any. */
-    const linkOf = (connectorId: string, localId: string) =>
-      sqlite
-        .prepare(
-          "SELECT externalId FROM connector_links WHERE connectorId = ? AND localId = ?",
-        )
-        .get(connectorId, localId) as { externalId: string } | undefined;
-
-    const companyOf = (id: string) =>
-      (
-        sqlite.prepare("SELECT company FROM contacts WHERE id = ?").get(id) as {
-          company: string;
-        }
-      ).company;
-
-    it("unlinks contacts on server delete while keeping contact_sources, and re-uploads if edited later", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/remote.vcf", {
-        etag: '"r1"',
-        vcard: miniVcard("Remote Pulled", ["EMAIL:remote@example.com"]),
-      });
-      const preExisting = contactService.createContact(s, {
-        name: "Owner PreExisting",
-        company: "Acme",
-      })!;
-      sqlite
-        .prepare(
-          "UPDATE contacts SET addedAt='2026-01-01 00:00:00', updatedAt='2026-01-01 00:00:00' WHERE id=?",
-        )
-        .run(preExisting.id);
-
-      const conn = await connect(s, dav.url, { pushExistingContacts: true });
-      contactService.createContact(s, {
-        name: "Owner AddedAfter",
-      });
-
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(2);
-
-      // Delete both pushed cards and the pulled card on the server
-      for (const href of [
-        ...dav.puts.map((p) => p.path),
-        "/dav/ab/a/remote.vcf",
-      ]) {
-        dav.books["/dav/ab/a/"]!.delete(href);
-        dav.tombstones.add(href);
-      }
-
-      await runNow(s, conn.id, "manual");
-      const rows = sqlite
-        .prepare("SELECT id, name, deletedAt FROM contacts WHERE ownerId = ?")
-        .all(s.ownerId) as Array<{
-        id: string;
-        name: string;
-        deletedAt: string | null;
-      }>;
-      expect(rows).toHaveLength(3);
-      expect(rows.every((r) => r.deletedAt === null)).toBe(true);
-      expect(linkIds(conn.id)).toHaveLength(0);
-
-      // The pulled contact still keeps its CardDAV contact_sources provenance row
-      const remoteRow = rows.find((r) => r.name === "Remote Pulled")!;
-      const sources = sqlite
-        .prepare("SELECT platform FROM contact_sources WHERE contactId = ?")
-        .all(remoteRow.id) as Array<{ platform: string }>;
-      expect(sources.map((src) => src.platform)).toContain("carddav");
-
-      // Editing an unlinked contact in Contrack uploads it again as a new card
-      dav.puts.length = 0;
-      contactService.updateContact(s, preExisting.id, { company: "Acme v2" });
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(1);
-      expect(dav.puts[0]!.body).toContain("ORG:Acme v2");
+    // The cursor keeps the book, until the server URL changes.
+    let found = dav.discoveries;
+    await run();
+    expect(dav.discoveries).toBe(found);
+    await updateConnector(s, conn.id, {
+      config: {
+        url: dav.url.replace("127.0.0.1", "localhost"),
+        username: USER,
+      },
+      secret: { password: PASS },
     });
+    found = dav.discoveries;
+    await run();
+    expect(dav.discoveries).toBe(found + 1);
+  });
 
-    it("detects full-scan deletions when server returns 404 propstat for sync-token, and skips deletions on 507 truncation", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/one.vcf", {
-        etag: '"e1"',
-        vcard: miniVcard("Card One"),
-      });
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/two.vcf", {
-        etag: '"e2"',
-        vcard: miniVcard("Card Two"),
-      });
-
-      const conn = await connect(s, dav.url);
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toHaveLength(2);
-
-      // Force full PROPFIND scan (which returns 404 propstat on <d:sync-token/> per card,
-      // and a 404 propstat response for tombstoned cards)
-      dav.flags.rejectSync = true;
-      dav.books["/dav/ab/a/"]!.delete("/dav/ab/a/two.vcf");
-      dav.tombstones.add("/dav/ab/a/two.vcf");
-
-      // When 507 Insufficient Storage truncation is present in a propstat, deletions are skipped
-      dav.flags.truncate507 = true;
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toHaveLength(2);
-
-      // Without 507 truncation, full scan unlinks the deleted card despite 404 sync-token propstat
-      dav.flags.truncate507 = false;
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toEqual(["/dav/ab/a/one.vcf"]);
-    });
-
-    it("supports non-prefix card hrefs and cleans up old-book links across two_way, pull_only, ETag-less, failed-push, 507, empty-listing, and server switches", async () => {
-      const s = newOwner();
-      const davA = await startMiniDav();
-      const davB = await startMiniDav();
-
-      // Server returns a card href outside /dav/ab/a/ (e.g. proxy/alias path /cards/aliased.vcf)
-      davA.books["/dav/ab/a/"]!.set("/cards/aliased.vcf", {
-        etag: '"alias1"',
-        vcard: miniVcard("Aliased Card", ["EMAIL:alias@example.com"]),
-      });
-      davA.books["/dav/ab/b/"]!.set("/dav/ab/b/other.vcf", {
-        etag: '"b1"',
-        vcard: miniVcard("Other Person"),
-      });
-      davB.books["/dav/ab/a/"]!.set("/dav/ab/a/serverb.vcf", {
-        etag: '"sb1"',
-        vcard: miniVcard("ServerB Person"),
-      });
-
-      const conn = await connect(s, davA.url);
-      await runNow(s, conn.id, "manual");
-      // Second run with non-prefix href must keep the link and not create duplicate contacts
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toEqual(["/cards/aliased.vcf"]);
-      const aliasContacts = named(s, "Aliased Card");
-      expect(aliasContacts).toHaveLength(1);
-
-      // Adding a trailing slash to config.url must not trigger a false book switch or re-fetch unchanged cards
-      await updateConnector(s, conn.id, {
-        config: {
-          url: `${davA.url}/`,
-          username: VALID_USER,
-          syncDirection: "two_way",
-          addressBookUrl: `${davA.url}/dav/ab/a/`,
-        },
-        secret: { password: VALID_PASS },
-      });
-      const runTrailingSlash = await runNow(s, conn.id, "manual");
-      expect(runTrailingSlash.stats.contacts).toBe(0);
-      expect(linkIds(conn.id)).toHaveLength(1);
-
-      // Switch to book B when listing is empty or 507-truncated, or when push fails with 401:
-      // 1) Empty listing on switch run must NOT wipe links prematurely
-      davA.flags.emptyListing = true;
-      await updateConnector(s, conn.id, {
-        config: {
-          url: davA.url,
-          username: VALID_USER,
-          syncDirection: "two_way",
-          addressBookUrl: `${davA.url}/dav/ab/b/`,
-        },
-        secret: { password: VALID_PASS },
-      });
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toHaveLength(1);
-      davA.flags.emptyListing = false;
-
-      // 2) 507 truncation on switch run must also defer link cleanup
-      davA.flags.truncate507 = true;
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toContain("/cards/aliased.vcf");
-      davA.flags.truncate507 = false;
-
-      // 3) If push fails with 401 on the switch run (after editing Aliased Card), the next run still cleans up old-book links
-      contactService.updateContact(s, aliasContacts[0]!.id, {
-        company: "EditedDuringSwitch",
-      });
-      davA.flags.put401 = true;
-      const runFailedPush = await runNow(s, conn.id, "manual");
-      expect(runFailedPush.status).toBe("error");
-      davA.flags.put401 = false;
-
-      // Now run on ETag-less Book B: cleanup finishes, unlinks /cards/aliased.vcf, and resets cursor etags/cardHashes
-      davA.flags.omitEtags = true;
-      davA.puts.length = 0;
-      const runBookB = await runNow(s, conn.id, "manual");
-      expect(runBookB.status).toBe("ok");
-      expect(davA.puts.some((p) => p.path === "/cards/aliased.vcf")).toBe(
-        false,
-      );
-      const linksAfterBookB = linkIds(conn.id);
-      expect(linksAfterBookB).not.toContain("/cards/aliased.vcf");
-      expect(linksAfterBookB).toContain("/dav/ab/b/other.vcf");
-      const cursorAfterBookB = JSON.parse(
-        (
-          sqlite
-            .prepare("SELECT cursor FROM connectors WHERE id = ?")
-            .get(conn.id) as { cursor: string }
-        ).cursor,
-      ) as {
-        etags: Record<string, string>;
-        cardHashes: Record<string, string>;
-      };
-      expect(cursorAfterBookB.etags["/cards/aliased.vcf"]).toBeUndefined();
-      expect(cursorAfterBookB.cardHashes["/cards/aliased.vcf"]).toBeUndefined();
-      davA.flags.omitEtags = false;
-
-      // Switch back to book A in pull_only mode: must unlink book B's cards
-      await updateConnector(s, conn.id, {
-        config: {
-          url: davA.url,
-          username: VALID_USER,
-          syncDirection: "pull_only",
-          addressBookUrl: `${davA.url}/dav/ab/a/`,
-        },
-      });
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toEqual(["/cards/aliased.vcf"]);
-
-      // Switch to Server B using direct discovery (without passing addressBookUrl)
-      await updateConnector(s, conn.id, {
-        config: {
-          url: davB.url,
-          username: VALID_USER,
-          syncDirection: "two_way",
-        },
-        secret: { password: VALID_PASS },
-      });
-      const runServerB = await runNow(s, conn.id, "manual");
-      expect(runServerB.status).toBe("ok");
-      const linksAfterServerB = linkIds(conn.id);
-      expect(linksAfterServerB).not.toContain("/cards/aliased.vcf");
-      expect(linksAfterServerB).toContain("/dav/ab/a/serverb.vcf");
-    });
-
-    it("preserves links on an empty full-scan PROPFIND listing and guards local edits on cards with photos when ETag changes", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/photo.vcf", {
-        etag: '"p1"',
-        vcard: miniVcard("Photo Person", [
-          "ORG:OldOrg",
-          `PHOTO;VALUE=URI:${dav.url}/avatar.png`,
-        ]),
-      });
-
-      const conn = await connect(s, dav.url);
-      await runNow(s, conn.id, "manual");
-
-      const photoContact = sqlite
-        .prepare(
-          "SELECT id, company, avatarUrl FROM contacts WHERE ownerId = ? AND name = 'Photo Person'",
-        )
-        .get(s.ownerId) as {
-        id: string;
-        company: string;
-        avatarUrl: string | null;
-      };
-      expect(photoContact.company).toBe("OldOrg");
-
-      // Edit Photo Person locally, and bump the server ETag to '"p2"' with identical vCard bytes
-      // so sync re-fetches the card and exercises the remoteCardHash stale-copy guard
-      contactService.updateContact(s, photoContact.id, { company: "NewOrg" });
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/photo.vcf", {
-        etag: '"p2"',
-        vcard: miniVcard("Photo Person", [
-          "ORG:OldOrg",
-          `PHOTO;VALUE=URI:${dav.url}/avatar.png`,
-        ]),
-      });
-      dav.puts.length = 0;
-      const runStale = await runNow(s, conn.id, "manual");
-      expect(runStale.status).toBe("ok");
-      expect(companyOf(photoContact.id)).toBe("NewOrg");
-      expect(dav.puts).toHaveLength(1);
-      expect(dav.puts[0]!.body).toContain("ORG:NewOrg");
-
-      // Edit Photo Person a second time after push (which stored remoteCardHash including PHOTO)
-      // and bump the server ETag to '"p2b"' with the server's post-PUT vCard: must not overwrite ThirdOrg!
-      contactService.updateContact(s, photoContact.id, { company: "ThirdOrg" });
-      const currentServerCard = dav.books["/dav/ab/a/"]!.get(
-        "/dav/ab/a/photo.vcf",
-      )!;
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/photo.vcf", {
-        etag: '"p2b"',
-        vcard: currentServerCard.vcard,
-      });
-      dav.puts.length = 0;
-      await runNow(s, conn.id, "manual");
-      expect(companyOf(photoContact.id)).toBe("ThirdOrg");
-      expect(dav.puts).toHaveLength(1);
-      expect(dav.puts[0]!.body).toContain("ORG:ThirdOrg");
-
-      // When the server's PHOTO URI actually changes with a new ETag, sync yields the update
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/photo.vcf", {
-        etag: '"p3"',
-        vcard: miniVcard("Photo Person", [
-          "ORG:ThirdOrg",
-          `PHOTO;VALUE=URI:${dav.url}/avatar2.png`,
-        ]),
-      });
-      const runPhotoChanged = await runNow(s, conn.id, "manual");
-      expect(runPhotoChanged.stats.contacts).toBe(1);
-
-      // Simulate an empty PROPFIND listing on a full scan: links must not be wiped
-      dav.flags.rejectSync = true;
-      dav.flags.emptyListing = true;
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toHaveLength(1);
-    });
-
-    it("supports iCloud cross-host addressBookUrl discovery, rejects missing books on save, and handles GET/PUT recovery", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      const davPartition = await startMiniDav();
-
-      // 1. iCloud cross-host discovery: entry server on 127.0.0.1 points home-set to partition host on localhost
-      davPartition.books["/dav/ab/a/"]!.set("/dav/ab/a/icloud.vcf", {
-        etag: '"ic1"',
-        vcard: miniVcard("iCloud Person", ["EMAIL:icloud@example.com"]),
-      });
-      const partitionOrigin = davPartition.url.replace(
-        "127.0.0.1",
-        "localhost",
-      );
-      dav.flags.homeSetOverride = `${partitionOrigin}/dav/ab/`;
-      const partitionBookUrl = `${partitionOrigin}/dav/ab/a/`;
-
-      const icloudTest = await testConnector(
-        s,
-        "carddav",
-        {
-          url: dav.url,
-          username: VALID_USER,
-          syncDirection: "two_way",
-          addressBookUrl: partitionBookUrl,
-        },
-        { password: VALID_PASS },
-      );
-      expect(icloudTest.ok).toBe(true);
-      expect(icloudTest.detail).toBe("Connected to Book /dav/ab/a/");
-
-      const icloudConn = await connect(s, dav.url, {
-        addressBookUrl: partitionBookUrl,
-      });
-      expect(icloudConn.id).toBeDefined();
-      const icloudRun = await runNow(s, icloudConn.id, "manual");
-      expect(icloudRun.status).toBe("ok");
-      expect(icloudRun.stats.contacts).toBe(1);
-      dav.flags.homeSetOverride = null;
-
-      // 2. testConnector with a missing addressBookUrl falls back and returns the full book list with a warning
-      const testMissing = await testConnector(
-        s,
-        "carddav",
-        {
-          url: dav.url,
-          username: VALID_USER,
-          syncDirection: "two_way",
-          addressBookUrl: `${dav.url}/dav/ab/missing/`,
-        },
-        { password: VALID_PASS },
-      );
-      expect(testMissing.ok).toBe(true);
-      expect(testMissing.detail).toMatch(
-        /Selected address book was not found; switched to/i,
-      );
-      expect(testMissing.addressBooks).toHaveLength(2);
-
-      // 3. createConnector with an addressBookUrl not in the server's discovered list rejects immediately
-      // (both via home-set discovery and direct address book URL discovery)
-      for (const [url, addressBookUrl] of [
-        [dav.url, `${dav.url}/dav/ab/missing/`],
-        [`${dav.url}/dav/ab/a/`, "https://evil.example.com/dav/ab/a/"],
-      ]) {
-        await expect(connect(s, url!, { addressBookUrl })).rejects.toThrow(
-          /Selected address book was not found on the CardDAV server/i,
-        );
-      }
-
-      // 4. GET failure before PUT skips the PUT rather than stripping NICKNAME / X-* fields
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/k.vcf", {
-        etag: '"k1"',
-        vcard: miniVcard("Kept Fields", ["NICKNAME:Kiki", "X-CUSTOM:keep"]),
-      });
-      const conn = await connect(s, dav.url);
-      await runNow(s, conn.id, "manual");
-      const [keptContact] = named(s, "Kept Fields");
-      contactService.updateContact(s, keptContact.id, { company: "NewCo" });
-      dav.flags.getFails = true;
-      dav.puts.length = 0;
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(0);
-
-      // A false 404 on GET sends If-None-Match: * on PUT, so the server rejects with 412
-      // instead of overwriting NICKNAME / X-CUSTOM on the live card
-      dav.flags.getFails = false;
-      dav.flags.false404OnGet = true;
-      dav.puts.length = 0;
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(1);
-      expect(dav.puts[0]!.ifNoneMatch).toBe("*");
-      expect(dav.books["/dav/ab/a/"]!.get("/dav/ab/a/k.vcf")!.vcard).toContain(
-        "NICKNAME:Kiki",
-      );
-
-      // When GET recovers, the pending edit is pushed with NICKNAME and X-CUSTOM preserved
-      dav.flags.false404OnGet = false;
-      dav.puts.length = 0;
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(1);
-      expect(dav.puts[0]!.body).toContain("ORG:NewCo");
-      expect(dav.puts[0]!.body).toContain("NICKNAME:Kiki");
-      expect(dav.puts[0]!.body).toContain("X-CUSTOM:keep");
-
-      // When a linked card is genuinely missing on GET (404) during push, push re-creates it with If-None-Match: *
-      dav.books["/dav/ab/a/"]!.delete("/dav/ab/a/k.vcf");
-      dav.puts.length = 0;
-      contactService.updateContact(s, keptContact.id, {
-        company: "ReCreatedCo",
-      });
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(1);
-      expect(dav.puts[0]!.ifNoneMatch).toBe("*");
-      expect(dav.puts[0]!.body).toContain("ORG:ReCreatedCo");
-      expect(dav.books["/dav/ab/a/"]!.has("/dav/ab/a/k.vcf")).toBe(true);
-
-      // 5. Partial PUT failure midway preserves links for already-uploaded contacts and uploads the rest on retry
-      const localA = contactService.createContact(s, { name: "Aaa Local" })!;
-      const localB = contactService.createContact(s, { name: "Bbb Local" })!;
-      dav.puts.length = 0;
-      dav.flags.failPutPrefix = `/dav/ab/a/${encodeURIComponent(localB.id)}`;
-      await runNow(s, conn.id, "manual");
-      expect(linkOf(conn.id, localA.id)).toBeDefined();
-      expect(linkOf(conn.id, localB.id)).toBeUndefined();
-
-      // Next run uploads B without duplicating A
-      dav.flags.failPutPrefix = null;
-      await runNow(s, conn.id, "manual");
-      expect(named(s, "Aaa Local")).toHaveLength(1);
-      const linkForBAfter = linkOf(conn.id, localB.id);
-      expect(linkForBAfter).toBeDefined();
-      expect(dav.books["/dav/ab/a/"]!.has(linkForBAfter!.externalId)).toBe(
-        true,
-      );
-
-      // 6. An oversized > 5 MB card is reported once and read again when its
-      // ETag changes
-      const bigPadding = "X".repeat(5 * 1024 * 1024 + 500);
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/huge.vcf", {
-        etag: '"huge-1"',
-        vcard: miniVcard("Huge Card", [`NOTE:${bigPadding}`]),
-      });
-      dav.flags.rejectSync = true;
-      expect((await runNow(s, conn.id, "manual")).stats.errors).toBe(1);
-      expect(named(s, "Huge Card")).toHaveLength(0);
-      expect((await runNow(s, conn.id, "manual")).stats.errors ?? 0).toBe(0);
-
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/huge.vcf", {
-        etag: '"huge-2"',
-        vcard: miniVcard("Huge Card", ["NOTE:Normal size"]),
-      });
-      await runNow(s, conn.id, "manual");
-      expect(named(s, "Huge Card")).toHaveLength(1);
-    });
-
-    it("reports a card it could not read and reads it on the next sync", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      const book = dav.books["/dav/ab/a/"]!;
-      book.set("/dav/ab/a/one.vcf", {
-        etag: '"o1"',
-        vcard: miniVcard("Card One"),
-      });
-      const conn = await connect(s, dav.url, { syncDirection: "pull_only" });
-      await runNow(s, conn.id, "manual");
-
-      book.set("/dav/ab/a/two.vcf", {
-        etag: '"t1"',
-        vcard: miniVcard("Card Two"),
-      });
-      dav.flags.multigetFails = true;
-      dav.flags.getFails = true;
-      const failed = await runNow(s, conn.id, "manual");
-      expect(failed.stats.errors).toBe(1);
-      expect(named(s, "Card Two")).toHaveLength(0);
-
-      dav.flags.multigetFails = false;
-      dav.flags.getFails = false;
-      await runNow(s, conn.id, "manual");
-      expect(named(s, "Card Two")).toHaveLength(1);
-    });
-
-    it("reports a write the server refused, tries it again, and writes over the card it just read", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      const book = dav.books["/dav/ab/a/"]!;
-      book.set("/dav/ab/a/kim.vcf", {
-        etag: '"k1"',
-        vcard: miniVcard("Kim Lee", ["EMAIL:kim@lee.example"]),
-      });
-      const conn = await connect(s, dav.url);
-      await runNow(s, conn.id, "manual");
-      const [kim] = named(s, "Kim Lee");
-      contactService.updateContact(s, kim!.id, { company: "Lee Labs" });
-
-      const errors = async () =>
-        (await runNow(s, conn.id, "manual")).stats.errors ?? 0;
-      // A server error is tried again on every run.
-      dav.flags.putStatus = 503;
-      expect([await errors(), await errors()]).toEqual([1, 1]);
-      // A refusal is reported once, and tried again after the next edit.
-      dav.flags.putStatus = 403;
-      expect([await errors(), await errors()]).toEqual([1, 0]);
-      dav.puts.length = 0;
-      await errors();
-      expect(dav.puts).toHaveLength(0);
-
-      dav.flags.putStatus = null;
-      dav.flags.editOnGet = true;
-      contactService.updateContact(s, kim!.id, { company: "Lee Labs 2" });
-      expect(await errors()).toBe(0);
-      // The ETag of the card the GET read, not the pull's "k1".
-      expect(dav.puts.at(-1)!.ifMatch).toMatch(/^"e-/);
-      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain("ORG:Lee Labs 2");
-      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain(
-        "NOTE:Server note",
-      );
-      // The next pull reads the server's edit that the PUT carried.
-      await runNow(s, conn.id, "manual");
-      expect(contactService.getContactById(s, kim!.id)!.about).toBe(
-        "Server note",
-      );
-    });
-
-    it("takes a baseline of an earlier version as it is, without writing every field", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/leo.vcf", {
-        etag: '"l1"',
-        vcard: miniVcard("Leo Park", ["EMAIL:leo@park.example"]),
-      });
-      const conn = await connect(s, dav.url);
-      await runNow(s, conn.id, "manual");
-      const [leo] = named(s, "Leo Park");
-      // A whole-card hash the earlier version saved, which the current
-      // writer does not reproduce.
-      const row = sqlite
-        .prepare("SELECT cursor FROM connectors WHERE id = ?")
-        .get(conn.id) as { cursor: string };
-      const cursor = JSON.parse(row.cursor);
-      cursor.pushedHashes[leo!.id] = "0123456789abcdef";
-      sqlite
-        .prepare("UPDATE connectors SET cursor = ? WHERE id = ?")
-        .run(JSON.stringify(cursor), conn.id);
-
-      dav.puts.length = 0;
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(0);
-      contactService.updateContact(s, leo!.id, { role: "Chef" });
-      await runNow(s, conn.id, "manual");
-      expect(dav.puts).toHaveLength(1);
-    });
-
-    it("unlinks a card deleted on the server when the push of that run failed", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      const book = dav.books["/dav/ab/a/"]!;
-      book.set("/dav/ab/a/one.vcf", {
-        etag: '"o1"',
-        vcard: miniVcard("Card One"),
-      });
-      book.set("/dav/ab/a/two.vcf", {
-        etag: '"t1"',
-        vcard: miniVcard("Card Two"),
-      });
-      const conn = await connect(s, dav.url);
-      await runNow(s, conn.id, "manual");
-
-      book.delete("/dav/ab/a/two.vcf");
-      dav.tombstones.add("/dav/ab/a/two.vcf");
-      dav.flags.tombstonesOnce = true;
-      contactService.updateContact(s, named(s, "Card One")[0]!.id, {
-        company: "Edited",
-      });
-      dav.flags.put401 = true;
-      expect((await runNow(s, conn.id, "manual")).status).toBe("error");
-      dav.flags.put401 = false;
-      await runNow(s, conn.id, "manual");
-      expect(linkIds(conn.id)).toEqual(["/dav/ab/a/one.vcf"]);
-    });
-
-    it("syncs a book whose listing is larger than 5 MB", async () => {
-      const s = newOwner();
-      const dav = await startMiniDav();
-      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/one.vcf", {
-        etag: '"o1"',
-        vcard: miniVcard("Card One"),
-      });
-      dav.flags.padListing = true;
-      const conn = await connect(s, dav.url, { syncDirection: "pull_only" });
-      // A full listing, then a sync-collection report.
-      for (let run = 0; run < 2; run++) {
-        expect((await runNow(s, conn.id, "manual")).status).toBe("ok");
-      }
-      expect(named(s, "Card One")).toHaveLength(1);
-    });
+  it("reads a SQLite timestamp as UTC", () => {
+    expect(parseTimestampMs("2026-10-16 12:00:00")).toBe(
+      Date.parse("2026-10-16T12:00:00Z"),
+    );
   });
 });

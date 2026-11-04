@@ -140,10 +140,10 @@ export function vcard(...lines: string[]): string {
   return ["BEGIN:VCARD", "VERSION:3.0", ...lines, "END:VCARD", ""].join("\r\n");
 }
 
-/** A Radicale address book for `user`, made empty for this test. */
-export async function radicaleBook(user: string) {
+/** A Radicale address book of `user`, made empty for this test. */
+export async function radicaleBook(user: string, name = "contacts") {
   const auth = `Basic ${Buffer.from(`${user}:lab`).toString("base64")}`;
-  const url = `${RADICALE}/${user}/contacts/`;
+  const url = `${RADICALE}/${user}/${name}/`;
   const dav = (path: string, init: RequestInit) =>
     fetch(path, {
       ...init,

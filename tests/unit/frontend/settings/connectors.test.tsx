@@ -1,4 +1,10 @@
 // @vitest-environment jsdom
+/**
+ * The connector screens' answers to what a browser test cannot easily cause:
+ * a refused save, a failed load, a denied clipboard, and every way a run's
+ * numbers are worded. The forms and the card's journeys are in
+ * tests/e2e/connectors.spec.ts.
+ */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import {
@@ -12,7 +18,6 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarFormModal } from "../../../../src/views/settings/connectors/CalendarFormModal";
 import { ConnectorCard } from "../../../../src/views/settings/connectors/ConnectorCard";
 import { ConnectorsView } from "../../../../src/views/settings/connectors/ConnectorsView";
 import { RunHistoryDrawer } from "../../../../src/views/settings/connectors/RunHistoryDrawer";
@@ -21,7 +26,6 @@ import * as clipboard from "../../../../src/lib/clipboard";
 import type {
   ConnectorRun,
   ConnectorSummary,
-  KindInfo,
 } from "../../../../shared/connectors";
 
 vi.mock("../../../../src/api/connectors", () => ({
@@ -38,1150 +42,213 @@ vi.mock("../../../../src/api/connectors", () => ({
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-describe("Frontend Connectors Components", () => {
-  let queryClient: QueryClient;
+/** Makes the hook `name` return `value`. */
+const hook = (name: keyof typeof connectorsApi, value: object) =>
+  vi.mocked(connectorsApi[name] as () => unknown).mockReturnValue(value);
 
-  const defaultKinds: KindInfo[] = [
-    {
-      kind: "ics",
-      label: "Calendar",
-      description:
-        "Sync meetings and see what is coming up from a private ICS URL",
-      capabilities: { schedule: true },
-    },
-    {
-      kind: "imap",
-      label: "Mailbox (IMAP)",
-      description: "Sync sent and received mail headers from any IMAP account",
-      capabilities: { schedule: true },
-    },
-    {
-      kind: "google",
-      label: "Google Workspace",
-      description: "Sync contacts, mail and calendar with Google",
-      capabilities: { schedule: true },
-    },
-    {
-      kind: "carddav",
-      label: "CardDAV",
-      description:
-        "Sync contacts two-way or one-way with Nextcloud, iCloud, Fastmail, Radicale or Baïkal",
-      capabilities: { schedule: true },
-    },
-  ];
+/** A mutation hook whose call resolves to `result`, or rejects with it. */
+const mutation = (name: keyof typeof connectorsApi, result: unknown = {}) => {
+  const mutateAsync =
+    result instanceof Error
+      ? vi.fn().mockRejectedValue(result)
+      : vi.fn().mockResolvedValue(result);
+  hook(name, { mutateAsync, isPending: false });
+  return mutateAsync;
+};
 
-  const createMockConnector = (
-    overrides?: Partial<ConnectorSummary>,
-  ): ConnectorSummary => ({
-    id: "conn-1",
-    name: "Google Calendar",
-    kind: "ics",
-    status: "active",
-    config: { url: "https://calendar.google.com/calendar.ics" },
-    secretPresent: false,
-    intervalMinutes: 30,
-    nextRunAt: "2026-02-01T12:30:00Z",
-    lastRunAt: "2026-02-01T12:00:00Z",
-    lastError: null,
-    lastRunStats: null,
-    createdAt: "2026-02-01T10:00:00Z",
-    updatedAt: "2026-02-01T12:00:00Z",
-    ...overrides,
-  });
+const connector = (
+  overrides: Partial<ConnectorSummary> = {},
+): ConnectorSummary => ({
+  id: "conn-1",
+  name: "Work Calendar",
+  kind: "ics",
+  status: "active",
+  config: { url: "https://calendar.example.com/calendar.ics" },
+  secretPresent: false,
+  intervalMinutes: 30,
+  nextRunAt: "2026-02-01T12:30:00Z",
+  lastRunAt: "2026-02-01T12:00:00Z",
+  lastError: null,
+  lastRunStats: null,
+  createdAt: "2026-02-01T10:00:00Z",
+  updatedAt: "2026-02-01T12:00:00Z",
+  ...overrides,
+});
 
+const run = (overrides: Partial<ConnectorRun>): ConnectorRun => ({
+  id: "run",
+  connectorId: "conn-1",
+  trigger: "manual",
+  status: "ok",
+  startedAt: "2026-02-01T10:00:00Z",
+  finishedAt: "2026-02-01T10:00:01Z",
+  stats: null,
+  error: null,
+  ...overrides,
+});
+
+const renderWithClient = (ui: React.ReactElement) =>
+  render(
+    <MemoryRouter>
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        {ui}
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+
+describe("connector screens", () => {
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
     vi.clearAllMocks();
-
-    vi.mocked(connectorsApi.useConnectorKinds).mockReturnValue({
-      data: defaultKinds,
-      isLoading: false,
-    } as unknown as ReturnType<typeof connectorsApi.useConnectorKinds>);
-
-    vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-      data: [],
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-    vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-      data: [],
-      isLoading: false,
-    } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
-
-    vi.mocked(connectorsApi.useCorrespondents).mockReturnValue({
-      data: [],
-      isLoading: false,
-    } as unknown as ReturnType<typeof connectorsApi.useCorrespondents>);
-
-    vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ id: "created-conn-1" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
-
-    vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ id: "updated-conn-1" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
-
-    vi.mocked(connectorsApi.useDeleteConnector).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ id: "deleted-conn-1" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useDeleteConnector>);
-
-    vi.mocked(connectorsApi.useSyncConnector).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ runId: "sync-run-1" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useSyncConnector>);
-
-    vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
-      mutateAsync: vi
-        .fn()
-        .mockResolvedValue({ ok: true, detail: "Connection test succeeded" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
+    hook("useConnectorKinds", { data: [], isLoading: false });
+    hook("useConnectors", { data: [], isLoading: false, isError: false });
+    hook("useConnectorRuns", { data: [], isLoading: false });
+    hook("useCorrespondents", { data: [], isLoading: false });
+    for (const name of [
+      "useCreateConnector",
+      "useTestConnector",
+      "useUpdateConnector",
+      "useDeleteConnector",
+      "useSyncConnector",
+    ] as const) {
+      mutation(name);
+    }
   });
 
-  afterEach(() => {
-    cleanup();
-  });
+  afterEach(cleanup);
 
-  const renderWithClient = (ui: React.ReactElement) =>
-    render(
-      <MemoryRouter>
-        <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-      </MemoryRouter>,
+  const renderCard = (overrides: Partial<ConnectorSummary> = {}) =>
+    renderWithClient(
+      <ConnectorCard
+        connector={connector(overrides)}
+        onEdit={vi.fn()}
+        onShowRuns={vi.fn()}
+      />,
     );
 
-  // 1. CalendarFormModal
-  describe("CalendarFormModal", () => {
-    it("displays error feedback when testing connection fails", async () => {
-      const mutateAsyncMock = vi
-        .fn()
-        .mockRejectedValue(new Error("Unable to reach calendar feed: 404"));
-
-      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
-        mutateAsync: mutateAsyncMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
-
-      renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-
-      const urlInput = screen.getByPlaceholderText(
-        /https:\/\/calendar\.google\.com\//i,
-      );
-      fireEvent.change(urlInput, {
-        target: { value: "https://example.com/bad.ics" },
-      });
-
-      const testBtn = screen.getByRole("button", { name: /test connection/i });
-      fireEvent.click(testBtn);
-
-      await waitFor(() => {
-        expect(
-          screen.getByText("Unable to reach calendar feed: 404"),
-        ).toBeTruthy();
-      });
-    });
-
-    it("displays error when clicking test connection with empty URL", async () => {
-      renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-
-      const testBtn = screen.getByRole("button", { name: /test connection/i });
-      fireEvent.click(testBtn);
-
-      expect(
-        screen.getByText("Enter an ICS calendar URL before testing"),
-      ).toBeTruthy();
-    });
-
-    it("submitting form in create mode calls useCreateConnector mutation and onClose", async () => {
-      const createMutateAsync = vi.fn().mockResolvedValue({ id: "conn-new-1" });
-      vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-        mutateAsync: createMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
-      const onCloseMock = vi.fn();
-
-      renderWithClient(
-        <CalendarFormModal isOpen={true} onClose={onCloseMock} />,
-      );
-
-      const nameInput = screen.getByLabelText("Connector name");
-      fireEvent.change(nameInput, { target: { value: "My Work Calendar" } });
-
-      const urlInput = screen.getByLabelText("Private ICS calendar URL");
-      fireEvent.change(urlInput, {
-        target: { value: "https://calendar.google.com/feed.ics" },
-      });
-
-      const submitBtn = screen.getByRole("button", { name: "Connect" });
-      fireEvent.click(submitBtn);
-
-      await waitFor(() => {
-        expect(createMutateAsync).toHaveBeenCalledWith({
-          kind: "ics",
-          name: "My Work Calendar",
-          config: {
-            url: "https://calendar.google.com/feed.ics",
-            lookbackDays: 90,
-            maxAttendees: 25,
-            includeDescription: false,
-            ghostThreshold: 3,
-            aliases: [],
-          },
-          intervalMinutes: 30,
-        });
-        expect(onCloseMock).toHaveBeenCalled();
-      });
-    });
-
-    it("editing existing connector pre-fills fields and submitting calls useUpdateConnector", async () => {
-      const updateMutateAsync = vi
-        .fn()
-        .mockResolvedValue({ id: "conn-edit-1" });
-      vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-        mutateAsync: updateMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
-      const onCloseMock = vi.fn();
-
-      const existingConnector = createMockConnector({
-        id: "conn-edit-1",
-        name: "Existing Work Calendar",
-        intervalMinutes: 60,
-        config: {
-          url: "https://work.example.com/cal.ics",
-          lookbackDays: 30,
-          maxAttendees: 50,
-          includeDescription: true,
-          ghostThreshold: 5,
-          aliases: ["me@work.example.com"],
-        },
-      });
-
-      renderWithClient(
-        <CalendarFormModal
-          isOpen={true}
-          onClose={onCloseMock}
-          connector={existingConnector}
-        />,
-      );
-
-      expect(screen.getByDisplayValue("Existing Work Calendar")).toBeTruthy();
-      expect(
-        screen.getByDisplayValue("https://work.example.com/cal.ics"),
-      ).toBeTruthy();
-
-      const saveBtn = screen.getByRole("button", { name: "Save changes" });
-      fireEvent.click(saveBtn);
-
-      await waitFor(() => {
-        expect(updateMutateAsync).toHaveBeenCalledWith({
-          id: "conn-edit-1",
-          name: "Existing Work Calendar",
-          config: {
-            url: "https://work.example.com/cal.ics",
-            lookbackDays: 30,
-            maxAttendees: 50,
-            includeDescription: true,
-            ghostThreshold: 5,
-            aliases: ["me@work.example.com"],
-          },
-          intervalMinutes: 60,
-        });
-        expect(onCloseMock).toHaveBeenCalled();
-      });
-    });
-
-    it("displays error message if submitting fails", async () => {
-      const createMutateAsync = vi
-        .fn()
-        .mockRejectedValue(new Error("Server validation error"));
-      vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-        mutateAsync: createMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
-
-      renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-
-      const urlInput = screen.getByLabelText("Private ICS calendar URL");
-      fireEvent.change(urlInput, {
-        target: { value: "https://calendar.google.com/feed.ics" },
-      });
-
-      const submitBtn = screen.getByRole("button", { name: "Connect" });
-      fireEvent.click(submitBtn);
-
-      await waitFor(() => {
-        expect(screen.getByRole("alert").textContent).toContain(
-          "Server validation error",
-        );
-      });
-    });
-
-    it("toggles URL visibility between password and text", () => {
-      renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-      const urlInput = screen.getByLabelText("Private ICS calendar URL");
-      expect(urlInput.getAttribute("type")).toBe("password");
-
-      const toggleBtn = screen.getByRole("button", { name: "Show URL" });
-      fireEvent.click(toggleBtn);
-      expect(urlInput.getAttribute("type")).toBe("text");
-
-      const hideBtn = screen.getByRole("button", { name: "Hide URL" });
-      fireEvent.click(hideBtn);
-      expect(urlInput.getAttribute("type")).toBe("password");
-    });
-
-    it("validates empty name and empty url on form submit", () => {
-      renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-      const nameInput = screen.getByLabelText("Connector name");
-      fireEvent.change(nameInput, { target: { value: "   " } });
-      const form = nameInput.closest("form")!;
-      fireEvent.submit(form);
-
-      expect(screen.getByRole("alert").textContent).toContain(
-        "Enter a name for this connector",
-      );
-
-      fireEvent.change(nameInput, { target: { value: "Valid Name" } });
-      const urlInput = screen.getByLabelText("Private ICS calendar URL");
-      fireEvent.change(urlInput, { target: { value: "   " } });
-      fireEvent.submit(form);
-
-      expect(screen.getByRole("alert").textContent).toContain(
-        "Enter a private ICS calendar URL",
-      );
-    });
-
-    it("updates form controls for interval, lookback, attendees, ghost threshold, and description switch", async () => {
-      const createMutateAsync = vi.fn().mockResolvedValue({ id: "conn-new" });
-      vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-        mutateAsync: createMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
-
-      renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-
-      const nameInput = screen.getByLabelText("Connector name");
-      fireEvent.change(nameInput, { target: { value: "Custom Config" } });
-
-      const urlInput = screen.getByLabelText("Private ICS calendar URL");
-      fireEvent.change(urlInput, {
-        target: { value: "https://custom.com/cal.ics" },
-      });
-
-      // Change interval to Hourly (60)
-      const hourlyBtn = screen.getByRole("radio", { name: "Hourly" });
-      fireEvent.click(hourlyBtn);
-
-      // Change lookback to 1 year (365)
-      const oneYearBtn = screen.getByRole("radio", { name: "1 year" });
-      fireEvent.click(oneYearBtn);
-
-      // Change max attendees
-      const maxAttendeesInput = screen.getByLabelText(
-        "Skip events with more than",
-      );
-      fireEvent.change(maxAttendeesInput, { target: { value: "50" } });
-
-      // Change ghost threshold
-      const ghostThresholdInput = screen.getByLabelText(
-        "Suggest a new person after",
-      );
-      fireEvent.change(ghostThresholdInput, { target: { value: "7" } });
-      fireEvent.change(
-        screen.getByLabelText("Also treat these addresses as mine"),
-        {
-          target: { value: "Me@Work.example; me@home.example other@x.example" },
-        },
-      );
-
-      // Toggle switch
-      const switchBtn = screen.getByRole("switch", {
-        name: "Include event descriptions",
-      });
-      fireEvent.click(switchBtn);
-
-      const submitBtn = screen.getByRole("button", { name: "Connect" });
-      fireEvent.click(submitBtn);
-
-      await waitFor(() => {
-        expect(createMutateAsync).toHaveBeenCalledWith({
-          kind: "ics",
-          name: "Custom Config",
-          config: {
-            url: "https://custom.com/cal.ics",
-            lookbackDays: 365,
-            maxAttendees: 50,
-            includeDescription: true,
-            ghostThreshold: 7,
-            aliases: ["me@work.example", "me@home.example", "other@x.example"],
-          },
-          intervalMinutes: 60,
-        });
-      });
-    });
+  it.each([
+    [
+      "5 meetings · 2 new people seen · 1 error",
+      { meetings: 5, ghosts: 2, errors: 1 },
+    ],
+    [
+      "1 meeting · 1 new person seen · 1 error",
+      { meetings: 1, ghosts: 1, errors: 1 },
+    ],
+  ])("words the last sync as %s", (line, lastRunStats) => {
+    renderCard({ lastRunStats });
+    expect(screen.getByText(`Last sync: ${line}`)).toBeTruthy();
   });
 
-  // 2. ConnectorCard
-  describe("ConnectorCard", () => {
-    it("renders active, paused, error, needs_reauth status badges", () => {
-      const { unmount: unmount1 } = renderWithClient(
-        <ConnectorCard
-          connector={createMockConnector({ status: "active" })}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
+  it("says why a pause or a removal failed, and keeps the dialog open for another try", async () => {
+    mutation("useUpdateConnector", new Error("Update failed"));
+    mutation("useDeleteConnector", new Error("Delete failed"));
+    renderCard();
+    const choose = (item: string) => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Actions for Work Calendar" }),
       );
-      expect(screen.getByText("Active")).toBeTruthy();
-      unmount1();
+      fireEvent.click(screen.getByRole("menuitem", { name: item }));
+    };
 
-      const { unmount: unmount2 } = renderWithClient(
-        <ConnectorCard
-          connector={createMockConnector({ status: "paused" })}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-      expect(screen.getByText("Paused")).toBeTruthy();
-      expect(screen.getByText("Sync paused")).toBeTruthy();
-      unmount2();
-
-      const { unmount: unmount3 } = renderWithClient(
-        <ConnectorCard
-          connector={createMockConnector({
-            status: "error",
-            lastError: "Network unreachable",
-          })}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-      expect(screen.getByText("Error")).toBeTruthy();
-      expect(screen.getByText("Last sync failed")).toBeTruthy();
-      expect(screen.getByText("Network unreachable")).toBeTruthy();
-      unmount3();
-
-      renderWithClient(
-        <ConnectorCard
-          connector={createMockConnector({
-            status: "needs_reauth",
-            lastError: "Session expired",
-          })}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-      expect(screen.getByText("Signed out")).toBeTruthy();
-      expect(screen.getByText("Sign-in expired")).toBeTruthy();
-      expect(screen.getByText("Session expired")).toBeTruthy();
-    });
-
-    it.each([
-      ["Pause", "active", "paused"],
-      ["Resume", "paused", "active"],
-    ] as const)(
-      "action menu option '%s' calls useUpdateConnector",
-      async (item, status, nextStatus) => {
-        const updateMutateAsync = vi.fn().mockResolvedValue({});
-        vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-          mutateAsync: updateMutateAsync,
-          isPending: false,
-        } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
-
-        const connector = createMockConnector({
-          id: "conn-toggle-1",
-          status,
-        });
-
-        renderWithClient(
-          <ConnectorCard
-            connector={connector}
-            onEdit={vi.fn()}
-            onShowRuns={vi.fn()}
-          />,
-        );
-
-        const menuTrigger = screen.getByRole("button", {
-          name: `Actions for ${connector.name}`,
-        });
-        fireEvent.click(menuTrigger);
-
-        fireEvent.click(screen.getByRole("menuitem", { name: item }));
-
-        await waitFor(() => {
-          expect(updateMutateAsync).toHaveBeenCalledWith({
-            id: "conn-toggle-1",
-            status: nextStatus,
-          });
-        });
-      },
+    choose("Pause");
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not pause Work Calendar: Update failed",
+      ),
     );
 
-    it("action menu option 'Remove' opens ConfirmDialog; checking deleteImported and confirming calls useDeleteConnector", async () => {
-      const deleteMutateAsync = vi.fn().mockResolvedValue({});
-      vi.mocked(connectorsApi.useDeleteConnector).mockReturnValue({
-        mutateAsync: deleteMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useDeleteConnector>);
-
-      const connector = createMockConnector({
-        id: "conn-remove-1",
-        name: "Remove Test Cal",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const removeItem = screen.getByRole("menuitem", { name: "Remove" });
-      fireEvent.click(removeItem);
-
-      // Confirm dialog is opened
-      expect(screen.getByText("Remove Remove Test Cal?")).toBeTruthy();
-
-      // Check deleteImported checkbox
-      const checkbox = screen.getByRole("checkbox");
-      expect((checkbox as HTMLInputElement).checked).toBe(false);
-      fireEvent.click(checkbox);
-      expect((checkbox as HTMLInputElement).checked).toBe(true);
-
-      // Confirm deletion
-      const confirmBtn = screen.getByRole("button", {
-        name: "Remove connector",
-      });
-      fireEvent.click(confirmBtn);
-
-      await waitFor(() => {
-        expect(deleteMutateAsync).toHaveBeenCalledWith({
-          id: "conn-remove-1",
-          deleteImported: true,
-        });
-      });
-    });
-
-    it("cancels remove ConfirmDialog without deleting", () => {
-      const deleteMutateAsync = vi.fn();
-      vi.mocked(connectorsApi.useDeleteConnector).mockReturnValue({
-        mutateAsync: deleteMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useDeleteConnector>);
-
-      const connector = createMockConnector({
-        id: "conn-cancel-del",
-        name: "Keep This",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      fireEvent.click(
-        screen.getByRole("button", { name: `Actions for ${connector.name}` }),
-      );
-      fireEvent.click(screen.getByRole("menuitem", { name: "Remove" }));
-      expect(screen.getByText("Remove Keep This?")).toBeTruthy();
-
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(screen.queryByText("Remove Keep This?")).toBeNull();
-      expect(deleteMutateAsync).not.toHaveBeenCalled();
-    });
-
-    it("handles update and delete errors gracefully", async () => {
-      const updateMutateAsync = vi
-        .fn()
-        .mockRejectedValue(new Error("Update failed"));
-      vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-        mutateAsync: updateMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
-
-      const deleteMutateAsync = vi
-        .fn()
-        .mockRejectedValue(new Error("Delete failed"));
-      vi.mocked(connectorsApi.useDeleteConnector).mockReturnValue({
-        mutateAsync: deleteMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useDeleteConnector>);
-
-      const connector = createMockConnector({
-        id: "conn-err-card",
-        name: "Error Card",
-        status: "active",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      // Trigger pause error
-      fireEvent.click(
-        screen.getByRole("button", { name: `Actions for ${connector.name}` }),
-      );
-      fireEvent.click(screen.getByRole("menuitem", { name: "Pause" }));
-      await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith(
-          "Could not pause Error Card: Update failed",
-        ),
-      );
-
-      // Trigger delete error: the dialog stays open for another try
-      fireEvent.click(
-        screen.getByRole("button", { name: `Actions for ${connector.name}` }),
-      );
-      fireEvent.click(screen.getByRole("menuitem", { name: "Remove" }));
-      fireEvent.click(screen.getByRole("button", { name: "Remove connector" }));
-      await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith(
-          "Could not remove Error Card: Delete failed",
-        ),
-      );
-      expect(screen.getByText("Remove Error Card?")).toBeTruthy();
-    });
-
-    it.each([
-      [
-        "5 meetings · 2 new people seen · 1 error",
-        { meetings: 5, ghosts: 2, errors: 1 },
-      ],
-      [
-        "1 meeting · 1 new person seen · 1 error",
-        { meetings: 1, ghosts: 1, errors: 1 },
-      ],
-    ])("formatStats displays %s", (line, lastRunStats) => {
-      const connector = createMockConnector({ kind: "ics", lastRunStats });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      expect(screen.getByText(`Last sync: ${line}`)).toBeTruthy();
-    });
-
-    it("Reconnect button opens the connector for editing", () => {
-      const onEditMock = vi.fn();
-      const connector = createMockConnector({
-        id: "conn-reauth-2",
-        status: "needs_reauth",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={onEditMock}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      const reconnectBtn = screen.getByRole("button", { name: "Reconnect" });
-      fireEvent.click(reconnectBtn);
-      expect(onEditMock).toHaveBeenCalledWith(connector);
-    });
-
-    it("Retry button on error card triggers sync", async () => {
-      const syncMutateAsync = vi.fn().mockResolvedValue({ runId: "retry-run" });
-      vi.mocked(connectorsApi.useSyncConnector).mockReturnValue({
-        mutateAsync: syncMutateAsync,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useSyncConnector>);
-
-      const connector = createMockConnector({
-        id: "conn-error-retry",
-        status: "error",
-        lastError: "Feed unreachable",
-      });
-
-      renderWithClient(
-        <ConnectorCard
-          connector={connector}
-          onEdit={vi.fn()}
-          onShowRuns={vi.fn()}
-        />,
-      );
-
-      const retryBtn = screen.getByRole("button", { name: "Retry now" });
-      fireEvent.click(retryBtn);
-
-      await waitFor(() => {
-        expect(syncMutateAsync).toHaveBeenCalledWith("conn-error-retry");
-      });
-    });
+    choose("Remove");
+    fireEvent.click(screen.getByRole("button", { name: "Remove connector" }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not remove Work Calendar: Delete failed",
+      ),
+    );
+    expect(screen.getByText("Remove Work Calendar?")).toBeTruthy();
   });
 
-  // 3. RunHistoryDrawer
-  describe("RunHistoryDrawer", () => {
-    const mockConnector = createMockConnector({
-      id: "conn-history-test",
-      name: "History Cal",
-    });
-
-    it("renders loading state when loading runs", () => {
-      vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-        data: undefined,
-        isLoading: true,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
-
-      renderWithClient(
-        <RunHistoryDrawer
-          isOpen={true}
-          onClose={vi.fn()}
-          connector={mockConnector}
-        />,
-      );
-
-      expect(screen.getByText("Loading runs…")).toBeTruthy();
-    });
-
-    it("renders empty state when no runs are recorded", () => {
-      vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-        data: [],
-        isLoading: false,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
-
-      renderWithClient(
-        <RunHistoryDrawer
-          isOpen={true}
-          onClose={vi.fn()}
-          connector={mockConnector}
-        />,
-      );
-
-      expect(screen.getByText("No syncs yet")).toBeTruthy();
-      expect(
-        screen.getByText("Each sync shows up here once the connector runs"),
-      ).toBeTruthy();
-    });
-
-    it("renders list of runs with ok/error/running statuses, stats, and timing", () => {
-      const mockRuns: ConnectorRun[] = [
-        {
-          id: "run-1",
-          connectorId: "conn-history-test",
-          trigger: "manual",
-          status: "ok",
-          startedAt: "2026-02-01T12:00:00.000Z",
-          finishedAt: "2026-02-01T12:00:02.500Z",
+  it("words each run's status, trigger, numbers and length", () => {
+    hook("useConnectorRuns", {
+      isLoading: false,
+      data: [
+        run({
+          id: "a",
+          finishedAt: "2026-02-01T10:00:02.500Z",
           stats: { meetings: 12, ghosts: 3 },
-          error: null,
-        },
-        {
-          id: "run-2",
-          connectorId: "conn-history-test",
+        }),
+        run({
+          id: "b",
           trigger: "schedule",
           status: "error",
-          startedAt: "2026-02-01T11:00:00.000Z",
-          finishedAt: "2026-02-01T11:00:01.000Z",
           stats: { errors: 1 },
           error: "401 Unauthorized token expired",
-        },
-        {
-          id: "run-3",
-          connectorId: "conn-history-test",
-          trigger: "schedule",
-          status: "running",
-          startedAt: "2026-02-01T13:00:00.000Z",
-          finishedAt: null,
-          stats: null,
-          error: null,
-        },
-      ];
-
-      vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-        data: mockRuns,
-        isLoading: false,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
-
-      renderWithClient(
-        <RunHistoryDrawer
-          isOpen={true}
-          onClose={vi.fn()}
-          connector={mockConnector}
-        />,
-      );
-
-      // Verify modal title
-      expect(screen.getByText("Run history for History Cal")).toBeTruthy();
-
-      // Verify statuses
-      expect(screen.getByText("ok")).toBeTruthy();
-      expect(screen.getByText("error")).toBeTruthy();
-      expect(screen.getByText("running")).toBeTruthy();
-
-      // Verify triggers
-      expect(screen.getByText("manual run")).toBeTruthy();
-      expect(screen.getAllByText("schedule run").length).toBe(2);
-
-      // Verify stats
-      expect(screen.getByText("12 meetings · 3 new people seen")).toBeTruthy();
-      expect(screen.getByText("1 error")).toBeTruthy();
-      expect(screen.getByText("No items processed")).toBeTruthy();
-
-      // Verify error alert
-      expect(screen.getByText("401 Unauthorized token expired")).toBeTruthy();
-
-      // Verify timing / duration
-      expect(screen.getByText("2.5s")).toBeTruthy();
-      expect(screen.getByText("1.0s")).toBeTruthy();
-      expect(screen.getByText("—")).toBeTruthy();
-    });
-
-    it("handles copy details to clipboard and clipboard error fallback", async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      const copySpy = vi
-        .spyOn(clipboard, "copyToClipboard")
-        .mockResolvedValue();
-      const run: ConnectorRun = {
-        id: "run-copy",
-        connectorId: "conn-hist-1",
-        trigger: "manual",
-        status: "ok",
-        startedAt: "2026-02-01T10:00:00Z",
-        finishedAt: "2026-02-01T10:00:02Z",
-        stats: { skipped: 4 },
-        error: null,
-      };
-      vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-        data: [run],
-        isLoading: false,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
-
-      renderWithClient(
-        <RunHistoryDrawer
-          isOpen={true}
-          onClose={vi.fn()}
-          connector={mockConnector}
-        />,
-      );
-
-      expect(screen.getByText("4 skipped")).toBeTruthy();
-
-      const copyBtn = screen.getByRole("button", {
-        name: "Copy run details",
-      });
-      await act(async () => {
-        fireEvent.click(copyBtn);
-      });
-
-      expect(copySpy).toHaveBeenCalledWith(JSON.stringify(run, null, 2));
-
-      // Test clipboard failure
-      copySpy.mockRejectedValueOnce(new Error("Permission denied"));
-      await act(async () => {
-        fireEvent.click(copyBtn);
-      });
-      expect(toast.error).toHaveBeenCalledWith(clipboard.CLIPBOARD_DENIED);
-
-      vi.useRealTimers();
-    });
-
-    it("formats fetched-only, message, and interaction stats, sub-second durations, and unknown status labels", () => {
-      const runs: ConnectorRun[] = [
-        {
-          id: "run-neutral",
-          connectorId: "conn-hist-1",
-          trigger: "manual",
-          status: "custom_status" as unknown as ConnectorRun["status"],
-          startedAt: "2026-02-01T10:00:00Z",
+        }),
+        run({ id: "c", status: "running", finishedAt: null }),
+        run({
+          id: "d",
+          status: "custom_status" as ConnectorRun["status"],
           finishedAt: "2026-02-01T10:00:00.500Z",
           stats: { fetched: 15 },
-          error: null,
-        },
-        {
-          id: "run-msg-int",
-          connectorId: "conn-hist-1",
-          trigger: "manual",
-          status: "ok",
-          startedAt: "2026-02-01T10:00:00Z",
-          finishedAt: "2026-02-01T10:00:01Z",
-          stats: { messages: 7, interactions: 10 },
-          error: null,
-        },
-        {
-          id: "run-interactions-only",
-          connectorId: "conn-hist-1",
-          trigger: "manual",
-          status: "ok",
-          startedAt: "2026-02-01T10:00:00Z",
-          finishedAt: "2026-02-01T10:00:01Z",
-          stats: { interactions: 4 },
-          error: null,
-        },
-      ];
-      vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-        data: runs,
-        isLoading: false,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
-
-      renderWithClient(
-        <RunHistoryDrawer isOpen={true} onClose={vi.fn()} connector={null} />,
-      );
-
-      expect(screen.getByText("15 fetched")).toBeTruthy();
-      expect(screen.getByText("500ms")).toBeTruthy();
-      expect(screen.getByText("custom_status")).toBeTruthy();
-      expect(screen.getByText("7 messages")).toBeTruthy();
-      expect(screen.getByText("4 interactions")).toBeTruthy();
+        }),
+        run({ id: "e", stats: { messages: 7, interactions: 10 } }),
+        run({ id: "f", stats: { interactions: 4 } }),
+      ],
     });
-  });
-
-  // 4. ConnectorsView
-  describe("ConnectorsView", () => {
-    it("renders loading skeleton", () => {
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: undefined,
-        isLoading: true,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      expect(screen.getByLabelText("Loading connectors")).toBeTruthy();
-    });
-
-    it("renders empty gallery when no connectors exist", () => {
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: [],
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      expect(
-        screen.getByRole("heading", { name: "Add a connector" }),
-      ).toBeTruthy();
-      expect(
-        screen.getByText(/Contrack learns who you talk to from your calendar/i),
-      ).toBeTruthy();
-      expect(screen.getByText("Calendar")).toBeTruthy();
-      expect(screen.getByText("Mailbox (IMAP)")).toBeTruthy();
-
-      // Top header "Add connector" button is not shown when empty
-      expect(
-        screen.queryByRole("button", { name: /Add connector/i }),
-      ).toBeNull();
-    });
-
-    it.each([
-      ["Calendar", /^Calendar\b/, "Connect calendar"],
-      ["Mailbox (IMAP)", /Mailbox \(IMAP\)/i, "Connect mailbox (IMAP)"],
-      ["Google Workspace", /Google Workspace/i, "Connect Google Workspace"],
-      ["CardDAV", /^CardDAV\b/i, "Connect CardDAV"],
-    ])(
-      "selecting %s from AddConnectorSheet opens its form",
-      (_kind, tile, heading) => {
-        const connectorsList = [
-          createMockConnector({ id: "conn-v1", name: "Primary Calendar" }),
-        ];
-
-        vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-          data: connectorsList,
-          isLoading: false,
-          isError: false,
-          refetch: vi.fn(),
-        } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-        renderWithClient(<ConnectorsView />);
-
-        // Open sheet
-        fireEvent.click(screen.getByRole("button", { name: /Add connector/i }));
-        expect(
-          screen.getByRole("heading", { name: "Add a connector" }),
-        ).toBeTruthy();
-
-        // Click the kind inside sheet
-        fireEvent.click(screen.getByRole("button", { name: tile }));
-
-        // Sheet closes and the kind's form opens
-        expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
-      },
+    renderWithClient(
+      <RunHistoryDrawer isOpen onClose={vi.fn()} connector={connector()} />,
     );
 
-    it("tests and creates a CardDAV connector from ConnectorsView, including picking among multiple discovered address books", async () => {
-      const testMock = vi.fn().mockResolvedValue({
-        ok: true,
-        detail: "Connected to Personal Contacts (2 address books found)",
-        addressBooks: [
-          {
-            url: "https://cloud.example.com/dav/books/personal/",
-            name: "Personal Contacts",
-            writable: true,
-          },
-          {
-            url: "https://cloud.example.com/dav/books/recent/",
-            name: "Recently contacted",
-            writable: false,
-          },
-        ],
-      });
-      const createMock = vi.fn().mockResolvedValue({ id: "carddav-1" });
+    for (const text of [
+      "Run history for Work Calendar",
+      "running",
+      "custom_status",
+      "schedule run",
+      "12 meetings · 3 new people seen",
+      "1 error",
+      "401 Unauthorized token expired",
+      "No items processed",
+      "15 fetched",
+      "7 messages",
+      "4 interactions",
+      "2.5s",
+      "500ms",
+      "—",
+    ]) {
+      expect(screen.getByText(text)).toBeTruthy();
+    }
+  });
 
-      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
-        mutateAsync: testMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
-      vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-        mutateAsync: createMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
+  it("copies a run's details, and says so when the clipboard is denied", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const copy = vi.spyOn(clipboard, "copyToClipboard").mockResolvedValue();
+    const skipped = run({ stats: { skipped: 4 } });
+    hook("useConnectorRuns", { data: [skipped], isLoading: false });
+    renderWithClient(
+      <RunHistoryDrawer isOpen onClose={vi.fn()} connector={null} />,
+    );
+    expect(screen.getByText("4 skipped")).toBeTruthy();
+    const copyBtn = screen.getByRole("button", { name: "Copy run details" });
 
-      renderWithClient(<ConnectorsView />);
+    await act(async () => fireEvent.click(copyBtn));
+    expect(copy).toHaveBeenCalledWith(JSON.stringify(skipped, null, 2));
 
-      fireEvent.click(screen.getByRole("button", { name: "Connect CardDAV" }));
-      expect(
-        screen.getByRole("heading", { name: "Connect CardDAV" }),
-      ).toBeTruthy();
+    copy.mockRejectedValueOnce(new Error("Permission denied"));
+    await act(async () => fireEvent.click(copyBtn));
+    expect(toast.error).toHaveBeenCalledWith(clipboard.CLIPBOARD_DENIED);
+    vi.useRealTimers();
+  });
 
-      fireEvent.change(screen.getByLabelText("Server or address book URL"), {
-        target: { value: "https://cloud.example.com" },
-      });
-      fireEvent.change(screen.getByLabelText("Username / email"), {
-        target: { value: "alice@example.com" },
-      });
-      fireEvent.change(screen.getByLabelText("App password"), {
-        target: { value: "secret-app-pwd" },
-      });
+  it("offers to load the connectors again when loading failed", () => {
+    const refetch = vi.fn();
+    hook("useConnectors", { isLoading: false, isError: true, refetch });
+    renderWithClient(<ConnectorsView />);
 
-      fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
-      await waitFor(() => {
-        expect(testMock).toHaveBeenCalledWith({
-          kind: "carddav",
-          config: {
-            url: "https://cloud.example.com",
-            username: "alice@example.com",
-            syncDirection: "two_way",
-          },
-          secret: { password: "secret-app-pwd" },
-          connectorId: undefined,
-        });
-      });
-
-      // Multi-book selector renders and defaults to the first writable book
-      const bookSelect = screen.getByLabelText(
-        "Address book",
-      ) as HTMLSelectElement;
-      expect(bookSelect.value).toBe(
-        "https://cloud.example.com/dav/books/personal/",
-      );
-
-      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-      await waitFor(() => {
-        expect(createMock).toHaveBeenCalledWith({
-          kind: "carddav",
-          name: "Personal Contacts",
-          config: {
-            url: "https://cloud.example.com",
-            username: "alice@example.com",
-            syncDirection: "two_way",
-            addressBookUrl: "https://cloud.example.com/dav/books/personal/",
-          },
-          secret: { password: "secret-app-pwd" },
-          intervalMinutes: 30,
-        });
-      });
-    });
-
-    it("renders error state and retry button when loading connectors fails", () => {
-      const refetchMock = vi.fn();
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: undefined,
-        isLoading: false,
-        isError: true,
-        refetch: refetchMock,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      expect(screen.getByText("Could not load connectors")).toBeTruthy();
-      const retryBtn = screen.getByRole("button", { name: "Try again" });
-      fireEvent.click(retryBtn);
-
-      expect(refetchMock).toHaveBeenCalledTimes(1);
-    });
-
-    it("opens and closes AddConnectorSheet, CalendarFormModal in edit mode, and RunHistoryDrawer", () => {
-      const connector = createMockConnector({
-        id: "conn-1",
-        name: "Personal iCloud",
-        kind: "ics",
-        config: { url: "https://icloud.com/feed.ics" },
-      });
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: [connector],
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      // Open and close AddConnectorSheet
-      fireEvent.click(screen.getByRole("button", { name: /Add connector/i }));
-      expect(
-        screen.getByRole("heading", { name: "Add a connector" }),
-      ).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(
-        screen.queryByRole("heading", { name: "Add a connector" }),
-      ).toBeNull();
-
-      // Open and close CalendarFormModal via card edit
-      const menuTrigger = screen.getByRole("button", {
-        name: "Actions for Personal iCloud",
-      });
-      fireEvent.click(menuTrigger);
-      fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
-      expect(
-        screen.getByRole("heading", { name: "Edit Personal iCloud" }),
-      ).toBeTruthy();
-      expect(screen.getByDisplayValue("Personal iCloud")).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(
-        screen.queryByRole("heading", { name: "Edit Personal iCloud" }),
-      ).toBeNull();
-
-      // Open and close RunHistoryDrawer via card runs
-      fireEvent.click(menuTrigger);
-      fireEvent.click(screen.getByRole("menuitem", { name: "Run history" }));
-      expect(
-        screen.getByRole("heading", {
-          name: "Run history for Personal iCloud",
-        }),
-      ).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Close" }));
-      expect(
-        screen.queryByRole("heading", {
-          name: "Run history for Personal iCloud",
-        }),
-      ).toBeNull();
-    });
+    expect(screen.getByText("Could not load connectors")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });

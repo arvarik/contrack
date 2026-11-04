@@ -1,162 +1,44 @@
 /**
- * tests/integration/connectors.imap.test.ts — Integration tests for IMAP connector adapter.
- *
- * Uses an in-process fake IMAP server to verify:
- * - Connection testing (test)
- * - Auth failure detection (ConnectorAuthError)
- * - Message syncing and cursor management (uidValidity, lastUid)
- * - End-to-end sync with createConnector + runNow
- * - Email body download & AI summary generation for matched contacts
+ * The Mailbox (IMAP) connector's answers to what a real server will not do
+ * on request: refuse a login in a given way, or reset the connection. The
+ * sync itself is proven against GreenMail in tests/lab/imap.lab.test.ts.
  */
 
 import net from "node:net";
-import crypto from "node:crypto";
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MessageStructureObject } from "imapflow";
 import {
   imapAdapter,
   summaryPart,
 } from "../../server/connectors/adapters/imap.ts";
 import { ConnectorConfigError } from "../../server/connectors/errors.ts";
-import { createConnector, runNow } from "../../server/connectors/service.ts";
-import { sqlite } from "../../server/db.ts";
-import { scopeForOwnerId, type Scope } from "../../server/tenancy/scope.ts";
-import * as gateway from "../../server/ai/gateway.ts";
-import * as instanceSwitch from "../../server/ai/instanceSwitch.ts";
-import type { SyncEvent } from "../../server/connectors/types.ts";
 
-describe("IMAP Adapter Integration", () => {
+describe("IMAP connect errors", () => {
+  /** A LOGIN refusal to send, or "reset" to reset the connection at the folder list. */
+  let answer = "";
   let server: net.Server;
-  let serverPort: number;
-  /** The text after `NO` that the fake server sends to LOGIN, if any. */
-  let loginRefusal: string | null = null;
-  let folderUidValidity = 12345;
-  /** Message bodies the fake server sent: only a summary needs one. */
-  let bodyFetches = 0;
-  /** Reset the connection (TCP RST) instead of answering the first FETCH. */
-  let resetOnFetch = false;
-  /** Every UID SEARCH the adapter sent, as the server read it. */
-  const searchCommands: string[] = [];
-  /** Serve the message with a Date header decades from its arrival. */
-  let bogusDate = false;
-
-  const rawMessageRfc822 = [
-    'From: "Alice Wonderland" <alice@example.com>',
-    'To: "Me" <me@example.com>',
-    "Subject: Important Project Discussion",
-    "Date: Sun, 15 Feb 2026 10:00:00 +0000",
-    "Message-ID: <msg-001@example.com>",
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=utf-8",
-    "",
-    "Hi, please find the latest project update attached. Let me know what you think.",
-  ].join("\r\n");
+  let port: number;
 
   beforeAll(async () => {
     process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";
-
     server = net.createServer((socket) => {
-      socket.write("* OK [CAPABILITY IMAP4rev1] Fake IMAP Server Ready\r\n");
-
-      let buffer = "";
+      socket.write("* OK [CAPABILITY IMAP4rev1] Fake IMAP ready\r\n");
       socket.on("data", (data) => {
-        buffer += data.toString();
-        while (buffer.includes("\r\n")) {
-          const idx = buffer.indexOf("\r\n");
-          const line = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-
-          if (!line.trim()) continue;
-
-          const parts = line.split(" ");
-          const tag = parts[0];
-          const cmd = (parts[1] || "").toUpperCase();
-          const rest = parts.slice(2).join(" ");
-
-          if (cmd === "LOGIN") {
-            if (loginRefusal) {
-              socket.write(`${tag} NO ${loginRefusal}\r\n`);
-            } else {
-              socket.write(`${tag} OK [CAPABILITY IMAP4rev1] Logged in\r\n`);
-            }
-          } else if (cmd === "CAPABILITY") {
-            socket.write(
-              `* CAPABILITY IMAP4rev1\r\n${tag} OK CAPABILITY completed\r\n`,
-            );
-          } else if (cmd === "LIST" || cmd === "LSUB") {
-            if (rest.includes("INBOX") || rest.includes("Sent")) {
-              socket.write(`${tag} OK ${cmd} done\r\n`);
-            } else {
-              socket.write(`* ${cmd} (\\HasNoChildren) "/" "INBOX"\r\n`);
-              socket.write(`* ${cmd} (\\HasNoChildren \\Sent) "/" "Sent"\r\n`);
-              socket.write(`${tag} OK ${cmd} completed\r\n`);
-            }
-          } else if (cmd === "SELECT" || cmd === "EXAMINE") {
-            socket.write(
-              `* 2 EXISTS\r\n* OK [UIDVALIDITY ${folderUidValidity}] UIDs valid\r\n* OK [UIDNEXT 200] Next UID\r\n${tag} OK [READ-WRITE] Select completed\r\n`,
-            );
-          } else if (cmd === "UID") {
-            const subCmd = (parts[2] || "").toUpperCase();
-            if (subCmd === "SEARCH") {
-              searchCommands.push(line);
-              if (line.includes("102:*") || line.includes("200:*")) {
-                socket.write(`* SEARCH\r\n${tag} OK SEARCH completed\r\n`);
-              } else {
-                socket.write(`* SEARCH 101\r\n${tag} OK SEARCH completed\r\n`);
-              }
-            } else if (subCmd === "FETCH") {
-              if (resetOnFetch) {
-                socket.resetAndDestroy();
-                return;
-              }
-              if (line.includes("BODY.PEEK[TEXT]")) {
-                // Only the text part: the adapter never downloads the whole
-                // message, whose attachments a summary does not read.
-                bodyFetches++;
-                const [head, body] = rawMessageRfc822.split("\r\n\r\n");
-                const header = `${head}\r\n\r\n`;
-                socket.write(
-                  `* 1 FETCH (UID 101 RFC822.SIZE ${rawMessageRfc822.length} BODY[HEADER] {${header.length}}\r\n${header} BODY[TEXT]<0> {${body.length}}\r\n${body})\r\n${tag} OK FETCH completed\r\n`,
-                );
-              } else if (
-                line.includes("BODY.PEEK[]") ||
-                line.includes("BODY[]")
-              ) {
-                socket.write(`${tag} NO Whole messages are not served\r\n`);
-              } else {
-                socket.write(
-                  `* 1 FETCH (UID 101 INTERNALDATE "15-Feb-2026 10:00:00 +0000" ENVELOPE ("${bogusDate ? "Fri, 01 Jan 2099 10:00:00 +0000" : "Sun, 15 Feb 2026 10:00:00 +0000"}" "Important Project Discussion" (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) ((NIL NIL "me" "example.com")) NIL NIL NIL "<msg-001@example.com>") BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" ${rawMessageRfc822.length} 9))\r\n${tag} OK FETCH completed\r\n`,
-                );
-              }
-            } else {
-              socket.write(`${tag} OK UID completed\r\n`);
-            }
-          } else if (cmd === "LOGOUT") {
-            socket.write(`* BYE Logging out\r\n${tag} OK LOGOUT completed\r\n`);
-            socket.end();
-          } else if (cmd === "CLOSE") {
-            socket.write(`${tag} OK CLOSE completed\r\n`);
-          } else {
-            socket.write(`${tag} OK Completed\r\n`);
-          }
+        for (const line of data.toString().split("\r\n").filter(Boolean)) {
+          const [tag, command] = line.split(" ");
+          // A reset comes once connected, at the folder list.
+          if (answer === "reset" && line.endsWith('LIST "" "*"'))
+            socket.resetAndDestroy();
+          else if (answer !== "reset" && command.toUpperCase() === "LOGIN")
+            socket.write(`${tag} NO ${answer}\r\n`);
+          else socket.write(`${tag} OK done\r\n`);
         }
       });
     });
-
-    await new Promise<void>((resolve) => {
-      server.listen(0, "127.0.0.1", () => {
-        serverPort = (server.address() as net.AddressInfo).port;
-        resolve();
-      });
-    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    port = (server.address() as net.AddressInfo).port;
   });
 
   afterAll(async () => {
@@ -164,39 +46,22 @@ describe("IMAP Adapter Integration", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  const ownerId = "imap-test-" + crypto.randomUUID().slice(0, 8);
-  const scope: Scope = scopeForOwnerId(ownerId);
-
-  beforeEach(() => {
-    loginRefusal = null;
-    resetOnFetch = false;
-    bogusDate = false;
-    searchCommands.length = 0;
-    folderUidValidity = 12345;
-  });
-
-  /** The config each test() call passes: the fake server, no summaries. */
-  const testConfig = () => ({
-    host: "127.0.0.1",
-    port: serverPort,
-    secure: false,
-    username: "me@example.com",
-    lookbackDays: 90,
-    rollup: true,
-    ghostThreshold: 3,
-    maxMessagesPerFolder: 5000,
-    aliases: [],
-    summaries: false,
-  });
-
-  it("test() succeeds with valid credentials", async () => {
-    const result = await imapAdapter.test(testConfig(), {
-      password: "goodpassword",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.detail).toContain("Connected successfully");
-  });
+  const connect = () =>
+    imapAdapter.test(
+      {
+        host: "127.0.0.1",
+        port,
+        secure: false,
+        username: "me@example.com",
+        lookbackDays: 90,
+        rollup: true,
+        ghostThreshold: 3,
+        maxMessagesPerFolder: 5000,
+        aliases: [],
+        summaries: false,
+      },
+      { password: "pw" },
+    );
 
   it.each([
     [
@@ -225,150 +90,43 @@ describe("IMAP Adapter Integration", () => {
       "IMAP authentication failed: Application-specific password required",
     ],
   ])(
-    "test() reads a LOGIN refusal of %s as %s",
+    "reads a LOGIN refusal of %s as %s",
     async (refusal, name, statusCode, message) => {
-      loginRefusal = refusal;
-      await expect(
-        imapAdapter.test(testConfig(), { password: "goodpassword" }),
-      ).rejects.toMatchObject({ name, statusCode, message });
+      answer = refusal;
+      await expect(connect()).rejects.toMatchObject({
+        name,
+        statusCode,
+        message,
+      });
     },
   );
 
-  it("asserts safe host when private hosts not allowed", async () => {
+  it("fails, and does not crash the process, when the server resets the connection", async () => {
+    // ImapFlow emits a reset as an `error` event. With no listener, Node
+    // throws it, and the server's uncaughtException handler exits.
+    answer = "reset";
+    const uncaught = vi.fn();
+    process.on("uncaughtException", uncaught);
+    try {
+      await expect(connect()).rejects.toThrow("Connection not available");
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(uncaught).not.toHaveBeenCalled();
+    } finally {
+      process.off("uncaughtException", uncaught);
+    }
+  });
+
+  it("refuses a private host unless private hosts are allowed", async () => {
     delete process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS;
     try {
-      await expect(
-        imapAdapter.test(testConfig(), { password: "test" }),
-      ).rejects.toThrow(ConnectorConfigError);
+      await expect(connect()).rejects.toThrow(ConnectorConfigError);
     } finally {
       process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";
     }
   });
+});
 
-  it("syncs messages, tracks cursor, and handles AI summaries", async () => {
-    // Mock AI gateway for summary
-    vi.spyOn(gateway, "isAnyProviderConfigured").mockReturnValue(true);
-    vi.spyOn(gateway, "generateFor").mockResolvedValue({
-      text: "Alice sent the latest project update for review.",
-      model: "test-llm",
-      tokenCount: 25,
-      latencyMs: 50,
-    } as gateway.AIGenerateResult);
-
-    const isContactParticipant = (p: { email?: string }) =>
-      p.email === "alice@example.com";
-    bodyFetches = 0;
-
-    const ctx = {
-      config: {
-        host: "127.0.0.1",
-        port: serverPort,
-        secure: false,
-        username: "me@example.com",
-        folders: ["INBOX"],
-        summaries: true,
-        lookbackDays: 90,
-        rollup: true,
-        ghostThreshold: 3,
-        maxMessagesPerFolder: 100,
-        aliases: [],
-      },
-      secret: { password: "password" },
-      cursor: null,
-      since: "2026-01-01T00:00:00.000Z",
-      selfAddresses: { emails: ["me@example.com"], phones: [] },
-      signal: new AbortController().signal,
-      log: console.log,
-      accountId: ownerId,
-      isContactParticipant,
-    };
-
-    const events: SyncEvent[] = [];
-    const gen = imapAdapter.sync(ctx);
-    let step = await gen.next();
-    while (!step.done) {
-      events.push(step.value);
-      step = await gen.next();
-    }
-
-    const cursor = step.value as { folders: Record<string, unknown> };
-    expect(cursor).toBeDefined();
-    expect(cursor.folders.INBOX).toEqual({
-      uidValidity: 12345,
-      lastUid: 101,
-    });
-
-    const interactions = events.filter((e) => e.kind === "interaction");
-    expect(interactions).toHaveLength(1);
-    const int = interactions[0] as Extract<SyncEvent, { kind: "interaction" }>;
-    expect(int.title).toBe("Important Project Discussion");
-    expect(int.direction).toBe("in");
-    expect(int.content).toBe(
-      "Alice sent the latest project update for review.",
-    );
-    // The summary needed the body, so the adapter downloaded it once.
-    expect(bodyFetches).toBe(1);
-  });
-
-  it("downloads no body and asks no model when AI is off for the owner", async () => {
-    vi.spyOn(gateway, "isAnyProviderConfigured").mockReturnValue(true);
-    const generateSpy = vi.spyOn(gateway, "generateFor");
-    generateSpy.mockClear();
-    // Off for the owner's account or for the whole instance: aiAllowedForUser
-    // answers the same for both.
-    const allowedSpy = vi
-      .spyOn(instanceSwitch, "aiAllowedForUser")
-      .mockReturnValue(false);
-    bodyFetches = 0;
-
-    try {
-      const gen = imapAdapter.sync({
-        config: {
-          host: "127.0.0.1",
-          port: serverPort,
-          secure: false,
-          username: "me@example.com",
-          folders: ["INBOX"],
-          summaries: true,
-          lookbackDays: 90,
-          rollup: true,
-          ghostThreshold: 3,
-          maxMessagesPerFolder: 100,
-          aliases: [],
-        },
-        secret: { password: "password" },
-        cursor: null,
-        since: "2026-01-01T00:00:00.000Z",
-        selfAddresses: { emails: ["me@example.com"], phones: [] },
-        signal: new AbortController().signal,
-        log: () => {},
-        accountId: ownerId,
-        isContactParticipant: (p: { email?: string }) =>
-          p.email === "alice@example.com",
-      });
-      const events: SyncEvent[] = [];
-      let step = await gen.next();
-      while (!step.done) {
-        events.push(step.value);
-        step = await gen.next();
-      }
-
-      const interactions = events.filter((e) => e.kind === "interaction");
-      expect(interactions).toHaveLength(1);
-      const int = interactions[0] as Extract<
-        SyncEvent,
-        { kind: "interaction" }
-      >;
-      expect(int.title).toBe("Important Project Discussion");
-      expect(int.content).toBeUndefined();
-      expect(allowedSpy).toHaveBeenCalledWith(ownerId);
-      expect(bodyFetches).toBe(0);
-      expect(generateSpy).not.toHaveBeenCalled();
-    } finally {
-      allowedSpy.mockRestore();
-    }
-  });
-
+describe("summaryPart", () => {
   it.each([
     [
       "plain text before HTML, never an attachment",
@@ -399,208 +157,8 @@ describe("IMAP Adapter Integration", () => {
       },
       { part: "1", html: true },
     ],
-    [
-      "the text of a single-part message",
-      { type: "text/plain" },
-      { part: "1", html: false },
-    ],
     ["nothing to read", { type: "image/png" }, null],
-  ])("summaryPart picks %s", (_name, structure, expected) => {
+  ])("picks %s", (_name, structure, expected) => {
     expect(summaryPart(structure as MessageStructureObject)).toEqual(expected);
-  });
-
-  it("fails the sync, not the process, when the server resets the connection", async () => {
-    // ImapFlow emits a reset as an `error` event. With no listener, Node
-    // throws it, and the server's uncaughtException handler exits.
-    resetOnFetch = true;
-    const uncaught = vi.fn();
-    process.on("uncaughtException", uncaught);
-    try {
-      const gen = imapAdapter.sync({
-        config: {
-          host: "127.0.0.1",
-          port: serverPort,
-          secure: false,
-          username: "me@example.com",
-          folders: ["INBOX"],
-          summaries: false,
-          lookbackDays: 90,
-          rollup: true,
-          ghostThreshold: 3,
-          maxMessagesPerFolder: 100,
-          aliases: [],
-        },
-        secret: { password: "password" },
-        cursor: null,
-        since: "2026-01-01T00:00:00.000Z",
-        selfAddresses: { emails: ["me@example.com"], phones: [] },
-        signal: new AbortController().signal,
-        log: () => {},
-        accountId: ownerId,
-      });
-      // The FETCH that was waiting rejects, and the sync ends with it.
-      await expect(gen.next()).rejects.toThrow("Connection not available");
-      await new Promise((resolve) => setImmediate(resolve));
-      expect(uncaught).not.toHaveBeenCalled();
-    } finally {
-      process.off("uncaughtException", uncaught);
-    }
-  });
-
-  it("integrates end-to-end with createConnector and runNow", async () => {
-    // Seed user
-    sqlite
-      .prepare(
-        `INSERT OR IGNORE INTO users (id, email, username, passwordHash) VALUES (?, ?, ?, 'hash')`,
-      )
-      .run(ownerId, `${ownerId}@example.com`, ownerId);
-
-    // Seed contact for alice
-    const contactId = crypto.randomUUID();
-    sqlite
-      .prepare(
-        `INSERT INTO contacts (id, ownerId, name, addedAt, updatedAt) VALUES (?, ?, 'Alice Wonderland', datetime('now'), datetime('now'))`,
-      )
-      .run(contactId, ownerId);
-    sqlite
-      .prepare(
-        `INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, 'alice@example.com', 1)`,
-      )
-      .run(crypto.randomUUID(), contactId);
-
-    const connector = await createConnector(scope, {
-      kind: "imap",
-      name: "My Work Email",
-      config: {
-        host: "127.0.0.1",
-        port: serverPort,
-        secure: false,
-        username: "me@example.com",
-        folders: ["INBOX"],
-        summaries: false,
-      },
-      secret: { password: "testpassword" },
-      intervalMinutes: 15,
-    });
-
-    expect(connector.id).toBeDefined();
-    expect(connector.kind).toBe("imap");
-    expect(connector.status).toBe("active");
-
-    // Run sync
-    const runResult = await runNow(scope, connector.id);
-    expect(runResult.status).toBe("ok");
-    expect(runResult.stats.interactions).toBe(1);
-
-    // Check interaction was saved
-    const rows = sqlite
-      .prepare("SELECT * FROM interactions WHERE ownerId = ? AND contactId = ?")
-      .all(ownerId, contactId) as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(1);
-    expect(rows[0].source).toBe("imap");
-    expect(rows[0].title).toBe("Important Project Discussion");
-
-    // Clean up
-    sqlite.prepare("DELETE FROM interactions WHERE ownerId = ?").run(ownerId);
-    sqlite
-      .prepare("DELETE FROM connector_links WHERE ownerId = ?")
-      .run(ownerId);
-    sqlite.prepare("DELETE FROM connector_runs WHERE ownerId = ?").run(ownerId);
-    sqlite.prepare("DELETE FROM connectors WHERE ownerId = ?").run(ownerId);
-    sqlite
-      .prepare("DELETE FROM contact_emails WHERE contactId = ?")
-      .run(contactId);
-    sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(contactId);
-    // What the writes recorded and queued. Both name the owner, and both
-    // keys restrict the delete of the account.
-    sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(ownerId);
-    sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(ownerId);
-    sqlite.prepare("DELETE FROM users WHERE id = ?").run(ownerId);
-  });
-
-  /** One sync against the fake server; the interactions and the cursor. */
-  async function syncMail(
-    config: Record<string, unknown>,
-    cursor: unknown = null,
-    since = "2026-01-01T00:00:00.000Z",
-  ) {
-    const events: SyncEvent[] = [];
-    const gen = imapAdapter.sync({
-      config: {
-        host: "127.0.0.1",
-        port: serverPort,
-        secure: false,
-        username: "me@example.com",
-        folders: ["INBOX"],
-        summaries: false,
-        lookbackDays: 90,
-        rollup: true,
-        ghostThreshold: 3,
-        maxMessagesPerFolder: 100,
-        aliases: [],
-        ...config,
-      } as Parameters<typeof imapAdapter.sync>[0]["config"],
-      secret: { password: "password" },
-      cursor,
-      since,
-      selfAddresses: { emails: ["me@example.com"], phones: [] },
-      signal: new AbortController().signal,
-      log: () => {},
-      accountId: ownerId,
-    });
-    let step = await gen.next();
-    while (!step.done) {
-      events.push(step.value);
-      step = await gen.next();
-    }
-    return {
-      mails: events.filter(
-        (e): e is Extract<SyncEvent, { kind: "interaction" }> =>
-          e.kind === "interaction",
-      ),
-      cursor: step.value,
-    };
-  }
-
-  it("yields a mail that sits in two folders once, keyed by its Message-ID, with each folder's old id", async () => {
-    // The fake server serves the same message from every folder, as a mail
-    // sent to oneself sits in both INBOX and Sent. Keyed by folder, it was two
-    // interactions. Yielded twice in one run, a stranger on it was counted
-    // twice, and a summary was written twice.
-    const { mails } = await syncMail({ folders: ["INBOX", "Sent"] });
-    expect(mails.map((m) => m.externalId)).toEqual([
-      "imap:msg-001@example.com",
-    ]);
-    // The old ids kept the Message-ID as the server gave it.
-    expect(mails[0].legacyExternalIds).toEqual([
-      expect.stringMatching(/^imap:INBOX:<?msg-001@example\.com>?$/),
-      expect.stringMatching(/^imap:Sent:<?msg-001@example\.com>?$/),
-    ]);
-  });
-
-  it("reads a folder without a cursor from the lookback window, not from the last sync", async () => {
-    // Sent was added to the config after the first run. The run's `since` is
-    // the last sync, so the new folder got one day of mail instead of 90.
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
-    await syncMail(
-      { folders: ["INBOX", "Sent"], lookbackDays: 90 },
-      {
-        folders: { INBOX: { uidValidity: 12345, lastUid: 50 } },
-        lastSyncAt: yesterday,
-      },
-      yesterday,
-    );
-    const since = searchCommands.find((line) => line.includes("SINCE"));
-    expect(since).toBeDefined();
-    const day = new Date(since!.match(/SINCE (\S+)/)![1]).getTime();
-    const daysAgo = (Date.now() - day) / 86_400_000;
-    expect(daysAgo).toBeGreaterThan(89);
-    expect(daysAgo).toBeLessThan(91);
-  });
-
-  it("dates a mail by the server when its Date header is far off", async () => {
-    bogusDate = true;
-    const { mails } = await syncMail({});
-    expect(mails[0].date).toBe("2026-02-15T10:00:00.000Z");
   });
 });
