@@ -198,6 +198,25 @@ function organizerIsPerson(email: string | undefined, name?: string): boolean {
   );
 }
 
+/**
+ * Contrack's label for a Google email type. Google's "home" is Contrack's
+ * "personal". The repository reads `label`: sent as `type`, every synced
+ * address was "personal".
+ */
+function emailLabel(type: string | undefined): string {
+  const t = type?.toLowerCase();
+  if (!t || t === "home") return "personal";
+  return t === "work" ? "work" : "other";
+}
+
+/** Contrack's label for a Google phone type, such as "workMobile". */
+function phoneLabel(type: string | undefined): string | undefined {
+  const t = type?.toLowerCase();
+  if (!t) return undefined;
+  if (t === "mobile" || t === "home") return t;
+  return t.startsWith("work") ? "work" : "other";
+}
+
 /** The headers that mark bulk mail, read with each message's metadata. */
 const BULK_HEADERS = [
   "List-Unsubscribe",
@@ -505,7 +524,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const emails = (person.emailAddresses || [])
               .map((e) => ({
                 email: e.value || "",
-                type: e.type || "other",
+                label: emailLabel(e.type),
                 isPrimary: e.metadata?.primary ?? false,
               }))
               .filter((e) => e.email);
@@ -513,7 +532,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const phones = (person.phoneNumbers || [])
               .map((p) => ({
                 phone: p.value || "",
-                type: p.type || "other",
+                label: phoneLabel(p.type),
                 isPrimary: p.metadata?.primary ?? false,
               }))
               .filter((p) => p.phone);

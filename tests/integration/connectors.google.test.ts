@@ -1331,7 +1331,10 @@ describe("Google Workspace Connector & OAuth Integration", () => {
             { resourceName: "people/gone", metadata: { deleted: true } },
             {
               resourceName: "people/nameless",
-              emailAddresses: [{ value: "nameless@example.com" }],
+              emailAddresses: [
+                { value: "nameless@example.com" },
+                { value: "nameless@work.example.com", type: "work" },
+              ],
             },
           ],
           nextSyncToken: "t2",
@@ -1365,10 +1368,16 @@ describe("Google Workspace Connector & OAuth Integration", () => {
           kind: "contact",
           externalId: "people/nameless",
           contact: expect.objectContaining({
+            // In the field the repository reads, in Contrack's words.
             emails: [
               {
                 email: "nameless@example.com",
-                type: "other",
+                label: "personal",
+                isPrimary: false,
+              },
+              {
+                email: "nameless@work.example.com",
+                label: "work",
                 isPrimary: false,
               },
             ],
