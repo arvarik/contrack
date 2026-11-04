@@ -158,6 +158,10 @@ docker run -d --name contrack -p 127.0.0.1:3210:3210 \
 
 Then open [http://localhost:3210](http://localhost:3210). There is no cloud account to sign up for and no API key required. Everything stays in your `contrack-data` folder. Whenever you want AI features, open **Settings → Administration → AI**.
 
+### One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Contrack/)
+
 <details>
 <summary><b>Other ways to run it</b></summary>
 
