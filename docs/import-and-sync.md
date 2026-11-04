@@ -168,7 +168,15 @@ Find the private address:
   calendars** > **Publish a calendar**. Copy the ICS link.
 
 Paste it into **Private ICS calendar URL**. Contrack reads only `http://` and
-`https://` addresses, and a feed of up to 5 MB.
+`https://` addresses, and a feed of up to 5 MB. If the address returns a web
+page, such as a sign-in page, the sync fails and Coming up keeps its meetings.
+
+If the calendar invites you at an address other than your sign-in email, enter
+it in **Also treat these addresses as mine**. Otherwise you count as a person
+in your own meetings.
+
+A meeting you declined is left out. An upcoming event with no one but you, such
+as a reminder, does not appear in Coming up.
 
 ### Mailbox (IMAP)
 

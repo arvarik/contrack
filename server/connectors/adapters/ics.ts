@@ -15,6 +15,10 @@ import ical, {
   type VEvent,
 } from "node-ical";
 import { safeFetch } from "../../utils/urlSafety.ts";
+import {
+  canonicalEmailAddress,
+  organizerIsPerson,
+} from "../email/normalize.ts";
 import { ConnectorConfigError } from "../errors.ts";
 import type {
   ConnectorAdapter,
@@ -31,6 +35,8 @@ export const icsConfigSchema = z.object({
   lookbackDays: z.number().int().min(1).max(365).default(90).optional(),
   maxAttendees: z.number().int().min(1).max(500).default(25).optional(),
   includeDescription: z.boolean().default(false).optional(),
+  /** The owner's addresses on the calendar, when they differ from the login. */
+  aliases: z.array(z.string()).default([]).optional(),
   /** Meetings with a stranger before Contrack suggests them as a contact. */
   ghostThreshold: z.coerce.number().int().min(1).max(10).default(3).optional(),
 });
@@ -169,7 +175,15 @@ export async function fetchIcsContent(
     );
   }
 
-  return readCappedBody(res, signal);
+  const body = await readCappedBody(res, signal);
+  // A sign-in or error page answers 200 too. Read as a feed, it had no events,
+  // and the sync removed every upcoming one.
+  if (!/BEGIN:VCALENDAR/i.test(body)) {
+    throw new ConnectorConfigError(
+      "The calendar address returned a page that is not a calendar",
+    );
+  }
+  return body;
 }
 
 /**
@@ -202,75 +216,88 @@ function noUidKey(title: string, start: Date): string {
   return `nouid-${digest.slice(0, 16)}`;
 }
 
-function parseParticipants(event: VEvent): Participant[] {
+/**
+ * The address and name of an ORGANIZER or ATTENDEE, which node-ical gives as a
+ * string or as `{ val, params }`. A CalDAV server can give the address as an
+ * EMAIL parameter with a `urn:uuid:` value, and Outlook gives `invalid:nomail`
+ * for an attendee whose address it hides: only a value with an "@" and no
+ * scheme left is an address.
+ */
+function person(prop: unknown): {
+  email?: string;
+  name?: string;
+  params: Record<string, string>;
+} {
+  const params =
+    (prop as { params?: Record<string, string> } | null)?.params ?? {};
+  const value = typeof prop === "string" ? prop : textOf(prop);
+  const email = (params.EMAIL ?? value)
+    ?.replace(/^mailto:/i, "")
+    .trim()
+    .toLowerCase();
+  return {
+    email: email && /^[^\s:@]+@[^\s:@]+$/.test(email) ? email : undefined,
+    name: params.CN || undefined,
+    params,
+  };
+}
+
+/**
+ * The people of an event: the organizer when a person organized it (not a
+ * shared or room calendar), and the attendees who are neither a room nor
+ * declined. Null when the owner, one of `self` by mailbox, declined it.
+ */
+function parseParticipants(
+  event: VEvent,
+  self: Set<string>,
+): Participant[] | null {
   const participants: Participant[] = [];
   const seenEmails = new Set<string>();
-
-  // 1. Organizer
-  if (event.organizer) {
-    const rawVal =
-      typeof event.organizer === "string"
-        ? event.organizer
-        : event.organizer.val;
-    const email = rawVal
-      ?.replace(/^mailto:/i, "")
-      .trim()
-      .toLowerCase();
-    const name =
-      typeof event.organizer === "object" && event.organizer.params?.CN
-        ? event.organizer.params.CN
-        : undefined;
-
+  const add = (email: string | undefined, name: string | undefined) => {
     if (email) {
+      if (seenEmails.has(email)) return;
       seenEmails.add(email);
       participants.push({ email, name });
     } else if (name) {
       participants.push({ name });
     }
+  };
+
+  if (event.organizer) {
+    const { email, name } = person(event.organizer);
+    if (organizerIsPerson(email, name)) add(email, name);
   }
 
-  // 2. Attendees
-  if (event.attendee) {
-    const attendees = Array.isArray(event.attendee)
+  const attendees = event.attendee
+    ? Array.isArray(event.attendee)
       ? event.attendee
-      : [event.attendee];
-
-    for (const att of attendees) {
-      const params =
-        typeof att === "object"
-          ? (att.params as Record<string, string> | undefined)
-          : undefined;
-      // A room is no person, and someone who declined was not there.
-      // Parameter values are case-insensitive (RFC 5545 3.2).
-      const partstat = String(params?.PARTSTAT ?? "").toUpperCase();
-      const cutype = String(params?.CUTYPE ?? "").toUpperCase();
-      if (
-        partstat === "DECLINED" ||
-        cutype === "RESOURCE" ||
-        cutype === "ROOM"
-      ) {
-        continue;
-      }
-      const rawVal = typeof att === "string" ? att : att.val;
-      const email = rawVal
-        ?.replace(/^mailto:/i, "")
-        .trim()
-        .toLowerCase();
-      const name =
-        typeof att === "object" && att.params?.CN ? att.params.CN : undefined;
-
-      if (email) {
-        if (!seenEmails.has(email)) {
-          seenEmails.add(email);
-          participants.push({ email, name });
-        }
-      } else if (name) {
-        participants.push({ name });
-      }
+      : [event.attendee]
+    : [];
+  for (const att of attendees) {
+    const { email, name, params } = person(att);
+    // A room is no person, and someone who declined was not there.
+    // Parameter values are case-insensitive (RFC 5545 3.2).
+    const partstat = String(params.PARTSTAT ?? "").toUpperCase();
+    const cutype = String(params.CUTYPE ?? "").toUpperCase();
+    if (partstat === "DECLINED") {
+      if (email && self.has(canonicalEmailAddress(email))) return null;
+      continue;
     }
+    if (cutype === "RESOURCE" || cutype === "ROOM") continue;
+    add(email, name);
   }
 
   return participants;
+}
+
+/**
+ * The key of an instance by its RECURRENCE-ID: the instant, or for an all-day
+ * one its day, with the instant earlier versions used as a legacy key.
+ */
+function recurrenceKey(rid: Date): [string, string?] {
+  return (rid as { dateOnly?: boolean }).dateOnly === true
+    ? [stamp(rid, true), rid.toISOString()]
+    : [rid.toISOString()];
 }
 
 export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
@@ -342,6 +369,58 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
     const futureEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const maxAttendees = config.maxAttendees ?? 25;
     const includeDescription = config.includeDescription ?? false;
+    const self = new Set(ctx.selfAddresses.emails.map(canonicalEmailAddress));
+    /** Whether anyone but the owner is in it. Coming up shows only those. */
+    const withOthers = (people: Participant[]) =>
+      people.some((p) => !p.email || !self.has(canonicalEmailAddress(p.email)));
+    const tooMany = (ev: VEvent) =>
+      (Array.isArray(ev.attendee) ? ev.attendee.length : ev.attendee ? 1 : 0) >
+      maxAttendees;
+
+    /** The meeting or upcoming event of an event that does not recur. */
+    function* single(
+      ev: VEvent,
+      externalId: string,
+      legacyExternalIds?: string[],
+    ): Generator<SyncEvent> {
+      if (!ev.start || ev.status === "CANCELLED" || tooMany(ev)) return;
+      const participants = parseParticipants(ev, self);
+      if (!participants) return;
+      const title = textOf(ev.summary) ?? "Untitled Event";
+      const startDate = new Date(ev.start);
+      const endDate = ev.end ? new Date(ev.end) : startDate;
+
+      // Skip events completely outside our window
+      if (endDate < lookbackStart || startDate > futureEnd) return;
+
+      const allDay = (ev.start as { dateOnly?: boolean }).dateOnly === true;
+      const startsAt = stamp(startDate, allDay);
+      const endsAt = stamp(endDate, allDay);
+
+      if (endDate <= now) {
+        yield {
+          kind: "interaction",
+          externalId,
+          ...(legacyExternalIds ? { legacyExternalIds } : {}),
+          type: "meeting",
+          title,
+          content: includeDescription ? textOf(ev.description) : undefined,
+          date: startsAt,
+          endsAt,
+          participants,
+          raw: { uid: ev.uid },
+        };
+      } else if (withOthers(participants)) {
+        yield {
+          kind: "upcoming",
+          externalId,
+          title,
+          startsAt,
+          endsAt,
+          participants,
+        };
+      }
+    }
 
     let fetched = 0;
     const vEvents = Object.values(parsed).filter((entry): entry is VEvent =>
@@ -364,21 +443,6 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
         };
       }
 
-      if (event.status === "CANCELLED") {
-        continue;
-      }
-
-      // Check attendees limit
-      const attendeeList = event.attendee
-        ? Array.isArray(event.attendee)
-          ? event.attendee
-          : [event.attendee]
-        : [];
-      if (attendeeList.length > maxAttendees) {
-        continue;
-      }
-
-      const participants = parseParticipants(event);
       const title = textOf(event.summary) ?? "Untitled Event";
       const content = includeDescription
         ? textOf(event.description)
@@ -389,6 +453,8 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
 
       // Handle recurring events
       if (event.rrule) {
+        if (event.status === "CANCELLED" || tooMany(event)) continue;
+        const participants = parseParticipants(event, self);
         if (recursWithinTheHour(event.rrule)) {
           log("Skipped a recurring event that repeats within the hour");
           continue;
@@ -434,9 +500,7 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
           let recId: string;
           let legacyId: string | undefined;
           if (rid instanceof Date) {
-            const dateOnly = (rid as { dateOnly?: boolean }).dateOnly === true;
-            recId = dateOnly ? stamp(rid, true) : rid.toISOString();
-            if (dateOnly) legacyId = rid.toISOString();
+            [recId, legacyId] = recurrenceKey(rid);
           } else if (rid) {
             recId = String(rid);
           } else {
@@ -450,7 +514,6 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
 
           // A moved or renamed instance carries its own details.
           const own = instance.isOverride ? instance.event : undefined;
-          const ownPeople = own ? parseParticipants(own) : [];
           const instanceTitle = textOf(own?.summary) ?? title;
           const instanceContent = includeDescription
             ? (textOf(own?.description) ?? content)
@@ -458,7 +521,10 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
           // An override that lists people uses its own list, even when
           // everyone on it declined.
           const instancePeople =
-            own && (own.attendee || own.organizer) ? ownPeople : participants;
+            own && (own.attendee || own.organizer)
+              ? parseParticipants(own, self)
+              : participants;
+          if (!instancePeople) continue;
           const startsAt = stamp(instance.start, instance.isFullDay);
           const endsAt = instance.end
             ? stamp(instance.end, instance.isFullDay)
@@ -477,7 +543,7 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
               participants: instancePeople,
               raw: { uid: event.uid, recId },
             };
-          } else {
+          } else if (withOthers(instancePeople)) {
             yield {
               kind: "upcoming",
               externalId,
@@ -488,45 +554,25 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
             };
           }
         }
+      } else if (event.recurrenceid instanceof Date) {
+        // Single instances of a series the feed does not hold, such as
+        // meetings of someone else's series the owner is invited to.
+        // node-ical keeps the first as the event, and each one, under two
+        // keys, in `recurrences`. Each is keyed as its series keys it, so
+        // the series logs none again when it arrives. The first one was
+        // keyed by the UID alone.
+        const first = event.recurrenceid.toISOString();
+        for (const one of new Set(Object.values(event.recurrences ?? {}))) {
+          if (!(one.recurrenceid instanceof Date)) continue;
+          const [recId] = recurrenceKey(one.recurrenceid);
+          yield* single(
+            one as VEvent,
+            `${baseId}_${recId}`,
+            one.recurrenceid.toISOString() === first ? [baseId] : undefined,
+          );
+        }
       } else {
-        // Non-recurring event
-        if (!event.start) continue;
-        const startDate = new Date(event.start);
-        const endDate = event.end ? new Date(event.end) : startDate;
-
-        // Skip events completely outside our window
-        if (endDate < lookbackStart || startDate > futureEnd) {
-          continue;
-        }
-
-        const externalId = baseId;
-        const allDay =
-          (event.start as { dateOnly?: boolean }).dateOnly === true;
-        const startsAt = stamp(startDate, allDay);
-        const endsAt = stamp(endDate, allDay);
-
-        if (endDate <= now) {
-          yield {
-            kind: "interaction",
-            externalId,
-            type: "meeting",
-            title,
-            content,
-            date: startsAt,
-            endsAt,
-            participants,
-            raw: { uid: event.uid },
-          };
-        } else {
-          yield {
-            kind: "upcoming",
-            externalId,
-            title,
-            startsAt,
-            endsAt,
-            participants,
-          };
-        }
+        yield* single(event, baseId);
       }
     }
 

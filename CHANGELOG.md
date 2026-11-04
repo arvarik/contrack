@@ -32,10 +32,21 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A Calendar or Mailbox connector counts each person once for each meeting or
   mail. A calendar counted the people of every past meeting again on each
   sync, so someone met once became a suggested person by the third sync.
+- The Calendar connector has **Also treat these addresses as mine**, for a
+  calendar that invites you at another address than your sign-in email. You
+  were a stranger in each of your meetings before.
 - The mailbox that a Mailbox connector reads counts as you, also when it is
   not your sign-in email.
 - The Mailbox connector reads the newsletter and mailing list headers, so bulk
   mail no longer suggests people.
+- A Calendar connector leaves out meetings you declined, keeps events with no
+  one but you off Coming up, and no longer counts shared or room calendars, or
+  Outlook's hidden attendees, as people. It reads the address that CalDAV
+  servers give with a `urn:uuid:` attendee.
+- Each meeting of someone else's series that you are invited to is logged,
+  once, also after the whole series reaches the calendar.
+- A calendar address that returns a web page, such as a sign-in page, fails the
+  sync and the connection test. Before, it emptied Coming up.
 - A mailbox folder that cannot be opened shows as an error while the other
   folders sync. The Mailbox connector no longer takes a folder such as
   "Presentations" for the Sent folder.

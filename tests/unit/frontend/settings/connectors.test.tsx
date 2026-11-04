@@ -231,6 +231,7 @@ describe("Frontend Connectors Components", () => {
             maxAttendees: 25,
             includeDescription: false,
             ghostThreshold: 3,
+            aliases: [],
           },
           intervalMinutes: 30,
         });
@@ -258,6 +259,7 @@ describe("Frontend Connectors Components", () => {
           maxAttendees: 50,
           includeDescription: true,
           ghostThreshold: 5,
+          aliases: ["me@work.example.com"],
         },
       });
 
@@ -287,6 +289,7 @@ describe("Frontend Connectors Components", () => {
             maxAttendees: 50,
             includeDescription: true,
             ghostThreshold: 5,
+            aliases: ["me@work.example.com"],
           },
           intervalMinutes: 60,
         });
@@ -411,6 +414,7 @@ describe("Frontend Connectors Components", () => {
             maxAttendees: 50,
             includeDescription: true,
             ghostThreshold: 7,
+            aliases: [],
           },
           intervalMinutes: 60,
         });

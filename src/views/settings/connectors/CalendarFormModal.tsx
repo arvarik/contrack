@@ -54,6 +54,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
   const [maxAttendees, setMaxAttendees] = useState<number>(25);
   const [includeDescription, setIncludeDescription] = useState(false);
   const [ghostThreshold, setGhostThreshold] = useState<number>(3);
+  const [aliases, setAliases] = useState("");
 
   const [testResult, setTestResult] = useState<{
     ok: boolean;
@@ -81,6 +82,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       setGhostThreshold(
         typeof cfg.ghostThreshold === "number" ? cfg.ghostThreshold : 3,
       );
+      setAliases(Array.isArray(cfg.aliases) ? cfg.aliases.join(", ") : "");
     } else {
       setName("Personal Calendar");
       setUrl("");
@@ -90,6 +92,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       setMaxAttendees(25);
       setIncludeDescription(false);
       setGhostThreshold(3);
+      setAliases("");
     }
     setTestResult(null);
     setFormError(null);
@@ -154,6 +157,10 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       maxAttendees,
       includeDescription,
       ghostThreshold,
+      aliases: aliases
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
     };
 
     try {
@@ -256,6 +263,24 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           <p className="mt-1 text-xs text-on-surface-variant">
             Supports https:// and webcal:// links from Google, iCloud, Fastmail
             or Outlook (&quot;Secret address in iCal format&quot;)
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="connector-ics-aliases" className={FIELD_HEADING}>
+            Also treat these addresses as mine
+          </label>
+          <input
+            id="connector-ics-aliases"
+            type="text"
+            {...NO_AUTOCORRECT}
+            value={aliases}
+            onChange={(e) => setAliases(e.target.value)}
+            placeholder="me@company.com"
+            className={FORM_INPUT}
+          />
+          <p className="mt-1 text-xs text-on-surface-variant">
+            The calendar&apos;s own address, when it is not your sign-in email
           </p>
         </div>
 
