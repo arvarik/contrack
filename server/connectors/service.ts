@@ -27,6 +27,7 @@ import { getAdapter } from "./registry.ts";
 import { ConnectorAuthError, ConnectorUnavailableError } from "./errors.ts";
 import { buildContactMatcher } from "./matching.ts";
 import { ingestStream } from "./ingest.ts";
+import { canonicalEmailAddress, isAutomatedSender } from "./email/normalize.ts";
 import type { SyncContext, SyncEvent } from "./types.ts";
 
 interface RawConnectorRow {
@@ -707,11 +708,7 @@ export async function runNow(
   if (userRow?.email) {
     selfEmails.push(userRow.email);
   }
-  if (Array.isArray(config.selfEmails)) {
-    for (const em of config.selfEmails) {
-      if (typeof em === "string") selfEmails.push(em);
-    }
-  }
+  selfEmails.push(...connectorSelfEmails(config, secret));
 
   const selfPhones: string[] = [];
   if (Array.isArray(config.selfPhones)) {
@@ -1069,73 +1066,159 @@ export function listRuns(
   return runRows.map(parseRunRow);
 }
 
+/**
+ * The owner's addresses a connector knows: the mailbox it signs in to
+ * (`secret.email`, Google's account), its aliases and its `selfEmails`. Ingest
+ * matched only the sign-in email of the Contrack account, so the connected
+ * mailbox itself counted as a stranger whenever it differed.
+ */
+function connectorSelfEmails(
+  config: Record<string, unknown>,
+  secret: unknown,
+): string[] {
+  const out: string[] = [];
+  const email = (secret as { email?: unknown } | null)?.email;
+  if (typeof email === "string") out.push(email);
+  for (const list of [config.aliases, config.selfEmails]) {
+    if (!Array.isArray(list)) continue;
+    for (const em of list) if (typeof em === "string") out.push(em);
+  }
+  return out;
+}
+
+/**
+ * The key one stranger is grouped by: the mailbox for an address, so that
+ * "Ana.Lee+news@gmail.com" and "analee@gmail.com" are one person, else the
+ * link's own key (a normalized phone, or a name).
+ */
+function correspondentKey(externalId: string): string {
+  return externalId.includes("@")
+    ? canonicalEmailAddress(externalId)
+    : externalId.toLowerCase();
+}
+
+/**
+ * The strangers the owner's connectors have seen, one row per person. Rows are
+ * grouped by mailbox, and a group is left out when the owner ignored any of
+ * it, when it is the owner, when a contact already has the address, and when
+ * it is a robot or a relay (`isAutomatedSender`). These checks run here as
+ * well as at ingest, so the rows an older version kept are cleaned up too.
+ */
 export function listCorrespondents(
   scope: Scope,
   limit: number = 50,
 ): Correspondent[] {
-  const sql = `SELECT
+  const rows = sqlite
+    .prepare(
+      `SELECT
          cl.connectorId,
          c.name AS connectorName,
+         c.config AS connectorConfig,
+         c.secret AS connectorSecret,
          cl.kind,
          cl.externalId,
-         cl.localId,
          cl.seenCount,
          cl.lastSeenAt,
          cl.ignoredAt,
          cl.displayName
        FROM connector_links cl
        JOIN connectors c ON c.id = cl.connectorId
-        WHERE cl.ownerId = ? AND cl.kind = 'correspondent' AND cl.ignoredAt IS NULL AND cl.localId IS NULL
-          AND cl.externalId NOT IN (
-            SELECT LOWER(ce.email)
-            FROM contact_emails ce
-            JOIN contacts c2 ON c2.id = ce.contactId
-            WHERE c2.ownerId = cl.ownerId AND c2.deletedAt IS NULL
-          )
-        ORDER BY cl.seenCount DESC, cl.lastSeenAt DESC
-        LIMIT ?`;
-
-  const rows = sqlite.prepare(sql).all(scope.ownerId, limit) as Array<{
+       WHERE cl.ownerId = ? AND cl.kind = 'correspondent' AND cl.localId IS NULL
+       ORDER BY cl.seenCount DESC, cl.lastSeenAt DESC`,
+    )
+    .all(scope.ownerId) as Array<{
     connectorId: string;
     connectorName: string;
+    connectorConfig: string | null;
+    connectorSecret: string | null;
     kind: string;
     externalId: string;
-    localId: string | null;
     seenCount: number;
     lastSeenAt: string;
     ignoredAt: string | null;
     displayName: string | null;
   }>;
 
-  return rows.map((row) => {
-    // Detect if externalId looks like email, phone, or name
-    let email: string | undefined;
-    let phone: string | undefined;
-    let name: string | undefined;
-
-    if (row.externalId.includes("@")) {
-      email = row.externalId;
-    } else if (/^\+?[0-9\s()-]{7,}$/.test(row.externalId)) {
-      phone = row.externalId;
-    } else {
-      name = row.externalId;
+  const known = new Set(
+    (
+      sqlite
+        .prepare(
+          `SELECT ce.email FROM contact_emails ce
+           JOIN contacts c ON c.id = ce.contactId
+           WHERE c.ownerId = ? AND c.deletedAt IS NULL`,
+        )
+        .all(scope.ownerId) as Array<{ email: string }>
+    ).map((r) => canonicalEmailAddress(r.email)),
+  );
+  const owner = sqlite
+    .prepare(`SELECT email FROM users WHERE id = ?`)
+    .get(scope.ownerId) as { email: string | null } | undefined;
+  const self = new Set(
+    owner?.email ? [canonicalEmailAddress(owner.email)] : [],
+  );
+  const seenConnectors = new Set<string>();
+  for (const row of rows) {
+    if (seenConnectors.has(row.connectorId)) continue;
+    seenConnectors.add(row.connectorId);
+    let config: Record<string, unknown> = {};
+    let secret: unknown = null;
+    try {
+      config = row.connectorConfig ? JSON.parse(row.connectorConfig) : {};
+      secret = row.connectorSecret
+        ? JSON.parse(secretBox.open(row.connectorSecret))
+        : null;
+    } catch {
+      // A secret the key no longer opens names no address.
     }
+    for (const email of connectorSelfEmails(config, secret)) {
+      self.add(canonicalEmailAddress(email));
+    }
+  }
 
-    return {
+  const groups = new Map<string, Correspondent & { hidden: boolean }>();
+  for (const row of rows) {
+    const key = correspondentKey(row.externalId);
+    const isEmail = row.externalId.includes("@");
+    const group = groups.get(key);
+    if (group) {
+      group.seenCount += row.seenCount;
+      if (row.lastSeenAt > group.lastSeenAt) group.lastSeenAt = row.lastSeenAt;
+      group.name ??= row.displayName ?? undefined;
+      group.hidden ||= row.ignoredAt !== null;
+      continue;
+    }
+    const isPhone = !isEmail && /^\+?[0-9\s()-]{7,}$/.test(row.externalId);
+    groups.set(key, {
       connectorId: row.connectorId,
       connectorName: row.connectorName,
       kind: row.kind,
       externalId: row.externalId,
-      email,
-      phone,
+      email: isEmail ? row.externalId : undefined,
+      phone: isPhone ? row.externalId : undefined,
       // The name the mail or meeting gave, or the name the link is keyed by.
-      name: row.displayName ?? name,
-      localId: row.localId,
+      name:
+        row.displayName ?? (isEmail || isPhone ? undefined : row.externalId),
+      localId: null,
       seenCount: row.seenCount,
       lastSeenAt: row.lastSeenAt,
-      ignoredAt: row.ignoredAt,
-    };
-  });
+      ignoredAt: null,
+      hidden:
+        row.ignoredAt !== null ||
+        (isEmail &&
+          (self.has(key) ||
+            known.has(key) ||
+            isAutomatedSender(row.externalId, row.displayName))),
+    });
+  }
+
+  return [...groups.values()]
+    .filter((g) => !g.hidden)
+    .sort(
+      (a, b) =>
+        b.seenCount - a.seenCount || b.lastSeenAt.localeCompare(a.lastSeenAt),
+    )
+    .slice(0, limit)
+    .map(({ hidden: _hidden, ...correspondent }) => correspondent);
 }
 
 /**
@@ -1146,13 +1229,26 @@ export function ignoreCorrespondent(
   connectorId: string,
   externalId: string,
 ): boolean {
-  const result = sqlite
-    .prepare(
-      `UPDATE connector_links
-       SET ignoredAt = CURRENT_TIMESTAMP
-       WHERE connectorId = ? AND kind = 'correspondent' AND externalId = ? AND ownerId = ?`,
-    )
-    .run(connectorId, externalId, scope.ownerId);
-
-  return result.changes > 0;
+  // Every spelling of the mailbox, as the list shows them as one person.
+  const key = correspondentKey(externalId);
+  const ids = (
+    sqlite
+      .prepare(
+        `SELECT externalId FROM connector_links
+         WHERE connectorId = ? AND kind = 'correspondent' AND ownerId = ?`,
+      )
+      .all(connectorId, scope.ownerId) as Array<{ externalId: string }>
+  )
+    .map((r) => r.externalId)
+    .filter((id) => id === externalId || correspondentKey(id) === key);
+  const ignore = sqlite.prepare(
+    `UPDATE connector_links
+     SET ignoredAt = CURRENT_TIMESTAMP
+     WHERE connectorId = ? AND kind = 'correspondent' AND externalId = ? AND ownerId = ?`,
+  );
+  let changes = 0;
+  for (const id of ids) {
+    changes += ignore.run(connectorId, id, scope.ownerId).changes;
+  }
+  return changes > 0;
 }

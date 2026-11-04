@@ -28,6 +28,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sync. The first sync after this update pulls the Google contacts once more.
 - A sync where one part fails, such as Gmail, shows the error on the connector
   and in its run history while the other parts still sync.
+- Correspondents list each person once, whatever the spelling of the address
+  ("+tag", dots in a Gmail address), and leave out your own addresses, robots
+  such as billing@ or no-reply@, Apple's Hide My Email relays and bulk mail.
+  Mail with no one but you and strangers no longer lands on your own contact.
+- A duplicate group says how many contacts share a name once, with the latest
+  count.
+- Connect Google says what to do at Google's "hasn't verified this app" and
+  "Access blocked" screens.
 
 ## [2.0.5] - 2026-11-02
 

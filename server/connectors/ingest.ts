@@ -3,9 +3,9 @@
  * 1. Matches participants to contacts (ContactMatcher).
  * 2. Deduplicates by externalId through connector_links.
  * 3. Rolls a day up by contactId:YYYY-MM-DD.
- * 4. Counts unknown participants as correspondents, and promotes them to ghost
- *    contacts past ghostThreshold. A no-reply sender and a broadcast to many
- *    strangers count nobody.
+ * 4. Counts unknown participants as correspondents, one per mailbox, and
+ *    promotes them to ghost contacts past ghostThreshold. Bulk mail, a robot
+ *    or relay sender and a broadcast to many strangers count nobody.
  * 5. Writes a synced person over the contact the sync made for it, and only
  *    fills in a contact the sync linked by a shared address. Trashes the
  *    former when its source deletes it, and unlinks the latter.
@@ -42,6 +42,7 @@ import {
 } from "../utils/remoteImage.ts";
 import type { ContactMatcher } from "./matching.ts";
 import type { SyncEvent } from "./types.ts";
+import { canonicalEmailAddress, isAutomatedSender } from "./email/normalize.ts";
 import type {
   ConnectorKind,
   Participant,
@@ -82,12 +83,6 @@ function givenName(p: Participant): string | null {
   return same(p.email) || same(p.phone) ? null : name;
 }
 
-/**
- * Addresses no person reads. A mail from one is a notification, so its sender
- * is not a correspondent and never a suggested contact.
- */
-const BULK_SENDER =
-  /^(no-?reply|do-?not-?reply|notifications?|mailer-daemon|postmaster|bounces?)([@+._-]|$)/i;
 /**
  * A mail or a meeting with more strangers than this is a broadcast, not a
  * conversation: it counts none of them. The calendar's own attendee cap is 25.
@@ -759,17 +754,19 @@ export async function ingestStream(
         }
         stats.interactions = (stats.interactions ?? 0) + 1;
       } else {
-        // No contact matched: count the strangers, unless this is a
-        // notification or a broadcast.
+        // No contact matched: count the strangers, unless this is bulk mail
+        // or a broadcast. A robot or a relay is never one (`isAutomatedSender`).
         const strangers =
+          event.automated ||
           match.unknownParticipants.length > MAX_STRANGERS_PER_EVENT
             ? []
             : match.unknownParticipants.filter(
-                (p) => !(p.email && BULK_SENDER.test(p.email)),
+                (p) => !(p.email && isAutomatedSender(p.email, p.name)),
               );
         for (const p of strangers) {
+          // By mailbox, so the spellings of one address are one stranger.
           const rawId =
-            p.email?.toLowerCase().trim() ||
+            (p.email ? canonicalEmailAddress(p.email) : "") ||
             (p.phone ? normalizePhone(p.phone) : null) ||
             p.name?.trim();
 

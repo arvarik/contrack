@@ -140,6 +140,40 @@ export function syncTokenExpired(err: unknown): boolean {
   );
 }
 
+/** The headers that mark bulk mail, read with each message's metadata. */
+const BULK_HEADERS = [
+  "List-Unsubscribe",
+  "List-Id",
+  "Precedence",
+  "Auto-Submitted",
+];
+
+/** Gmail's tabs for mail no person wrote to the owner. */
+const BULK_LABELS = new Set([
+  "CATEGORY_PROMOTIONS",
+  "CATEGORY_UPDATES",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_FORUMS",
+]);
+
+/**
+ * Whether a message is bulk mail: Gmail sorted it into Promotions, Updates,
+ * Social or Forums, or it carries a list header, a bulk Precedence or an
+ * Auto-Submitted other than "no" (RFC 2369, 2919 and 3834).
+ */
+export function isBulkMail(
+  labelIds: string[] | undefined,
+  header: (name: string) => string | undefined,
+): boolean {
+  if (labelIds?.some((l) => BULK_LABELS.has(l))) return true;
+  if (header("List-Unsubscribe") || header("List-Id")) return true;
+  if (/^(bulk|list|junk)$/i.test(header("Precedence")?.trim() ?? "")) {
+    return true;
+  }
+  const auto = header("Auto-Submitted")?.trim().toLowerCase();
+  return Boolean(auto && auto !== "no");
+}
+
 /**
  * Gmail's answer to `q` under the gmail.metadata scope, the one a connector
  * holds when AI summaries were off at sign-in: 403 "Metadata scope does not
@@ -641,6 +675,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                   "Date",
                   "Message-ID",
                   "In-Reply-To",
+                  ...BULK_HEADERS,
                 ],
               },
               callOptions(signal),
@@ -744,6 +779,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             date: norm.date,
             direction: norm.direction,
             participants: norm.participants,
+            automated: isBulkMail(meta.data.labelIds, getHeader),
             raw: { messageId: msgId, threadId: meta.data.threadId },
           };
 

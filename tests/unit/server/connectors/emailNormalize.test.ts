@@ -4,6 +4,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  canonicalEmailAddress,
+  isAutomatedSender,
   normalizeEmail,
   normalizeEmailAddress,
   parseAddressList,
@@ -156,5 +158,36 @@ describe("normalizeEmail", () => {
       name: "Partner",
       email: "partner@example.com",
     });
+  });
+});
+
+describe("canonicalEmailAddress", () => {
+  it("gives one mailbox for its spellings", () => {
+    expect(canonicalEmailAddress(' "Ana.Lee+news@GoogleMail.com", ')).toBe(
+      "analee@gmail.com",
+    );
+    expect(canonicalEmailAddress("ana.lee+work@acme.io")).toBe(
+      "ana.lee@acme.io",
+    );
+  });
+});
+
+describe("isAutomatedSender", () => {
+  it.each([
+    ["billing@shop.com", null, true],
+    ["orders-no-reply@chownow.com", null, true],
+    ["hello@email.mindful.com", "Mindful", true],
+    ["info_at_shop_com_sv7421e24gr2c7_f8km9154@icloud.com", "Shop", true],
+    ["quiet.river-4a@icloud.com", null, true],
+    ["anything@icloud.com", "Hide My Email", true],
+    ["access-support@x.com", null, true],
+    ["salesforce_customercare@customercare.airline.com", "Customer Care", true],
+    ["unsubscribe-cqjkpksurq@imh.rsys130.example.com", null, true],
+    ["me_ucxcwg@kindle.com", null, true],
+    ["john.smith@icloud.com", "John Smith", false],
+    ["information.officer@gov.org", null, false],
+    ["helena@acme.io", "Helena", false],
+  ])("%s is automated: %s", (email, name, automated) => {
+    expect(isAutomatedSender(email, name)).toBe(automated);
   });
 });

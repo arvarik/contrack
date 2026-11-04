@@ -41,6 +41,11 @@ export type SyncEvent =
       endsAt?: string;
       direction?: "in" | "out";
       participants: Participant[];
+      /**
+       * Bulk mail: a newsletter, a receipt, a notification. Its strangers are
+       * not people to suggest, so ingest counts none of them.
+       */
+      automated?: boolean;
       raw?: unknown;
     }
   | {
