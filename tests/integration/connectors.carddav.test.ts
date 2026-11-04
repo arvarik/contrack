@@ -683,6 +683,15 @@ ${itemResponses.join("\n")}
     } finally {
       process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";
     }
+    // With private hosts on, plain http:// still goes only to one.
+    await expect(
+      testConnector(
+        scope,
+        "carddav",
+        { url: "http://192.0.2.10/dav/", username: VALID_USER },
+        { password: VALID_PASS },
+      ),
+    ).rejects.toThrow(/https:\/\//i);
   });
 
   it("keeps Authorization on same-origin redirects and strips it on cross-host or sibling-host redirects", async () => {
@@ -884,11 +893,13 @@ ${itemResponses.join("\n")}
     expect(run4.status).toBe("ok");
     expect(run4.stats.contacts).toBe(1); // René Descartes pulled
     expect(run4.stats.pushed).toBeUndefined(); // 403 skipped safely
+    expect(run4.stats.errors).toBe(1); // and reported
     const connAfter403 = getConnector(scope, connector.id);
     expect(connAfter403?.status).toBe("active");
     forceStatusOnPutHref = null;
 
-    // Run 5: Weak ETag on remote card -> PUT omits If-Match so strong comparison does not 412
+    // Run 5: the refused edit is tried again, on a card whose ETag is weak
+    // now -> PUT omits If-Match so strong comparison does not 412
     putRequests.length = 0;
     const adaCard = cards.get("/dav/addressbooks/alice/default/ada.vcf")!;
     cards.set("/dav/addressbooks/alice/default/ada.vcf", {
@@ -896,17 +907,12 @@ ${itemResponses.join("\n")}
       vcard: adaCard.vcard,
     });
     currentSyncToken = "http://sabredav.org/ns/sync/3";
-    // Pull the weak ETag first, then edit Ada
-    await runNow(scope, connector.id, "manual");
-    putRequests.length = 0;
-    contactService.updateContact(scope, adaRow!.id, {
-      role: "Weak ETag Architect",
-    });
     const run5 = await runNow(scope, connector.id, "manual");
     expect(run5.status).toBe("ok");
     expect(run5.stats.pushed).toBe(1);
     expect(putRequests).toHaveLength(1);
     expect(putRequests[0]!.ifMatch).toBeUndefined();
+    expect(putRequests[0]!.body).toContain("TITLE:Refused Role Change");
 
     // Run 6: Merge Ada (duplicate) into a canonical survivor contact -> link re-points to survivor,
     // updating /dav/addressbooks/alice/default/ada.vcf instead of creating a duplicate card!
@@ -1074,6 +1080,12 @@ ${itemResponses.join("\n")}
         put401: boolean;
         failPutPrefix: string | null;
         homeSetOverride: string | null;
+        multigetFails: boolean;
+        putStatus: number | null;
+        editOnGet: boolean;
+        padListing: boolean;
+        /** A report names a deletion once, as the token then moves past it. */
+        tombstonesOnce: boolean;
       };
       puts: Array<{
         path: string;
@@ -1121,6 +1133,11 @@ ${itemResponses.join("\n")}
         put401: false,
         failPutPrefix: null,
         homeSetOverride: null,
+        multigetFails: false,
+        putStatus: null,
+        editOnGet: false,
+        padListing: false,
+        tombstonesOnce: false,
       };
       const puts: MiniDav["puts"] = [];
       const bookOf = (p: string) =>
@@ -1189,6 +1206,10 @@ ${itemResponses.join("\n")}
           );
         }
         const book = books[p];
+        // A listing past the 5 MB that a single card may take.
+        const pad = flags.padListing
+          ? `<d:response><d:href>${p}pad/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype><d:displayname>${"x".repeat(6 * 1024 * 1024)}</d:displayname></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
+          : "";
         if (book && m === "PROPFIND") {
           const asksSyncToken = body.includes("sync-token");
           const truncPropstat =
@@ -1217,7 +1238,7 @@ ${itemResponses.join("\n")}
                     ),
                 ]
               : [];
-          return sendXml(207, multiStatusXml([self, ...items].join("\n")));
+          return sendXml(207, multiStatusXml([self, ...items, pad].join("\n")));
         }
         if (book && m === "REPORT" && body.includes("sync-collection")) {
           const tok =
@@ -1240,18 +1261,25 @@ ${itemResponses.join("\n")}
               (h) =>
                 `<d:response><d:href>${h}</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response>`,
             );
+          if (flags.tombstonesOnce) tombstones.clear();
           return sendXml(
             207,
             multiStatusXml(
               [
                 ...live,
                 ...dead,
+                pad,
                 `<d:sync-token>${prefix}${rev}</d:sync-token>`,
               ].join("\n"),
             ),
           );
         }
         if (book && m === "REPORT" && body.includes("addressbook-multiget")) {
+          if (flags.multigetFails) {
+            res.writeHead(500);
+            res.end();
+            return;
+          }
           const hrefs = [...body.matchAll(/<d:href>([^<]+)<\/d:href>/g)].map(
             (mm) => normalizeHrefPath(mm[1]!, "http://127.0.0.1"),
           );
@@ -1285,11 +1313,24 @@ ${itemResponses.join("\n")}
             res.end();
             return;
           }
-          const c = books[bp]!.get(p);
+          let c = books[bp]!.get(p);
           if (!c) {
             res.writeHead(404);
             res.end();
             return;
+          }
+          if (flags.editOnGet) {
+            // Somebody edits the card on the server after the pull.
+            flags.editOnGet = false;
+            c = {
+              etag: `"e-${crypto.randomUUID().slice(0, 8)}"`,
+              vcard: c.vcard.replace(
+                "END:VCARD",
+                "NOTE:Server note\r\nEND:VCARD",
+              ),
+            };
+            books[bp]!.set(p, c);
+            rev++;
           }
           const headers: Record<string, string> = {
             "Content-Type": "text/vcard",
@@ -1315,6 +1356,11 @@ ${itemResponses.join("\n")}
           const ifNoneMatch = req.headers["if-none-match"] as
             string | undefined;
           puts.push({ path: p, body, ifMatch, ifNoneMatch });
+          if (flags.putStatus) {
+            res.writeHead(flags.putStatus);
+            res.end();
+            return;
+          }
           const ex = books[bp]!.get(p);
           if (
             (ifMatch && (!ex || ex.etag !== ifMatch)) ||
@@ -1857,6 +1903,109 @@ ${itemResponses.join("\n")}
       });
       await runNow(s, conn.id, "manual");
       expect(named(s, "Huge Card")).toHaveLength(1);
+    });
+
+    it("reports a card it could not read and reads it on the next sync", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      const book = dav.books["/dav/ab/a/"]!;
+      book.set("/dav/ab/a/one.vcf", {
+        etag: '"o1"',
+        vcard: miniVcard("Card One"),
+      });
+      const conn = await connect(s, dav.url, { syncDirection: "pull_only" });
+      await runNow(s, conn.id, "manual");
+
+      book.set("/dav/ab/a/two.vcf", {
+        etag: '"t1"',
+        vcard: miniVcard("Card Two"),
+      });
+      dav.flags.multigetFails = true;
+      dav.flags.getFails = true;
+      const failed = await runNow(s, conn.id, "manual");
+      expect(failed.stats.errors).toBe(1);
+      expect(named(s, "Card Two")).toHaveLength(0);
+
+      dav.flags.multigetFails = false;
+      dav.flags.getFails = false;
+      await runNow(s, conn.id, "manual");
+      expect(named(s, "Card Two")).toHaveLength(1);
+    });
+
+    it("reports a write the server refused, tries it again, and writes over the card it just read", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      const book = dav.books["/dav/ab/a/"]!;
+      book.set("/dav/ab/a/kim.vcf", {
+        etag: '"k1"',
+        vcard: miniVcard("Kim Lee", ["EMAIL:kim@lee.example"]),
+      });
+      const conn = await connect(s, dav.url);
+      await runNow(s, conn.id, "manual");
+      const [kim] = named(s, "Kim Lee");
+      contactService.updateContact(s, kim!.id, { company: "Lee Labs" });
+
+      for (const status of [403, 507]) {
+        dav.flags.putStatus = status;
+        const refused = await runNow(s, conn.id, "manual");
+        expect(refused.stats.errors, `HTTP ${status}`).toBe(1);
+      }
+
+      dav.flags.putStatus = null;
+      dav.flags.editOnGet = true;
+      dav.puts.length = 0;
+      const run = await runNow(s, conn.id, "manual");
+      expect(run.stats.errors ?? 0).toBe(0);
+      // The ETag of the card the GET read, not the pull's "k1".
+      expect(dav.puts.at(-1)!.ifMatch).toMatch(/^"e-/);
+      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain("ORG:Lee Labs");
+      expect(book.get("/dav/ab/a/kim.vcf")!.vcard).toContain(
+        "NOTE:Server note",
+      );
+    });
+
+    it("unlinks a card deleted on the server when the push of that run failed", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      const book = dav.books["/dav/ab/a/"]!;
+      book.set("/dav/ab/a/one.vcf", {
+        etag: '"o1"',
+        vcard: miniVcard("Card One"),
+      });
+      book.set("/dav/ab/a/two.vcf", {
+        etag: '"t1"',
+        vcard: miniVcard("Card Two"),
+      });
+      const conn = await connect(s, dav.url);
+      await runNow(s, conn.id, "manual");
+
+      book.delete("/dav/ab/a/two.vcf");
+      dav.tombstones.add("/dav/ab/a/two.vcf");
+      dav.flags.tombstonesOnce = true;
+      contactService.updateContact(s, named(s, "Card One")[0]!.id, {
+        company: "Edited",
+      });
+      dav.flags.put401 = true;
+      expect((await runNow(s, conn.id, "manual")).status).toBe("error");
+      dav.flags.put401 = false;
+      await runNow(s, conn.id, "manual");
+      expect(linkIds(conn.id)).toEqual(["/dav/ab/a/one.vcf"]);
+    });
+
+    it("syncs a book whose listing is larger than 5 MB", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/one.vcf", {
+        etag: '"o1"',
+        vcard: miniVcard("Card One"),
+      });
+      dav.flags.padListing = true;
+      const conn = await connect(s, dav.url, { syncDirection: "pull_only" });
+      // A full listing, then a sync-collection report.
+      for (let run = 0; run < 2; run++) {
+        expect((await runNow(s, conn.id, "manual")).status).toBe("ok");
+      }
+      expect(named(s, "Card One")).toHaveLength(1);
     });
   });
 });

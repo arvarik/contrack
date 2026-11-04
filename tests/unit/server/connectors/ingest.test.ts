@@ -991,6 +991,32 @@ describe("connectors ingestStream", () => {
     ).toEqual([0]);
   });
 
+  it("links a connector added back to the contacts it made, and only fills them in", async () => {
+    const solo = (name: string): SyncEvent => ({
+      kind: "contact",
+      externalId: "people/solo",
+      contact: { name, emails: [], phones: [], company: "Acme" },
+    });
+    await ingest([solo("Name Only")]);
+    // Removed, which drops the links, and added back later.
+    sqlite
+      .prepare("DELETE FROM connector_links WHERE connectorId = ?")
+      .run(connectorId);
+    sqlite
+      .prepare(
+        "UPDATE connectors SET createdAt = datetime('now', '+1 minute') WHERE id = ?",
+      )
+      .run(connectorId);
+
+    await ingest([solo("Renamed In Google")]);
+    expect(
+      column(
+        "SELECT name FROM contacts WHERE ownerId = ? AND company = 'Acme'",
+        ownerId,
+      ),
+    ).toEqual(["Name Only"]);
+  });
+
   it("records contact.created for a promoted ghost, and gives it a phonetic hash", async () => {
     const stranger = { email: "sam@stranger.example", name: "Sam Stranger" };
     await ingest([mail("m-1", [stranger]), mail("m-2", [stranger])], {

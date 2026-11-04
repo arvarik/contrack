@@ -300,15 +300,25 @@ Radicale, Baïkal, or any other RFC 6352 CardDAV server over `https://`.
 
 In two-way mode, Contrack only pushes active contacts created or edited after
 you connect the server (existing contacts from earlier imports and archived
-contacts are not uploaded unless you edit them). When updating a linked card,
-Contrack fetches the server's card first and updates only the properties
-Contrack manages, preserving server-side fields such as `PHOTO`, `NICKNAME`,
-structured `ADR` components, Apple labels, and `X-*` properties. If a card
-changed on the CardDAV server since the last sync, the server's version wins.
-Deleting a contact on your CardDAV server unlinks it in Contrack without moving
-the contact to the Trash (editing the contact in Contrack later uploads it
-again as a new card), and moving a contact to the Trash in Contrack never
-deletes the contact on your CardDAV server.
+contacts are not uploaded unless you edit them). Only an edit to a card field
+counts: a meeting, a note, or a briefing does not upload a contact. After a
+switch from **Pull only** to **Two-way sync**, Contrack uploads the contacts
+you edit from then on. When updating a linked card, Contrack fetches the
+server's card first and writes only the fields you changed in Contrack since
+the last sync, so a change made on the server to another field stays. It
+preserves server-side fields such as `PHOTO`, `NICKNAME`, structured `ADR`
+components, Apple labels, `X-*` properties, and the card's vCard version. If a
+card changed on the CardDAV server since the last sync, the server's version
+wins. A contact that existed in Contrack before you connected keeps its name
+and its details: the card only fills in what is empty. A contact that two
+cards share, such as a family's email address, is written to the card that
+made it. A card that Contrack cannot read, or a contact that the server
+refuses to save, shows as an error on the connector and in its run history,
+and Contrack tries it again on the next sync. Deleting a contact on your
+CardDAV server unlinks it in Contrack without moving the contact to the Trash
+(editing the contact in Contrack later uploads it again as a new card), and
+moving a contact to the Trash in Contrack never deletes the contact on your
+CardDAV server.
 
 ### Sync options
 
@@ -378,7 +388,8 @@ when each started, how long it took, what it brought in, and any error.
 **Remove** stops the connector and keeps what it brought in. To delete that
 too, tick "Also delete the interactions it brought in, and the people it found
 who are not contacts". The contacts that a Google or CardDAV connector brought
-in stay either way.
+in stay either way. Add the connector back, and it links them again instead
+of adding them twice, and only fills them in.
 
 ### What connectors read and store
 

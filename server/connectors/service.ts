@@ -849,14 +849,21 @@ export async function runNow(
         isArchived: Boolean(c.isArchived),
         vcardInput: toVCardInput(c),
       }));
+      // In the order they were linked. `made`: the card's source row.
       const rawLinks = sqlite
         .prepare(
-          `SELECT externalId, localId FROM connector_links
-           WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND localId IS NOT NULL`,
+          `SELECT l.externalId, l.localId, EXISTS (
+             SELECT 1 FROM contact_sources s
+             WHERE s.contactId = l.localId AND s.platform = ? AND s.externalId = l.externalId
+           ) AS made
+           FROM connector_links l
+           WHERE l.connectorId = ? AND l.ownerId = ? AND l.kind = 'contact' AND l.localId IS NOT NULL
+           ORDER BY l.rowid`,
         )
-        .all(connector.id, scope.ownerId) as Array<{
+        .all(connector.kind, connector.id, scope.ownerId) as Array<{
         externalId: string;
         localId: string;
+        made: number;
       }>;
       const canonicalStmt = sqlite.prepare(
         `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
@@ -882,7 +889,11 @@ export async function runNow(
             )
             .run(canonicalId, connector.id, scope.ownerId, link.externalId);
         }
-        return { externalId: link.externalId, localId: canonicalId };
+        return {
+          externalId: link.externalId,
+          localId: canonicalId,
+          made: link.made === 1,
+        };
       });
 
       const pushResult = await adapter.push({
@@ -900,6 +911,10 @@ export async function runNow(
       nextCursor = pushResult.cursor;
       if (pushResult.pushed > 0) {
         stats.pushed = (stats.pushed ?? 0) + pushResult.pushed;
+      }
+      for (const message of pushResult.errors ?? []) {
+        stats.errors = (stats.errors ?? 0) + 1;
+        failures.push(message);
       }
 
       const removedExternalIds = pushResult.removedExternalIds ?? [];

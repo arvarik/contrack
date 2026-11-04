@@ -10,6 +10,8 @@
  */
 
 import crypto from "node:crypto";
+import dns from "node:dns/promises";
+import net from "node:net";
 // The slim entry parses with htmlparser2 alone, which xmlMode below uses.
 // The full entry loads parse5, which the Docker image removes.
 import * as cheerio from "cheerio/slim";
@@ -19,9 +21,11 @@ import {
   extractVCardContacts,
   patchVCard,
   serializeVCard,
+  VCARD_FIELDS,
+  type VCardField,
   type VCardInput,
 } from "../../../shared/vcard.ts";
-import { safeFetch } from "../../utils/urlSafety.ts";
+import { isPrivateAddress, safeFetch } from "../../utils/urlSafety.ts";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
 import type {
   ConnectorAdapter,
@@ -61,18 +65,30 @@ export interface CarddavCursor {
   pushedHashes?: Record<string, string>;
   pushedUpdatedAt?: Record<string, string>;
   deletedHrefs?: string[];
+  /** Cards the last pull could not read, read again on the next. */
+  retryHrefs?: string[];
   lastSyncAt?: string;
 }
 
 export const MAX_DAV_BYTES = 5 * 1024 * 1024; // 5 MB response body cap per request
 const DAV_TIMEOUT_MS = 15_000;
 const DAV_DEADLINE_MS = 60_000;
+/**
+ * A listing of the book (PROPFIND, sync-collection) carries an href and an
+ * ETag per card, about 330 bytes on Radicale, and the server builds it before
+ * it answers: 15,000 cards were 4.9 MB after 11 seconds. A larger cap and
+ * wait let a book of about 150,000 cards sync.
+ */
+const MAX_DAV_LISTING_BYTES = 48 * 1024 * 1024;
+const DAV_LISTING_TIMEOUT_MS = 5 * 60_000;
 export const MULTIGET_BATCH_SIZE = 10;
 const MAX_SYNC_PAGES = 50;
 
 class DavResponseTooLargeError extends ConnectorConfigError {
   constructor(maxBytes: number) {
-    super(`CardDAV response exceeded 5 MB cap (received > ${maxBytes} bytes)`);
+    super(
+      `CardDAV response exceeded the ${maxBytes / 1024 / 1024} MB cap (received > ${maxBytes} bytes)`,
+    );
     this.name = "DavResponseTooLargeError";
   }
 }
@@ -97,7 +113,12 @@ export function parseTimestampMs(ts: string | null | undefined): number {
  * `lastContactedAt` or `aiBriefing`) never trigger a spurious CardDAV push.
  */
 export function vcardContentHash(input: VCardInput): string {
-  const normalized: VCardInput = {
+  return crypto.hash("sha256", serializeVCard(normalized(input))).slice(0, 16);
+}
+
+/** A contact's card fields in one form, so a hash changes only with them. */
+function normalized(input: VCardInput): VCardInput {
+  return {
     name: input.name,
     firstName: input.firstName ?? null,
     lastName: input.lastName ?? null,
@@ -140,7 +161,46 @@ export function vcardContentHash(input: VCardInput): string {
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b)),
   };
-  return crypto.hash("sha256", serializeVCard(normalized)).slice(0, 16);
+}
+
+const FIELDS = Object.keys(VCARD_FIELDS) as VCardField[];
+
+/**
+ * A short hash of each card field Contrack writes, joined by dots: the
+ * baseline push keeps per contact, so a push writes only the fields that
+ * changed since and a change made on the server to another field stays.
+ */
+export function vcardFieldHashes(input: VCardInput): string {
+  const n = normalized(input);
+  const values: Record<VCardField, unknown> = {
+    name: [n.name, n.firstName, n.lastName],
+    company: n.company,
+    role: n.role,
+    birthday: n.birthday,
+    about: n.about,
+    emails: n.emails,
+    phones: n.phones,
+    addresses: n.addresses,
+    web: [n.website, n.socialLinks],
+    tags: n.tags,
+  };
+  return FIELDS.map((field) =>
+    crypto.hash("sha256", JSON.stringify(values[field])).slice(0, 6),
+  ).join(".");
+}
+
+/**
+ * The fields that differ from the baseline, or undefined for all of them: a
+ * baseline of an earlier version is one hash of the whole card.
+ */
+function changedFields(
+  baseline: string,
+  current: string,
+): Set<VCardField> | undefined {
+  const before = baseline.split(".");
+  if (before.length !== FIELDS.length) return undefined;
+  const now = current.split(".");
+  return new Set(FIELDS.filter((_, i) => before[i] !== now[i]));
 }
 
 function remoteCardHash(
@@ -187,6 +247,7 @@ export function formatEtagHeader(etag: string): string {
 
 async function readCappedBody(
   res: globalThis.Response,
+  maxBytes: number,
   signal?: AbortSignal,
 ): Promise<string> {
   const reader = res.body?.getReader();
@@ -202,8 +263,8 @@ async function readCappedBody(
       const { done, value } = await reader.read();
       if (done) break;
       if (value) {
-        if (received + value.byteLength > MAX_DAV_BYTES) {
-          throw new DavResponseTooLargeError(MAX_DAV_BYTES);
+        if (received + value.byteLength > maxBytes) {
+          throw new DavResponseTooLargeError(maxBytes);
         }
         received += value.byteLength;
         text += decoder.decode(value, { stream: true });
@@ -214,6 +275,26 @@ async function readCappedBody(
   } finally {
     void reader.cancel().catch(() => undefined);
     reader.releaseLock();
+  }
+}
+
+/**
+ * Whether a host is on the private network: plain http goes only there, with
+ * CONNECTORS_ALLOW_PRIVATE_HOSTS, so a password never crosses the internet in
+ * cleartext.
+ */
+async function isPrivateHost(hostname: string): Promise<boolean> {
+  const host = hostname.replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (net.isIP(host)) return isPrivateAddress(host);
+  try {
+    const addresses = await dns.lookup(host, { all: true });
+    return (
+      addresses.length > 0 &&
+      addresses.every((a) => isPrivateAddress(a.address))
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -235,9 +316,13 @@ async function davRequest(
     headers?: Record<string, string>;
     body?: string;
     signal?: AbortSignal;
+    /** A listing of the whole book: a larger cap and a longer wait. */
+    listing?: boolean;
   },
 ): Promise<DavResponse> {
-  const deadline = AbortSignal.timeout(DAV_DEADLINE_MS);
+  const deadline = AbortSignal.timeout(
+    options.listing ? DAV_LISTING_TIMEOUT_MS : DAV_DEADLINE_MS,
+  );
   const signal = options.signal
     ? AbortSignal.any([options.signal, deadline])
     : deadline;
@@ -249,7 +334,10 @@ async function davRequest(
   } catch {
     throw new ConnectorConfigError("Invalid CardDAV URL");
   }
-  if (parsedTarget.protocol !== "https:" && !allowPrivate) {
+  if (
+    parsedTarget.protocol !== "https:" &&
+    !(allowPrivate && (await isPrivateHost(parsedTarget.hostname)))
+  ) {
     throw new ConnectorConfigError(
       "CardDAV requires an https:// URL so your password is not sent in cleartext",
     );
@@ -275,7 +363,7 @@ async function davRequest(
       headers,
       body: options.body,
       signal,
-      timeoutMs: DAV_TIMEOUT_MS,
+      timeoutMs: options.listing ? DAV_LISTING_TIMEOUT_MS : DAV_TIMEOUT_MS,
       allowPrivate,
     });
     res = result.response;
@@ -297,7 +385,11 @@ async function davRequest(
     );
   }
 
-  const body = await readCappedBody(res, signal);
+  const body = await readCappedBody(
+    res,
+    options.listing ? MAX_DAV_LISTING_BYTES : MAX_DAV_BYTES,
+    signal,
+  );
   return {
     status: res.status,
     statusText: res.statusText,
@@ -898,7 +990,13 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
       : null;
     const toFetchHrefs = new Set<string>();
     const pendingEtags = new Map<string, string>();
-    const deletedHrefs = new Set<string>();
+    // Deletions the last push did not take, because it failed, are still
+    // owed: the push unlinks them.
+    const deletedHrefs = new Set<string>(
+      sameBook ? (prevCursor.deletedHrefs ?? []) : [],
+    );
+    /** Cards that could not be read, with why, for the next run. */
+    const failedHrefs = new Map<string, string>();
     /** A card the server no longer has. Its hash goes after the fetch. */
     const markDeleted = (href: string) => {
       deletedHrefs.add(href);
@@ -908,6 +1006,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
     };
     /** Keeps a card whose ETag is unchanged, and queues any other to fetch. */
     const noteEtag = (href: string, raw: string | null) => {
+      deletedHrefs.delete(href);
       const etag = cleanEtag(raw);
       if (etag && prevEtags[href] === etag) {
         nextEtags[href] = etag;
@@ -942,6 +1041,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
           contentType: "application/xml; charset=utf-8",
           body: syncReportBody,
           signal,
+          listing: true,
         });
 
         if (reportRes.status === 401) {
@@ -1020,6 +1120,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
         contentType: "application/xml; charset=utf-8",
         body: propfindBody,
         signal,
+        listing: true,
       });
 
       if (propRes.status === 401) {
@@ -1118,7 +1219,7 @@ ${hrefElements}
             const right = await fetchMultigetBatch(batch.slice(mid));
             return [...left, ...right];
           }
-          log(`Skipping oversized vCard at ${batch[0]} (> 5 MB)`);
+          failedHrefs.set(batch[0]!, "larger than 5 MB");
           return [];
         }
         throw err;
@@ -1137,7 +1238,7 @@ ${hrefElements}
           const right = await fetchMultigetBatch(batch.slice(mid));
           return [...left, ...right];
         }
-        log(`Skipping oversized vCard at ${batch[0]} (HTTP ${mgRes.status})`);
+        failedHrefs.set(batch[0]!, `HTTP ${mgRes.status}`);
         return [];
       }
 
@@ -1191,10 +1292,12 @@ ${hrefElements}
                 etag: cleanEtag(getRes.headers.get("etag")) || null,
                 vcard: getRes.body,
               });
+            } else {
+              failedHrefs.set(href, `HTTP ${getRes.status}`);
             }
           } catch (err: unknown) {
             if (err instanceof ConnectorAuthError) throw err;
-            log(`Skipping vCard at ${href}: ${(err as Error).message}`);
+            failedHrefs.set(href, (err as Error).message);
           }
         }
       }
@@ -1202,10 +1305,27 @@ ${hrefElements}
       return vcardPayloads;
     };
 
+    if (sameBook) {
+      for (const href of prevCursor.retryHrefs ?? []) {
+        if (!deletedHrefs.has(href)) toFetchHrefs.add(href);
+      }
+    }
     const hrefList = Array.from(toFetchHrefs);
     for (let i = 0; i < hrefList.length; i += MULTIGET_BATCH_SIZE) {
       const batch = hrefList.slice(i, i + MULTIGET_BATCH_SIZE);
       const vcardPayloads = await fetchMultigetBatch(batch);
+      // A card the answer left out was not read: it is tried again, and
+      // after a sync-collection nothing else would bring it back.
+      const read = new Set(vcardPayloads.map((p) => p.href));
+      for (const href of batch) {
+        if (!read.has(href) && !deletedHrefs.has(href)) {
+          if (!failedHrefs.has(href)) {
+            failedHrefs.set(href, "the server did not return it");
+          }
+        } else {
+          failedHrefs.delete(href);
+        }
+      }
 
       for (const entry of vcardPayloads) {
         const resolvedEtag = entry.etag ?? pendingEtags.get(entry.href);
@@ -1227,6 +1347,7 @@ ${hrefElements}
             externalId: entry.href,
             contact: contactFields,
             photoUrl: avatarUrl ?? undefined,
+            noPhoto: !avatarUrl || undefined,
           };
         }
       }
@@ -1234,6 +1355,13 @@ ${hrefElements}
 
     for (const deletedHref of deletedHrefs) {
       delete nextCardHashes[deletedHref];
+    }
+    if (failedHrefs.size > 0) {
+      const [href, why] = failedHrefs.entries().next().value!;
+      yield {
+        kind: "stage_failed",
+        message: `${failedHrefs.size} CardDAV card(s) could not be read and are tried again on the next sync (${href}: ${why})`,
+      };
     }
 
     return {
@@ -1246,6 +1374,8 @@ ${hrefElements}
       cardHashes: nextCardHashes,
       pushedHashes: { ...(prevCursor.pushedHashes ?? {}) },
       deletedHrefs: Array.from(deletedHrefs),
+      retryHrefs:
+        failedHrefs.size > 0 ? Array.from(failedHrefs.keys()) : undefined,
       lastSyncAt: new Date().toISOString(),
     };
   },
@@ -1253,7 +1383,7 @@ ${hrefElements}
   async push(
     ctx: PushContext<CarddavConfig, CarddavSecret>,
   ): Promise<PushResult> {
-    const { config, secret, signal, log } = ctx;
+    const { config, secret, signal } = ctx;
     const prevCursor = (ctx.cursor as CarddavCursor | null) ?? {};
     const etags: Record<string, string> = { ...(prevCursor.etags ?? {}) };
     const cardHashes: Record<string, string> = {
@@ -1280,13 +1410,14 @@ ${hrefElements}
     const deferBookSwitchCleanup =
       Boolean(prevCursor.bookSwitchPending) && !activeBookSet;
 
-    // Keep pushedHashes pruned to only active contacts in ctx.contacts
+    // Keep pushedHashes pruned to only active contacts in ctx.contacts. A
+    // contact the pull just wrote is at its baseline.
     for (const contact of ctx.contacts) {
       if (prevHashes[contact.id]) {
         pushedHashes[contact.id] = prevHashes[contact.id];
       }
       if (ctx.ingestedContactIds.has(contact.id)) {
-        pushedHashes[contact.id] = vcardContentHash(contact.vcardInput);
+        pushedHashes[contact.id] = vcardFieldHashes(contact.vcardInput);
       }
     }
 
@@ -1307,6 +1438,11 @@ ${hrefElements}
           }
         }
       }
+      // A baseline for every contact, so Two-way sync later writes only the
+      // contacts edited after this, not every one a meeting touched.
+      for (const contact of ctx.contacts) {
+        pushedHashes[contact.id] ??= vcardFieldHashes(contact.vcardInput);
+      }
       return {
         pushed: 0,
         cursor: {
@@ -1318,6 +1454,7 @@ ${hrefElements}
           cardHashes,
           pushedHashes,
           deletedHrefs: [],
+          retryHrefs: prevCursor.retryHrefs,
           lastSyncAt: prevCursor.lastSyncAt,
         },
         newLinks: [],
@@ -1334,7 +1471,13 @@ ${hrefElements}
       ? prevCursor.addressBookUrl!
       : (await discoverAddressBook(config, secret, signal)).addressBookUrl;
 
-    const linkByLocalId = new Map<string, string>();
+    // The cards each contact is linked to. A contact two cards share, such
+    // as a family's address, is written to the card that made it, or else to
+    // the card it was linked to first: never to every card.
+    const linksByLocalId = new Map<
+      string,
+      Array<{ href: string; made: boolean }>
+    >();
     const pendingSwitchLocalIds = new Set<string>();
     for (const link of ctx.links) {
       if (removedSet.has(link.externalId)) continue;
@@ -1350,40 +1493,48 @@ ${hrefElements}
         continue;
       }
       if (link.localId) {
-        linkByLocalId.set(link.localId, link.externalId);
+        const list = linksByLocalId.get(link.localId) ?? [];
+        list.push({ href: link.externalId, made: Boolean(link.made) });
+        linksByLocalId.set(link.localId, list);
       }
     }
+    const targetHrefs = (localId: string): string[] => {
+      const links = linksByLocalId.get(localId) ?? [];
+      const made = links.filter((l) => l.made).map((l) => l.href);
+      return made.length > 0 ? made : links.slice(0, 1).map((l) => l.href);
+    };
 
-    const rawConnectedMs = parseTimestampMs(ctx.connectorCreatedAt);
-    // SQLite `datetime('now')` on contacts.addedAt / updatedAt has 1-second
-    // resolution (truncating milliseconds), while connectors.createdAt is ISO
-    // with milliseconds. Floor connectedMs to whole seconds so a contact created
-    // immediately after connecting within the same second is not skipped.
-    const connectedMs = Number.isFinite(rawConnectedMs)
-      ? Math.floor(rawConnectedMs / 1000) * 1000
-      : NaN;
+    const connectedMs = parseTimestampMs(ctx.connectorCreatedAt);
     let pushed = 0;
     const newLinks: Array<{ externalId: string; localId: string }> = [];
+    /** Contacts not written this run, with why. They are tried again. */
+    const failed: string[] = [];
 
     for (const contact of ctx.contacts) {
       signal.throwIfAborted();
       if (pendingSwitchLocalIds.has(contact.id)) {
         continue;
       }
-      const currentHash = vcardContentHash(contact.vcardInput);
+      const current = vcardFieldHashes(contact.vcardInput);
       if (ctx.ingestedContactIds.has(contact.id)) {
-        pushedHashes[contact.id] = currentHash;
+        pushedHashes[contact.id] = current;
         continue;
       }
 
-      const linkedHref = linkByLocalId.get(contact.id);
+      const linkedHrefs = targetHrefs(contact.id);
       const lastHash = pushedHashes[contact.id];
       const legacyTs = legacyUpdatedAt[contact.id];
+      /** The fields to write to a linked card. Undefined writes them all. */
+      let fields: Set<VCardField> | undefined;
 
       if (lastHash) {
-        if (lastHash === currentHash) {
+        if (lastHash === current) continue;
+        if (lastHash === vcardContentHash(contact.vcardInput)) {
+          // A baseline of an earlier version, and nothing changed since.
+          pushedHashes[contact.id] = current;
           continue;
         }
+        fields = changedFields(lastHash, current);
       } else if (legacyTs) {
         const lastMs = parseTimestampMs(legacyTs);
         const updatedMs = parseTimestampMs(contact.updatedAt);
@@ -1392,170 +1543,162 @@ ${hrefElements}
           Number.isFinite(updatedMs) &&
           Math.floor(lastMs / 1000) * 1000 >= updatedMs
         ) {
-          pushedHashes[contact.id] = currentHash;
+          pushedHashes[contact.id] = current;
           continue;
         }
-      } else if (!linkedHref) {
-        // Unlinked contact never pushed before: skip archived rows and contacts
-        // that existed before the connector was connected (unless edited after).
+      } else if (linkedHrefs.length === 0) {
+        // Unlinked contact never pushed before: skip archived rows and
+        // contacts added before the connector was connected. Their content
+        // becomes the baseline, so an edit after this uploads them. Not
+        // updatedAt: a meeting or a briefing moves it too.
         if (contact.isArchived) {
-          pushedHashes[contact.id] = currentHash;
+          pushedHashes[contact.id] = current;
           continue;
         }
-        if (!config.pushExistingContacts && Number.isFinite(connectedMs)) {
-          const addedMs = parseTimestampMs(contact.addedAt);
-          const updatedMs = parseTimestampMs(contact.updatedAt);
-          const latestLocalMs = Math.max(
-            Number.isFinite(addedMs) ? addedMs : 0,
-            Number.isFinite(updatedMs) ? updatedMs : 0,
-          );
-          if (latestLocalMs > 0 && latestLocalMs < connectedMs) {
-            pushedHashes[contact.id] = currentHash;
-            continue;
-          }
+        const addedMs = parseTimestampMs(contact.addedAt);
+        // SQLite `datetime('now')` on contacts.addedAt has 1-second
+        // resolution, while connectors.createdAt is ISO with milliseconds.
+        if (
+          !config.pushExistingContacts &&
+          Number.isFinite(connectedMs) &&
+          Number.isFinite(addedMs) &&
+          addedMs < Math.floor(connectedMs / 1000) * 1000
+        ) {
+          pushedHashes[contact.id] = current;
+          continue;
         }
       }
 
-      const targetHref =
-        linkedHref ??
-        normalizeHrefPath(
-          `${addressBookUrl.replace(/\/?$/, "/")}${encodeURIComponent(contact.id)}.vcf`,
-          addressBookUrl,
-        );
-      const targetUrl = resolveUrl(addressBookUrl, targetHref);
-
-      let vcardBody: string;
-      let getNotFound = false;
-      if (linkedHref) {
-        // GET the current server card first so we replace only the properties
-        // Contrack owns and preserve PHOTO, NICKNAME, structured ADR, Apple
-        // labels, UID, and every X-* property.
-        let existingVCard: string | null = null;
-        try {
-          const getRes = await davRequest(targetUrl, {
-            method: "GET",
-            auth,
-            signal,
-          });
+      const targets =
+        linkedHrefs.length > 0
+          ? linkedHrefs
+          : [
+              normalizeHrefPath(
+                `${addressBookUrl.replace(/\/?$/, "/")}${encodeURIComponent(contact.id)}.vcf`,
+                addressBookUrl,
+              ),
+            ];
+      /**
+       * Writes the contact to one card: true, or why it could not. A linked
+       * card is read first, so the PUT changes only the fields Contrack
+       * changed and keeps every other line, and its ETag guards the PUT.
+       */
+      const putCard = async (
+        targetHref: string,
+        linked: boolean,
+      ): Promise<true | string> => {
+        const targetUrl = resolveUrl(addressBookUrl, targetHref);
+        let vcardBody: string;
+        // A new card goes only where nothing is, and a card read first only
+        // over the version read. A weak ETag cannot guard a PUT.
+        let condition: Record<string, string> = { "If-None-Match": "*" };
+        if (linked) {
+          let getRes: DavResponse;
+          try {
+            getRes = await davRequest(targetUrl, {
+              method: "GET",
+              auth,
+              signal,
+            });
+          } catch (err: unknown) {
+            return (err as Error).message;
+          }
           if (getRes.status === 401) {
             throw new ConnectorAuthError(
               "CardDAV server rejected the credentials on push (HTTP 401)",
             );
           }
           if (getRes.status === 404 || getRes.status === 410) {
-            getNotFound = true;
-            delete etags[linkedHref];
+            // Gone on the server since the pull: written again in full,
+            // only where nothing is.
+            delete etags[targetHref];
+            vcardBody = serializeVCard({
+              ...contact.vcardInput,
+              uid: contact.id,
+            });
           } else if (
             getRes.status >= 200 &&
             getRes.status < 300 &&
             getRes.body.includes("BEGIN:VCARD")
           ) {
-            existingVCard = getRes.body;
-            const liveEtag = cleanEtag(getRes.headers.get("etag"));
-            if (liveEtag) {
-              if (!etags[linkedHref]) {
-                etags[linkedHref] = liveEtag;
-              } else if (
-                isWeakEtag(etags[linkedHref]) &&
-                liveEtag !== etags[linkedHref]
-              ) {
-                log(
-                  "Skipped pushing a contact modified on the CardDAV server since last sync",
-                );
-                pushedHashes[contact.id] = currentHash;
-                delete etags[targetHref];
-                delete cardHashes[targetHref];
-                continue;
-              }
-            }
+            vcardBody = patchVCard(getRes.body, contact.vcardInput, fields);
+            // The ETag of the card just read, not the pull's: the patch is
+            // made on this card.
+            const etag = formatEtagHeader(
+              cleanEtag(getRes.headers.get("etag")),
+            );
+            condition = etag ? { "If-Match": etag } : {};
+          } else {
+            return `reading the card answered HTTP ${getRes.status}`;
           }
-        } catch (err: unknown) {
-          if (err instanceof ConnectorAuthError) throw err;
-        }
-
-        if (existingVCard) {
-          vcardBody = patchVCard(existingVCard, contact.vcardInput);
-        } else if (getNotFound) {
+        } else {
           vcardBody = serializeVCard({
             ...contact.vcardInput,
             uid: contact.id,
           });
-        } else {
-          log(
-            `Skipped pushing contact ${contact.id} (could not fetch existing CardDAV card before update)`,
+        }
+
+        let putRes: DavResponse;
+        try {
+          putRes = await davRequest(targetUrl, {
+            method: "PUT",
+            auth,
+            contentType: "text/vcard; charset=utf-8",
+            headers: condition,
+            body: vcardBody,
+            signal,
+          });
+        } catch (err: unknown) {
+          if (err instanceof ConnectorAuthError) throw err;
+          return (err as Error).message;
+        }
+        if (putRes.status === 401) {
+          throw new ConnectorAuthError(
+            "CardDAV server rejected the credentials on push (HTTP 401)",
           );
-          continue;
         }
-      } else {
-        vcardBody = serializeVCard({ ...contact.vcardInput, uid: contact.id });
-      }
-
-      const headers: Record<string, string> = {};
-      if (linkedHref && etags[linkedHref] && !isWeakEtag(etags[linkedHref])) {
-        headers["If-Match"] = formatEtagHeader(etags[linkedHref]);
-      } else if (!linkedHref || getNotFound) {
-        headers["If-None-Match"] = "*";
-      }
-
-      let putRes: DavResponse;
-      try {
-        putRes = await davRequest(targetUrl, {
-          method: "PUT",
-          auth,
-          contentType: "text/vcard; charset=utf-8",
-          headers,
-          body: vcardBody,
-          signal,
-        });
-      } catch (err: unknown) {
-        if (err instanceof ConnectorAuthError) throw err;
-        log(`Skipped pushing contact ${contact.id}: ${(err as Error).message}`);
-        continue;
-      }
-
-      if (putRes.status === 401) {
-        throw new ConnectorAuthError(
-          "CardDAV server rejected the credentials on push (HTTP 401)",
-        );
-      }
-
-      if (
-        putRes.status === 403 ||
-        putRes.status === 409 ||
-        putRes.status === 412
-      ) {
-        log(
-          `Skipped pushing contact ${contact.id} (CardDAV server returned HTTP ${putRes.status})`,
-        );
-        if (!getNotFound) {
-          pushedHashes[contact.id] = currentHash;
-          delete cardHashes[targetHref];
+        if (putRes.status < 200 || putRes.status >= 300) {
+          return `HTTP ${putRes.status}`;
         }
-        if (putRes.status === 409 || putRes.status === 412) {
-          delete etags[targetHref];
-        }
-        continue;
-      }
-
-      if (putRes.status >= 200 && putRes.status < 300) {
-        pushed++;
-        pushedHashes[contact.id] = currentHash;
         const { contacts: pushedParsed } = extractVCardContacts(vcardBody);
         cardHashes[targetHref] = pushedParsed[0]
           ? remoteCardHash(pushedParsed[0], pushedParsed[0].avatarUrl)
-          : currentHash;
+          : vcardContentHash(contact.vcardInput);
         const responseEtag = cleanEtag(putRes.headers.get("etag"));
         if (responseEtag) {
           etags[targetHref] = responseEtag;
         } else {
           delete etags[targetHref];
         }
-        newLinks.push({ externalId: targetHref, localId: contact.id });
+        return true;
+      };
+
+      let wroteAll = true;
+      for (const targetHref of targets) {
+        const result = await putCard(targetHref, linkedHrefs.length > 0);
+        if (result === true) {
+          if (linkedHrefs.length === 0) {
+            newLinks.push({ externalId: targetHref, localId: contact.id });
+          }
+        } else {
+          wroteAll = false;
+          failed.push(`${contact.vcardInput.name}: ${result}`);
+        }
+      }
+      if (wroteAll) {
+        pushed++;
+        pushedHashes[contact.id] = current;
       }
     }
 
     return {
       pushed,
+      errors:
+        failed.length > 0
+          ? [
+              `${failed.length} contact(s) could not be written to the CardDAV server and are tried again on the next sync (${failed[0]})`,
+            ]
+          : undefined,
       cursor: {
         addressBookUrl,
         configuredUrl: config.url,
@@ -1565,6 +1708,7 @@ ${hrefElements}
         cardHashes,
         pushedHashes,
         deletedHrefs: [],
+        retryHrefs: prevCursor.retryHrefs,
         lastSyncAt: prevCursor.lastSyncAt,
       },
       newLinks,

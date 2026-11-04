@@ -15,9 +15,13 @@ export const IMAP_PORT = 3143;
 export const RADICALE = "http://127.0.0.1:5232";
 export const DAY_MS = 86_400_000;
 
-/** A new owner with a user row, so the login address counts as the owner. */
+/**
+ * A new owner with a user row, so the login address counts as the owner. The
+ * id is a UUID like a real one: the uploads folder refuses another form, so a
+ * contact photo would not save.
+ */
 export function labOwner(): { ownerId: string; scope: Scope; email: string } {
-  const ownerId = `lab-${crypto.randomUUID().slice(0, 8)}`;
+  const ownerId = crypto.randomUUID();
   const email = `${ownerId}@lab.test`;
   sqlite
     .prepare(

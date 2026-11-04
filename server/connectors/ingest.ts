@@ -385,12 +385,25 @@ export async function ingestStream(
       { localId: string | null } | undefined;
   }
 
+  /** When this connector was made: a source row from before is another's. */
+  const connectorCreatedAt =
+    (
+      sqlite
+        .prepare(
+          `SELECT createdAt FROM connectors WHERE id = ? AND ownerId = ?`,
+        )
+        .get(connector.id, scope.ownerId) as { createdAt: string } | undefined
+    )?.createdAt ?? null;
+
   /**
    * Whether this source owns the contact's details for this external id: its
-   * source row names the connector's kind and the id, the pull or the push
-   * made it. Not when the contact took in another one by a merge, which moves
-   * the duplicate's source row to it, and not when another link also feeds
-   * it. Then the contact is the owner's, and the source only fills it in.
+   * source row names the connector's kind and the id, and this connector's
+   * pull or push made it. Not a row from before the connector: a connector
+   * removed and added back finds its old contacts the owner's. Not when the
+   * contact took in another one by a merge, which moves the duplicate's
+   * source row to it, and not when another card that made it also feeds it.
+   * Then the contact is the owner's, and the source only fills it in. A card
+   * that only shares an address with it does not count.
    */
   function madeBySync(contactId: string, externalId: string): boolean {
     return Boolean(
@@ -398,11 +411,15 @@ export async function ingestStream(
         .prepare(
           `SELECT 1 FROM contact_sources s
            WHERE s.contactId = ? AND s.platform = ? AND s.externalId = ?
+             AND (? IS NULL OR
+               julianday(COALESCE(s.connectedOn, s.importedAt)) >= julianday(?))
              AND NOT EXISTS (
                SELECT 1 FROM dedupe_merge_log m
                WHERE m.ownerId = ? AND m.primaryId = s.contactId AND m.undoneAt IS NULL)
              AND NOT EXISTS (
                SELECT 1 FROM connector_links l
+               JOIN contact_sources o
+                 ON o.contactId = l.localId AND o.externalId = l.externalId
                WHERE l.ownerId = ? AND l.kind = 'contact' AND l.localId = s.contactId
                  AND NOT (l.connectorId = ? AND l.externalId = ?))`,
         )
@@ -410,12 +427,66 @@ export async function ingestStream(
           contactId,
           connector.kind,
           externalId,
+          connectorCreatedAt,
+          connectorCreatedAt,
           scope.ownerId,
           scope.ownerId,
           connector.id,
           externalId,
         ),
     );
+  }
+
+  /**
+   * The contact a card with no link already made: a connector removed and
+   * added back finds its old contacts by their source rows, and a card that
+   * Contrack uploaded carries the contact's id as its UID, when the run
+   * stopped before it saved the link. Matching them keeps the card from
+   * coming in a second time.
+   */
+  function knownCardContact(externalId: string, uid: unknown): string | null {
+    const row = sqlite
+      .prepare(
+        `SELECT id FROM contacts
+         WHERE ownerId = ? AND deletedAt IS NULL AND (
+           id = ? OR id IN (
+             SELECT contactId FROM contact_sources
+             WHERE platform = ? AND externalId = ?))
+         ORDER BY id = ? DESC
+         LIMIT 1`,
+      )
+      .get(
+        scope.ownerId,
+        typeof uid === "string" ? uid : null,
+        connector.kind,
+        externalId,
+        typeof uid === "string" ? uid : null,
+      ) as { id: string } | undefined;
+    return row?.id ?? null;
+  }
+
+  /**
+   * A card with no photo takes back the photo an earlier sync saved from a
+   * card: a copy the sync makes is named `import-` or `remote-`, and a photo
+   * the owner chose has another name.
+   */
+  function dropSavedPhoto(contactId: string) {
+    const row = sqlite
+      .prepare(
+        `SELECT name, pronouns, avatarUrl FROM contacts WHERE id = ? AND ownerId = ?`,
+      )
+      .get(contactId, scope.ownerId) as
+      | { name: string; pronouns: string | null; avatarUrl: string | null }
+      | undefined;
+    const saved = `/uploads/u/${scope.ownerId}/avatars/`;
+    if (
+      row?.avatarUrl?.startsWith(`${saved}import-`) ||
+      row?.avatarUrl?.startsWith(`${saved}remote-`)
+    ) {
+      contactService.updateContact(scope, contactId, {
+        avatarUrl: defaultAvatarUrl(row.name, row.pronouns),
+      });
+    }
   }
 
   /**
@@ -550,6 +621,7 @@ export async function ingestStream(
     remote: ContactPayload,
     externalId: string,
     placeholderUrl?: string,
+    noPhoto?: boolean,
   ): void {
     try {
       if (placeholderUrl) restoreDrawnAvatar(contactId, placeholderUrl);
@@ -559,6 +631,7 @@ export async function ingestStream(
           contactId,
           withLocalTagsAndLinks(contactId, remote),
         );
+        if (noPhoto) dropSavedPhoto(contactId);
         return;
       }
       const local = contactService.getContactById(scope, contactId);
@@ -1078,6 +1151,7 @@ export async function ingestStream(
           cPayload,
           event.externalId,
           event.defaultPhotoUrl,
+          event.noPhoto,
         );
 
         if (
@@ -1119,8 +1193,24 @@ export async function ingestStream(
             event.externalId,
           );
       } else {
-        let matchedContactId: string | null = null;
-        for (const em of cEmails) {
+        let matchedContactId = knownCardContact(event.externalId, cPayload.uid);
+        if (matchedContactId && matchedContactId === cPayload.uid) {
+          // The card the push made: its source row, which the run that
+          // stopped did not save, so later edits on the server apply.
+          sqlite
+            .prepare(
+              `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn)
+               VALUES (?, ?, ?, ?, ?)`,
+            )
+            .run(
+              crypto.randomUUID(),
+              matchedContactId,
+              connector.kind,
+              event.externalId,
+              nowIso,
+            );
+        }
+        for (const em of matchedContactId ? [] : cEmails) {
           matchedContactId = matcher.resolveContactId({ email: em });
           if (matchedContactId) break;
         }
