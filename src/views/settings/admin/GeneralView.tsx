@@ -824,8 +824,14 @@ export const GoogleRow = () => {
                 expire after 7 days
               </p>
               <p>
-                At sign-in Google warns that the app is unverified. Choose
-                Continue (up to 100 accounts)
+                While the app is in Testing, add each Google account that
+                connects under Test users, or Google answers &ldquo;Access
+                blocked&rdquo;
+              </p>
+              <p>
+                At sign-in Google shows &ldquo;Google hasn&rsquo;t verified this
+                app&rdquo;, because the client is your own. Choose Continue (up
+                to 100 accounts)
               </p>
             </li>
             <li className="space-y-1.5">
