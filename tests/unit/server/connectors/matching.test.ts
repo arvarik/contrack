@@ -25,6 +25,15 @@ describe("connectors matching", () => {
     expect(result).toBe("contact-alice");
   });
 
+  it("matches an address by mailbox, without its +tag or Gmail's dots", () => {
+    const matcher = createMatcherFromMaps(new Map(), new Map());
+    matcher.registerContact("contact-ana", ["AnaLee@gmail.com"]);
+
+    expect(matcher.resolveContactId({ email: "ana.lee+news@gmail.com" })).toBe(
+      "contact-ana",
+    );
+  });
+
   it("normalizes phone formats to match equivalent international/local representations", () => {
     const emailMap = new Map<string, string>();
     const phoneMap = new Map<string, string>([["4155550100", "contact-bob"]]);

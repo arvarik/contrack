@@ -245,8 +245,9 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               Google then shows &ldquo;Google hasn&rsquo;t verified this
               app&rdquo;, because the sign-in goes through this server&rsquo;s
               own Google Cloud client. Choose Continue. If Google shows
-              &ldquo;Access blocked&rdquo; instead, add this Google account as a
-              test user under Google Auth platform, Audience, or publish the app
+              &ldquo;Access blocked&rdquo; instead, publish the app under Google
+              Auth platform, Audience, or add this Google account as a test user
+              there. A test user&rsquo;s sign-in ends after 7 days
             </p>
           </div>
         )}
@@ -314,6 +315,26 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               checked={summaries}
               onChange={setSummaries}
             />
+            {/* The sign-in asked for headers only, so no body can be read
+                until Google grants more. Saving the switch alone did nothing. */}
+            {summaries &&
+              (connector?.config as Record<string, unknown> | undefined)
+                ?.mailBodies === false && (
+                <div className="rounded-xl bg-warning/10 p-3 space-y-2">
+                  <p className="text-xs text-on-surface-variant">
+                    This connection may read message headers only. Summaries
+                    need Google to allow reading message bodies, so sign in
+                    again with summaries on
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleConnectRedirect}
+                    className="btn-secondary btn-sm"
+                  >
+                    Reconnect with summaries
+                  </button>
+                </div>
+              )}
 
             <SyncScheduleField
               value={intervalMinutes}

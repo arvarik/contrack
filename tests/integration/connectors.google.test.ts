@@ -49,7 +49,7 @@ import type { SyncEvent } from "../../server/connectors/types.ts";
 
 /** The People fields the adapter asks for. `metadata` carries `deleted`. */
 const PERSON_FIELDS =
-  "metadata,names,emailAddresses,phoneNumbers,organizations,photos";
+  "metadata,names,emailAddresses,phoneNumbers,organizations,photos,birthdays,addresses,biographies,urls,memberships";
 
 describe("Google Workspace Connector & OAuth Integration", () => {
   let server: http.Server;
@@ -191,7 +191,11 @@ describe("Google Workspace Connector & OAuth Integration", () => {
      * exchange that hands out `refreshToken` (Google sends none on a repeat
      * consent).
      */
-    async function signInWithGoogle(email: string, refreshToken?: string) {
+    async function signInWithGoogle(
+      email: string,
+      refreshToken?: string,
+      scope = FULL_SCOPE,
+    ) {
       const state = crypto.randomUUID();
       sqlite
         .prepare(
@@ -206,7 +210,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
               access_token: `access-${email}`,
               refresh_token: refreshToken,
               expiry_date: Date.now() + 3600 * 1000,
-              scope: "https://www.googleapis.com/auth/gmail.readonly",
+              scope,
             },
           });
           setCredentials = vi.fn();
@@ -228,6 +232,86 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       ).toBeUndefined();
       return res;
     }
+
+    /** Everything the connect button asks for, with summaries on. */
+    const FULL_SCOPE = [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/contacts.readonly",
+      "https://www.googleapis.com/auth/calendar.events.readonly",
+      "https://www.googleapis.com/auth/gmail.readonly",
+    ].join(" ");
+
+    /** Removes a test's Google connector, so later tests see only their own. */
+    const dropGoogleConnector = (email: string) =>
+      sqlite
+        .prepare("DELETE FROM connectors WHERE ownerId = ? AND name = ?")
+        .run(memberActor.user.id, `Google (${email})`);
+
+    it("connects on a server east of UTC, and turns off a stage whose scope was not granted", async () => {
+      // SQLite stores the state's time in UTC. Read as local time in Berlin,
+      // a state made a second ago was an hour old, and every sign-in expired.
+      const tz = process.env.TZ;
+      process.env.TZ = "Europe/Berlin";
+      try {
+        const res = await signInWithGoogle(
+          "east-of-utc@example.com",
+          "east-refresh",
+          "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.metadata",
+        );
+        expect(res.headers.location).toBe(
+          "/settings/connectors?connected=google",
+        );
+      } finally {
+        process.env.TZ = tz;
+      }
+      const conn = listConnectors(memberActor.scope).find(
+        (c) => c.name === "Google (east-of-utc@example.com)",
+      );
+      expect(conn?.config).toMatchObject({
+        syncContacts: false,
+        syncEmail: true,
+        syncCalendar: false,
+        summaries: false,
+        mailBodies: false,
+        accountEmail: "east-of-utc@example.com",
+      });
+      dropGoogleConnector("east-of-utc@example.com");
+    });
+
+    it("signs a connector whose secret the key no longer opens in again, in place", async () => {
+      await signInWithGoogle("lost-key@example.com", "old-refresh");
+      sqlite
+        .prepare(
+          "UPDATE connectors SET secret = 'not-a-sealed-secret' WHERE ownerId = ? AND name = ?",
+        )
+        .run(memberActor.user.id, "Google (lost-key@example.com)");
+      await signInWithGoogle("lost-key@example.com", "new-refresh");
+      expect(
+        listConnectors(memberActor.scope).filter(
+          (c) => c.name === "Google (lost-key@example.com)",
+        ),
+      ).toHaveLength(1);
+      expect(googleAccounts()["lost-key@example.com"]).toBe("new-refresh");
+      dropGoogleConnector("lost-key@example.com");
+    });
+
+    it("gives up the access at Google when the connector is removed", async () => {
+      await signInWithGoogle("removed@example.com", "removed-refresh");
+      const conn = listConnectors(memberActor.scope).find(
+        (c) => c.name === "Google (removed@example.com)",
+      )!;
+      const revoke = vi
+        .spyOn(googleAdapter, "revoke")
+        .mockRejectedValue(new Error("network down"));
+      const res = await request(server)
+        .delete(`/api/connectors/${conn.id}`)
+        .set("Cookie", memberActor.cookie);
+      // A failed revoke does not keep the connector.
+      expect(res.status).toBe(204);
+      expect(revoke).toHaveBeenCalledWith(
+        expect.objectContaining({ refreshToken: "removed-refresh" }),
+      );
+    });
 
     /** Each Google connector's account and refresh token, by address. */
     const googleAccounts = () =>
@@ -503,6 +587,10 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       const futureEnd = new Date(
         now.getTime() + 25 * 3600 * 1000,
       ).toISOString();
+      const day = (days: number) =>
+        new Date(now.getTime() + days * 24 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 10);
 
       vi.spyOn(google, "calendar").mockReturnValue({
         events: {
@@ -530,8 +618,9 @@ describe("Google Workspace Connector & OAuth Integration", () => {
                 {
                   id: "cal-all-day-3",
                   summary: "Site Holiday",
-                  start: { date: "2099-01-05" },
-                  end: { date: "2099-01-06" },
+                  start: { date: day(3) },
+                  end: { date: day(4) },
+                  attendees: [{ email: "bob@builder.com" }],
                 },
               ],
               nextSyncToken: "calendar-sync-token-v1",
@@ -595,6 +684,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         contactsSyncToken: "contacts-sync-token-v1",
         contactsFields: PERSON_FIELDS,
         calendarSyncToken: "calendar-sync-token-v1",
+        calendarListedAt: expect.any(String),
         gmailHistoryId: "history-9999",
         lastSyncAt: expect.any(String),
       });
@@ -626,8 +716,8 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       // An all-day event is its day, not midnight UTC, so it never shows on
       // the evening before west of UTC.
       expect(upcoming[1]).toMatchObject({
-        startsAt: "2099-01-05",
-        endsAt: "2099-01-06",
+        startsAt: day(3),
+        endsAt: day(4),
       });
 
       // Every call carries a timeout and the sync's signal. With neither, a
@@ -640,7 +730,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         ...options(google.gmail(null!).users.messages.get),
         ...options(google.calendar(null!).events.list),
       ];
-      expect(sent).toHaveLength(5);
+      expect(sent).toHaveLength(6);
       for (const option of sent) {
         expect(option).toEqual({
           timeout: GOOGLE_CALL_TIMEOUT_MS,
@@ -847,6 +937,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
     async function run(
       config: Partial<Parameters<typeof googleAdapter.sync>[0]["config"]>,
       cursor: unknown = null,
+      firstSince?: string,
     ) {
       const events: SyncEvent[] = [];
       const gen = googleAdapter.sync({
@@ -865,6 +956,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         secret: { refreshToken: "good-token", email: "me@example.com" },
         cursor,
         since: "2026-02-01T00:00:00.000Z",
+        firstSince,
         selfAddresses: { emails: ["me@example.com"], phones: [] },
         signal: new AbortController().signal,
         log: () => {},
@@ -1239,7 +1331,10 @@ describe("Google Workspace Connector & OAuth Integration", () => {
             { resourceName: "people/gone", metadata: { deleted: true } },
             {
               resourceName: "people/nameless",
-              emailAddresses: [{ value: "nameless@example.com" }],
+              emailAddresses: [
+                { value: "nameless@example.com" },
+                { value: "nameless@work.example.com", type: "work" },
+              ],
             },
           ],
           nextSyncToken: "t2",
@@ -1273,10 +1368,16 @@ describe("Google Workspace Connector & OAuth Integration", () => {
           kind: "contact",
           externalId: "people/nameless",
           contact: expect.objectContaining({
+            // In the field the repository reads, in Contrack's words.
             emails: [
               {
                 email: "nameless@example.com",
-                type: "other",
+                label: "personal",
+                isPrimary: false,
+              },
+              {
+                email: "nameless@work.example.com",
+                label: "work",
                 isPrimary: false,
               },
             ],
@@ -1285,7 +1386,277 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       ]);
     });
 
-    it("drops rooms and attendees who declined, and treats a meeting the owner declined as cancelled", async () => {
+    it("maps a card's birthday, addresses, notes, links and labels to the contact", async () => {
+      const list = vi.fn().mockResolvedValue({
+        data: {
+          connections: [
+            {
+              resourceName: "people/c1",
+              names: [{ displayName: "Ana Lee" }],
+              birthdays: [{ date: { month: 5, day: 14 } }],
+              addresses: [
+                {
+                  formattedValue: "1 Main St\nSpringfield, IL 62701\nUS",
+                  type: "home",
+                  metadata: { primary: true },
+                },
+              ],
+              biographies: [{ value: "Met at the conference." }],
+              urls: [
+                { value: "https://analee.example" },
+                {
+                  value: "https://www.linkedin.com/in/analee",
+                  type: "profile",
+                },
+              ],
+              memberships: [
+                {
+                  contactGroupMembership: {
+                    contactGroupResourceName: "contactGroups/friends",
+                  },
+                },
+                {
+                  contactGroupMembership: {
+                    contactGroupResourceName: "contactGroups/starred",
+                  },
+                },
+                {
+                  contactGroupMembership: {
+                    contactGroupResourceName: "contactGroups/1a2b3c",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      });
+      const groups = vi.fn().mockResolvedValue({
+        data: {
+          contactGroups: [
+            {
+              resourceName: "contactGroups/friends",
+              name: "friends",
+              formattedName: "Friends",
+              groupType: "SYSTEM_CONTACT_GROUP",
+            },
+            {
+              resourceName: "contactGroups/starred",
+              name: "starred",
+              formattedName: "Starred",
+              groupType: "SYSTEM_CONTACT_GROUP",
+            },
+            {
+              resourceName: "contactGroups/1a2b3c",
+              name: "Book club",
+              formattedName: "Book club",
+              groupType: "USER_CONTACT_GROUP",
+            },
+          ],
+        },
+      });
+      vi.spyOn(google, "people").mockReturnValue({
+        people: { connections: { list } },
+        contactGroups: { list: groups },
+      } as unknown as ReturnType<typeof google.people>);
+
+      const { events } = await run({ syncContacts: true });
+
+      expect(events).toEqual([
+        {
+          kind: "contact",
+          externalId: "people/c1",
+          contact: {
+            name: "Ana Lee",
+            emails: [],
+            phones: [],
+            birthday: "--05-14",
+            about: "Met at the conference.",
+            website: "https://analee.example",
+            addresses: [
+              {
+                address: "1 Main St, Springfield, IL 62701, US",
+                label: "home",
+                isPrimary: true,
+              },
+            ],
+            socialLinks: [
+              { url: "https://analee.example" },
+              { url: "https://www.linkedin.com/in/analee" },
+            ],
+            tags: ["Friends", "Book club"],
+          },
+        },
+      ]);
+    });
+
+    it("sends Google's letter tile as the card's placeholder, not as its photo", async () => {
+      const tile = "https://lh3.googleusercontent.com/cm/ABC123=s100";
+      vi.spyOn(google, "people").mockReturnValue({
+        people: {
+          connections: {
+            list: vi.fn().mockResolvedValue({
+              data: {
+                connections: [
+                  {
+                    resourceName: "people/c1",
+                    names: [{ displayName: "Ana Lee" }],
+                    photos: [{ url: tile, default: true }],
+                  },
+                ],
+              },
+            }),
+          },
+        },
+      } as unknown as ReturnType<typeof google.people>);
+
+      const { events } = await run({ syncContacts: true });
+
+      expect(events[0]).toMatchObject({ defaultPhotoUrl: tile });
+      expect(events[0]).not.toHaveProperty("photoUrl", tile);
+    });
+
+    it("logs a meeting that ended since the last window once, though its token returns nothing, and lists 60 days ahead", async () => {
+      const hour = 3600_000;
+      const day = 24 * hour;
+      const at = (offsetMs: number) =>
+        new Date(Date.now() + offsetMs).toISOString();
+      const listedAt = at(-2 * hour);
+      const event = (id: string, start: number) => ({
+        id,
+        summary: id,
+        start: { dateTime: at(start) },
+        end: { dateTime: at(start + hour) },
+        attendees: [{ email: "bob@example.com" }],
+      });
+      // The token returns a meeting added after it took place, and one that
+      // changed and ended after the last window, which the window logs.
+      type Query = { syncToken?: string; timeMin?: string; timeMax?: string };
+      const list = vi.fn(async (params: Query) => ({
+        data: params.syncToken
+          ? {
+              items: [
+                event("added-late", -6 * hour),
+                event("held", -90 * 60_000),
+              ],
+              nextSyncToken: "c2",
+            }
+          : { items: [event("held", -90 * 60_000), event("next", day)] },
+      }));
+      vi.spyOn(google, "calendar").mockReturnValue({
+        events: { list },
+      } as unknown as ReturnType<typeof google.calendar>);
+
+      const { events, cursor } = await run(
+        { syncCalendar: true },
+        { calendarSyncToken: "c1", calendarListedAt: listedAt },
+      );
+      expect(
+        events.map((e) => [e.kind, "externalId" in e ? e.externalId : null]),
+      ).toEqual([
+        ["interaction", "google:calendar:added-late"],
+        ["interaction", "google:calendar:held"],
+        ["upcoming", "google:calendar:next"],
+        ["upcoming_listed", null],
+      ]);
+      const [token, window] = list.mock.calls.map(([params]) => params);
+      expect(token).toMatchObject({ syncToken: "c1" });
+      expect(token.timeMin).toBeUndefined();
+      expect(window.syncToken).toBeUndefined();
+      expect(window.timeMin).toBe(
+        new Date(Date.parse(listedAt) - day).toISOString(),
+      );
+      expect(
+        Date.parse(window.timeMax!) -
+          Date.parse(cursor.calendarListedAt as string),
+      ).toBe(60 * day);
+      expect(cursor.calendarSyncToken).toBe("c2");
+    });
+
+    it("keeps no event of another type or of the owner alone, and no organizer that is a calendar or a robot", async () => {
+      const at = (offsetMs: number) =>
+        new Date(Date.now() + offsetMs).toISOString();
+      const event = (id: string, extra: object) => ({
+        id,
+        summary: id,
+        start: { dateTime: at(24 * 3600_000) },
+        end: { dateTime: at(25 * 3600_000) },
+        ...extra,
+      });
+      const bob = { attendees: [{ email: "bob@example.com" }] };
+      vi.spyOn(google, "calendar").mockReturnValue({
+        events: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              items: [
+                event("birthday", { ...bob, eventType: "birthday" }),
+                event("focus", { ...bob, eventType: "focusTime" }),
+                event("reminder", {
+                  organizer: { email: "me@example.com", self: true },
+                }),
+                event("chore", {
+                  organizer: { email: "family@group.calendar.google.com" },
+                }),
+                event("imported", {
+                  ...bob,
+                  organizer: { email: "unknownorganizer@calendar.google.com" },
+                }),
+                event("booking", {
+                  ...bob,
+                  organizer: { email: "noreply@bookings.example.com" },
+                }),
+                event("review", {
+                  ...bob,
+                  organizer: { email: "carol@example.com" },
+                }),
+              ],
+              nextSyncToken: "c1",
+            },
+          }),
+        },
+      } as unknown as ReturnType<typeof google.calendar>);
+
+      const { events } = await run({ syncCalendar: true });
+      expect(
+        events.flatMap((e) =>
+          e.kind === "upcoming"
+            ? [[e.title, e.participants.map((p) => p.email)]]
+            : [],
+        ),
+      ).toEqual([
+        ["imported", ["bob@example.com"]],
+        ["booking", ["bob@example.com"]],
+        ["review", ["bob@example.com", "carol@example.com"]],
+      ]);
+    });
+
+    it("starts a stage with no place of its own at the lookback date, and forgets the place of a stage that is off", async () => {
+      const firstSince = "2025-11-03T00:00:00.000Z";
+      const messages = vi.fn().mockResolvedValue({ data: {} });
+      mockGmail({ messages: { list: messages } });
+      const events = vi
+        .fn()
+        .mockResolvedValue({ data: { nextSyncToken: "c1" } });
+      vi.spyOn(google, "calendar").mockReturnValue({
+        events: { list: events },
+      } as unknown as ReturnType<typeof google.calendar>);
+
+      const { cursor } = await run(
+        { syncEmail: true, syncCalendar: true },
+        {
+          lastSyncAt: "2026-02-01T00:00:00.000Z",
+          contactsSyncToken: "p1",
+          contactsFields: PERSON_FIELDS,
+        },
+        firstSince,
+      );
+      expect(messages.mock.calls[0][0].q).toBe(
+        `after:${Date.parse(firstSince) / 1000}`,
+      );
+      expect(events.mock.calls[0][0].timeMin).toBe(firstSince);
+      expect(cursor.contactsSyncToken).toBeUndefined();
+    });
+
+    it("drops rooms and attendees who declined, and any meeting the owner declined", async () => {
       const hour = 3600_000;
       const at = (offsetMs: number) =>
         new Date(Date.now() + offsetMs).toISOString();
@@ -1330,10 +1701,7 @@ describe("Google Workspace Connector & OAuth Integration", () => {
             { email: "bob@example.com", name: undefined },
           ],
         }),
-        {
-          kind: "upcoming_cancelled",
-          externalId: "google:calendar:future-declined",
-        },
+        { kind: "upcoming_listed" },
       ]);
     });
   });

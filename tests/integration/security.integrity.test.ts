@@ -106,7 +106,7 @@ describe("Security, resiliency, and integrity regressions", () => {
     }
   });
 
-  it("[P0 #4] Google incremental sync preserves unchanged future upcoming_events and removes upcoming_cancelled events", async () => {
+  it("[P0 #4] a Google sync that did not list its calendar window keeps the future upcoming_events", async () => {
     const scope = scopeForOwnerId(actor.user.id);
     contactService.createContact(scope, {
       name: "Calendar Partner",
@@ -138,7 +138,7 @@ describe("Security, resiliency, and integrity regressions", () => {
       yield {
         kind: "upcoming",
         externalId: "gcal-evt-2",
-        title: "Cancel Me Meeting",
+        title: "Later Meeting",
         startsAt: futureStart2,
         endsAt: futureEnd2,
         participants: [{ email: "calendar-partner@example.com" }],
@@ -159,13 +159,10 @@ describe("Security, resiliency, and integrity regressions", () => {
       phones: [],
     });
 
-    // Second incremental delta sync: only yields a cancellation for gcal-evt-2
-    // and does NOT re-yield gcal-evt-1.
+    // The next run yields no upcoming event and no upcoming_listed, as when
+    // its Calendar part fails.
     async function* deltaSync(): AsyncGenerator<SyncEvent, unknown, void> {
-      yield {
-        kind: "upcoming_cancelled",
-        externalId: "gcal-evt-2",
-      };
+      yield* [];
       return {};
     }
 
@@ -176,12 +173,13 @@ describe("Security, resiliency, and integrity regressions", () => {
 
     const remaining = sqlite
       .prepare(
-        "SELECT externalId, title FROM upcoming_events WHERE connectorId = ? AND ownerId = ?",
+        "SELECT externalId, title FROM upcoming_events WHERE connectorId = ? AND ownerId = ? ORDER BY externalId",
       )
       .all(connId, scope.ownerId) as { externalId: string; title: string }[];
 
     expect(remaining).toEqual([
       { externalId: "gcal-evt-1", title: "Keep Me Meeting" },
+      { externalId: "gcal-evt-2", title: "Later Meeting" },
     ]);
   });
 

@@ -4,8 +4,9 @@
  *   2. Email through the Gmail API (messages.list / history.list, metadata
  *      headers by default, full bodies only for matched contacts when
  *      summaries are on)
- *   3. Events through the Calendar API (events.list with syncToken: past ones
- *      as meetings, future ones as upcoming_events)
+ *   3. Events through the Calendar API (events.list with syncToken for past
+ *      meetings, and a window listed in full for upcoming_events and the
+ *      meetings that ended since the last run)
  * invalid_grant and 401s become ConnectorAuthError, which sets needs_reauth.
  *
  * @module server/connectors/adapters/google
@@ -13,13 +14,18 @@
 
 import {
   google,
+  type CalendarEvent,
   type CalendarEventsQuery,
   type GmailMessagePart,
   type PeopleConnectionsQuery,
 } from "../googleApis.ts";
 import { z } from "zod";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
-import { mailDate, normalizeEmail } from "../email/normalize.ts";
+import {
+  isAutomatedSender,
+  mailDate,
+  normalizeEmail,
+} from "../email/normalize.ts";
 import {
   summarizeEmail,
   summariesAllowed,
@@ -44,6 +50,16 @@ export const googleConfigSchema = z.object({
   ghostThreshold: z.coerce.number().int().min(1).max(10).default(3),
   maxMessagesPerRun: z.coerce.number().int().min(1).default(5000),
   aliases: z.array(z.string()).default([]),
+  /**
+   * The account's address, from sign-in. The connector is found by it again
+   * when its secret cannot be opened, so Reconnect fixes it in place.
+   */
+  accountEmail: z.string().optional(),
+  /**
+   * Whether Google granted gmail.readonly, which summaries need to read a
+   * body. Undefined for a connector made before this was recorded.
+   */
+  mailBodies: z.boolean().optional(),
 });
 
 export type GoogleConfig = z.infer<typeof googleConfigSchema>;
@@ -78,13 +94,39 @@ export interface GmailBackfill {
  * them, and a token made with other fields is dropped for one full pull.
  */
 const PERSON_FIELDS =
-  "metadata,names,emailAddresses,phoneNumbers,organizations,photos";
+  "metadata,names,emailAddresses,phoneNumbers,organizations,photos,birthdays,addresses,biographies,urls,memberships";
+
+/** The first entry Google marks primary, else the first entry. */
+function primary<T extends { metadata?: { primary?: boolean } }>(
+  list: T[] | undefined,
+): T | undefined {
+  return list?.find((item) => item.metadata?.primary) ?? list?.[0];
+}
+
+/**
+ * A People birthday as Contrack stores one: "1990-05-14", or "--05-14" when
+ * the card has no year. Google's free text when the date has no day.
+ */
+function birthdayText(birthday?: {
+  date?: { year?: number; month?: number; day?: number };
+  text?: string;
+}): string | undefined {
+  const date = birthday?.date;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (date?.month && date.day) {
+    const year = date.year ? String(date.year).padStart(4, "0") : "-";
+    return `${year}-${pad(date.month)}-${pad(date.day)}`;
+  }
+  return birthday?.text?.trim() || undefined;
+}
 
 export interface GoogleCursor {
   contactsSyncToken?: string;
   /** The `personFields` that `contactsSyncToken` was made with. */
   contactsFields?: string;
   calendarSyncToken?: string;
+  /** When the calendar window was last listed in full. */
+  calendarListedAt?: string;
   gmailHistoryId?: string;
   gmailBackfill?: GmailBackfill;
   lastSyncAt?: string;
@@ -138,6 +180,41 @@ export function syncTokenExpired(err: unknown): boolean {
   return (
     status === 400 && /EXPIRED_SYNC_TOKEN|sync token is expired/i.test(said)
   );
+}
+
+/** How far ahead the calendar keeps upcoming events. Pulse shows a week. */
+const UPCOMING_DAYS = 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * An organizer who is a person: not a shared, room, holiday or imported
+ * calendar (an address at calendar.google.com, such as Google's
+ * unknownorganizer@calendar.google.com), and not a robot sender.
+ */
+function organizerIsPerson(email: string | undefined, name?: string): boolean {
+  return (
+    !email ||
+    !(/calendar\.google\.com$/i.test(email) || isAutomatedSender(email, name))
+  );
+}
+
+/**
+ * Contrack's label for a Google email type. Google's "home" is Contrack's
+ * "personal". The repository reads `label`: sent as `type`, every synced
+ * address was "personal".
+ */
+function emailLabel(type: string | undefined): string {
+  const t = type?.toLowerCase();
+  if (!t || t === "home") return "personal";
+  return t === "work" ? "work" : "other";
+}
+
+/** Contrack's label for a Google phone type, such as "workMobile". */
+function phoneLabel(type: string | undefined): string | undefined {
+  const t = type?.toLowerCase();
+  if (!t) return undefined;
+  if (t === "mobile" || t === "home") return t;
+  return t.startsWith("work") ? "work" : "other";
 }
 
 /** The headers that mark bulk mail, read with each message's metadata. */
@@ -282,6 +359,11 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
   configSchema: googleConfigSchema,
   secretSchema: googleSecretSchema,
 
+  async revoke(secret: GoogleSecret) {
+    if (!secret?.refreshToken) return;
+    await createOAuth2Client(secret).revokeToken(secret.refreshToken);
+  },
+
   async test(_config: GoogleConfig, secret: GoogleSecret | null) {
     if (!secret?.refreshToken) {
       throw new ConnectorAuthError(
@@ -329,12 +411,18 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         ? (ctx.cursor as GoogleCursor)
         : {};
 
+    // A stage that is off forgets its place, so turning it on again is a
+    // first sync from the lookback date.
     let contactsSyncToken =
-      cursor.contactsFields === PERSON_FIELDS
+      config.syncContacts !== false && cursor.contactsFields === PERSON_FIELDS
         ? cursor.contactsSyncToken
         : undefined;
-    let calendarSyncToken = cursor.calendarSyncToken;
-    let gmailHistoryId = cursor.gmailHistoryId;
+    const calendarOn = config.syncCalendar !== false;
+    let calendarSyncToken = calendarOn ? cursor.calendarSyncToken : undefined;
+    let calendarListedAt = calendarOn ? cursor.calendarListedAt : undefined;
+    let gmailHistoryId =
+      config.syncEmail !== false ? cursor.gmailHistoryId : undefined;
+    const firstSince = ctx.firstSince ?? ctx.since;
 
     const selfEmails = [
       secret.email || "",
@@ -343,7 +431,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     ].filter(Boolean);
 
     let totalFetched = 0;
-    let summaryCount = 0;
+    let summaryTries = 0;
     let stagesSucceeded = 0;
     let stagesFailed = 0;
     let firstStageError: unknown = null;
@@ -353,6 +441,37 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       const people = google.people(auth);
       let pageToken: string | undefined;
       let nextSyncToken: string | undefined;
+      let labels: Map<string, string> | undefined;
+      /**
+       * The owner's labels by resource name, read once a card has one. Of the
+       * system groups, Google Contacts shows only friends, family and
+       * coworkers as labels, so myContacts and starred are left out.
+       */
+      const labelNames = async () => {
+        if (!labels) {
+          // ponytail: one page of 1,000 labels. Follow nextPageToken if an
+          // owner ever has more.
+          const res = await people.contactGroups.list(
+            { pageSize: 1000, groupFields: "name,groupType" },
+            callOptions(signal),
+          );
+          labels = new Map();
+          for (const group of res.data.contactGroups ?? []) {
+            const name = group.formattedName || group.name;
+            if (
+              group.resourceName &&
+              name &&
+              (group.groupType === "USER_CONTACT_GROUP" ||
+                /^contactGroups\/(friends|family|coworkers)$/.test(
+                  group.resourceName,
+                ))
+            ) {
+              labels.set(group.resourceName, name);
+            }
+          }
+        }
+        return labels;
+      };
 
       try {
         do {
@@ -410,7 +529,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const emails = (person.emailAddresses || [])
               .map((e) => ({
                 email: e.value || "",
-                type: e.type || "other",
+                label: emailLabel(e.type),
                 isPrimary: e.metadata?.primary ?? false,
               }))
               .filter((e) => e.email);
@@ -418,7 +537,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const phones = (person.phoneNumbers || [])
               .map((p) => ({
                 phone: p.value || "",
-                type: p.type || "other",
+                label: phoneLabel(p.type),
                 isPrimary: p.metadata?.primary ?? false,
               }))
               .filter((p) => p.phone);
@@ -426,14 +545,37 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const org =
               person.organizations?.find((o) => o.metadata?.primary) ||
               person.organizations?.[0];
-            const photoUrl =
-              person.photos?.find((p) => p.metadata?.primary)?.url ||
-              person.photos?.[0]?.url;
+            const photo = primary(person.photos);
+            // Google's letter tile for a card with no photo is marked
+            // `default`. The URL test is a fallback for a tile without it.
+            const placeholder =
+              photo?.default || photo?.url?.includes("/default-user");
             // A card with an address and no name is still a person: ingest
             // names it by the address, or keeps the linked contact's name.
             if (!primaryName && emails.length === 0 && phones.length === 0) {
               continue;
             }
+
+            const addresses = (person.addresses ?? [])
+              .map((a) => ({
+                address: (a.formattedValue ?? "")
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .join(", "),
+                label: a.type || "home",
+                isPrimary: a.metadata?.primary ?? false,
+              }))
+              .filter((a) => a.address);
+            const urls = (person.urls ?? []).flatMap((u) => {
+              const url = u.value?.trim();
+              return url ? [{ url, type: u.type }] : [];
+            });
+            const groups = (person.memberships ?? []).flatMap(
+              (m) => m.contactGroupMembership?.contactGroupResourceName ?? [],
+            );
+            const names = groups.length ? await labelNames() : undefined;
+            const tags = groups.flatMap((g) => names?.get(g) ?? []);
 
             yield {
               kind: "contact",
@@ -444,11 +586,22 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                 phones,
                 company: org?.name || undefined,
                 role: org?.title || undefined,
+                birthday: birthdayText(primary(person.birthdays)),
+                about: primary(person.biographies)?.value?.trim() || undefined,
+                // The first link labeled as a home page or with no label.
+                website: urls.find((u) => !u.type || u.type === "homePage")
+                  ?.url,
+                // Left out when the card has none, so a card without them
+                // does not clear the contact's.
+                ...(addresses.length ? { addresses } : {}),
+                ...(urls.length
+                  ? { socialLinks: urls.map(({ url }) => ({ url })) }
+                  : {}),
+                ...(tags.length ? { tags } : {}),
               },
-              photoUrl:
-                photoUrl && !photoUrl.includes("/default-user")
-                  ? photoUrl
-                  : undefined,
+              photoUrl: photo?.url && !placeholder ? photo.url : undefined,
+              defaultPhotoUrl:
+                photo?.url && placeholder ? photo.url : undefined,
             };
 
             totalFetched++;
@@ -483,7 +636,8 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     }
 
     // 2. Email (Gmail API)
-    let gmailBackfill = cursor.gmailBackfill;
+    let gmailBackfill =
+      config.syncEmail !== false ? cursor.gmailBackfill : undefined;
     if (config.syncEmail !== false) {
       const gmail = google.gmail(auth);
       const maxMessages = config.maxMessagesPerRun ?? 5000;
@@ -592,7 +746,11 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           // before the oldest it fetched, until the window is done. Jumping
           // to the history id at once lost the older mail for good.
           const start: GmailBackfill = gmailBackfill ?? {
-            since: Math.floor(new Date(ctx.since).getTime() / 1000),
+            since: Math.floor(
+              new Date(
+                cursor.gmailHistoryId ? ctx.since : firstSince,
+              ).getTime() / 1000,
+            ),
             historyId: await profileHistoryId(),
           };
           /** One page, by `q` until Google refuses it, then without. */
@@ -740,13 +898,18 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           let summaryContent: string | undefined;
 
           // summariesAllowed before the body is fetched: with AI off for
-          // the instance or for the owner, the body is not needed at all.
+          // the instance or for the owner, the body is not needed at all. A
+          // token without gmail.readonly cannot read a body, so none is
+          // tried. The cap counts tries: counting only summaries made, a
+          // failing body or model let one run try every matching message.
           if (
             config.summaries &&
+            config.mailBodies !== false &&
             matchesContact &&
-            summaryCount < MAX_SUMMARIES_PER_RUN &&
+            summaryTries < MAX_SUMMARIES_PER_RUN &&
             summariesAllowed(ctx.accountId)
           ) {
+            summaryTries++;
             try {
               const full = await gmail.users.messages.get(
                 { userId: "me", id: msgId, format: "full" },
@@ -758,10 +921,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                   signal: ctx.signal,
                   accountId: ctx.accountId,
                 });
-                if (summary) {
-                  summaryContent = summary;
-                  summaryCount++;
-                }
+                if (summary) summaryContent = summary;
               }
             } catch (bodyErr) {
               ctx.log(
@@ -821,13 +981,126 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       }
     }
 
-    // 3. Calendar (Google Calendar API)
-    if (config.syncCalendar !== false) {
+    // 3. Calendar (Google Calendar API), in two listings. A sync token returns
+    // only the events that changed, so an upcoming event that ended unchanged
+    // never came back and was never logged, and Google refuses timeMin and
+    // timeMax with a token.
+    //   a. The token: the changes since the last run, or a full pull that
+    //      makes a token. It logs the meetings that ended by `from`, such as
+    //      one added after it took place.
+    //   b. The window: the events that end after `from` and start in the next
+    //      UPCOMING_DAYS, listed in full on every run. It logs the meetings
+    //      that ended after `from`, and yields the others as upcoming events,
+    //      which replace the connector's rows (`upcoming_listed`). So an event
+    //      shows when it enters the window and is logged when it ends, and a
+    //      cancelled event, a whole cancelled series or a 410 leaves no row.
+    // `from` is when the last window was listed, so each meeting is logged
+    // once, by one of the two.
+    if (calendarOn) {
       const calendar = google.calendar(auth);
+      const now = new Date();
+      const from = new Date(
+        calendarListedAt ?? (calendarSyncToken ? ctx.since : firstSince),
+      );
+      const selfSet = new Set(selfEmails.map((e) => e.toLowerCase()));
+
+      /** The meeting or upcoming event a Google event is, and when it ends. */
+      const calendarItem = (
+        event: CalendarEvent,
+      ): { end: Date; sync: SyncEvent } | undefined => {
+        // Only meetings: not a birthday, an out of office, a focus time, a
+        // working location or an event from Gmail.
+        if (!event.id || event.status === "cancelled") return undefined;
+        if ((event.eventType ?? "default") !== "default") return undefined;
+
+        const startStr = event.start?.dateTime || event.start?.date;
+        const endStr = event.end?.dateTime || event.end?.date;
+        if (!startStr) return undefined;
+
+        const startDate = new Date(startStr);
+        const endDate = endStr
+          ? new Date(endStr)
+          : new Date(startDate.getTime() + 60 * 60 * 1000);
+        // An all-day event has a day and no time, and is kept as the day
+        // (`2026-10-09`), which every reader's calendar reads as that day.
+        // Midnight UTC would be the evening before west of UTC.
+        const allDay = !event.start?.dateTime;
+        const startsAt = allDay ? startStr : startDate.toISOString();
+        const endsAt =
+          allDay && event.end?.date ? event.end.date : endDate.toISOString();
+
+        // The owner declined: no meeting, and nothing upcoming. A room is no
+        // person, and someone who declined was not there.
+        if (
+          event.attendees?.some(
+            (a) => a.self && a.responseStatus === "declined",
+          )
+        ) {
+          return undefined;
+        }
+        const people = (event.attendees || []).filter(
+          (a) => !a.resource && a.responseStatus !== "declined",
+        );
+        const organizer = event.organizer;
+        if (
+          organizer &&
+          (organizer.email || organizer.displayName) &&
+          organizerIsPerson(organizer.email, organizer.displayName) &&
+          !people.some((a) => a.email === organizer.email)
+        ) {
+          people.push(organizer);
+        }
+        const participants: Participant[] = people
+          .map((a) => ({
+            email: a.email || undefined,
+            name: a.displayName || undefined,
+          }))
+          .filter((a) => a.email || a.name);
+
+        const externalId = `google:calendar:${event.id}`;
+        const title = event.summary?.trim() || "(No title)";
+
+        if (endDate <= now) {
+          return {
+            end: endDate,
+            sync: {
+              kind: "interaction",
+              externalId,
+              type: "meeting",
+              title,
+              date: startsAt,
+              endsAt,
+              participants,
+              raw: { id: event.id, iCalUID: event.iCalUID },
+            },
+          };
+        }
+        // An event of the owner alone, such as a reminder, stays out of Pulse.
+        const withOthers = people.some(
+          (p) =>
+            !p.self &&
+            (p.email || p.displayName) &&
+            !(p.email && selfSet.has(p.email.toLowerCase())),
+        );
+        if (!withOthers) return undefined;
+        return {
+          end: endDate,
+          sync: {
+            kind: "upcoming",
+            externalId,
+            title,
+            startsAt,
+            endsAt,
+            participants,
+          },
+        };
+      };
+
       let pageToken: string | undefined;
       let nextSyncToken: string | undefined;
 
       try {
+        // a. The token.
         do {
           signal.throwIfAborted();
           const params: CalendarEventsQuery = {
@@ -840,7 +1113,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           if (calendarSyncToken) {
             params.syncToken = calendarSyncToken;
           } else {
-            params.timeMin = new Date(ctx.since).toISOString();
+            params.timeMin = from.toISOString();
           }
 
           let res;
@@ -852,101 +1125,17 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               calendarSyncToken = undefined;
               delete params.syncToken;
               delete params.pageToken;
-              params.timeMin = new Date(ctx.since).toISOString();
+              params.timeMin = from.toISOString();
               res = await calendar.events.list(params, callOptions(signal));
             } else {
               throw err;
             }
           }
 
-          const items = res.data.items || [];
-          const now = new Date();
-
-          for (const event of items) {
-            if (!event.id) continue;
-            if (event.status === "cancelled") {
-              yield {
-                kind: "upcoming_cancelled",
-                externalId: `google:calendar:${event.id}`,
-              };
-              continue;
-            }
-
-            const startStr = event.start?.dateTime || event.start?.date;
-            const endStr = event.end?.dateTime || event.end?.date;
-            if (!startStr) continue;
-
-            const startDate = new Date(startStr);
-            const endDate = endStr
-              ? new Date(endStr)
-              : new Date(startDate.getTime() + 60 * 60 * 1000);
-            // An all-day event has a day and no time, and is kept as the day
-            // (`2026-10-09`), which every reader's calendar reads as that day.
-            // Midnight UTC would be the evening before west of UTC.
-            const allDay = !event.start?.dateTime;
-            const startsAt = allDay ? startStr : startDate.toISOString();
-            const endsAt =
-              allDay && event.end?.date
-                ? event.end.date
-                : endDate.toISOString();
-
-            // The owner declined: a future one leaves Pulse, a past one was
-            // no meeting. A room is no person, and someone who declined was
-            // not there.
-            const self = event.attendees?.find((a) => a.self);
-            if (self?.responseStatus === "declined") {
-              if (endDate >= now) {
-                yield {
-                  kind: "upcoming_cancelled",
-                  externalId: `google:calendar:${event.id}`,
-                };
-              }
-              continue;
-            }
-            const attendees: Participant[] = (event.attendees || [])
-              .filter((a) => !a.resource && a.responseStatus !== "declined")
-              .map((a) => ({
-                email: a.email || undefined,
-                name: a.displayName || undefined,
-              }))
-              .filter((a) => a.email || a.name);
-
-            if (
-              event.organizer &&
-              (event.organizer.email || event.organizer.displayName)
-            ) {
-              if (!attendees.some((a) => a.email === event.organizer?.email)) {
-                attendees.push({
-                  email: event.organizer.email || undefined,
-                  name: event.organizer.displayName || undefined,
-                });
-              }
-            }
-
-            const title = event.summary?.trim() || "(No title)";
-
-            if (endDate < now) {
-              yield {
-                kind: "interaction",
-                externalId: `google:calendar:${event.id}`,
-                type: "meeting",
-                title,
-                date: startsAt,
-                endsAt,
-                participants: attendees,
-                raw: { id: event.id, iCalUID: event.iCalUID },
-              };
-            } else {
-              yield {
-                kind: "upcoming",
-                externalId: `google:calendar:${event.id}`,
-                title,
-                startsAt,
-                endsAt,
-                participants: attendees,
-              };
-            }
-
+          for (const event of res.data.items || []) {
+            const item = calendarItem(event);
+            if (!item || item.end > from) continue;
+            yield item.sync;
             totalFetched++;
             if (totalFetched % 50 === 0) {
               yield { kind: "progress", fetched: totalFetched };
@@ -962,6 +1151,38 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         if (nextSyncToken) {
           calendarSyncToken = nextSyncToken;
         }
+
+        // b. The window. It starts a day early, because Google can end an
+        // all-day event at midnight in the calendar's time zone, up to 14
+        // hours before the midnight UTC that `calendarItem` uses.
+        do {
+          signal.throwIfAborted();
+          const res = await calendar.events.list(
+            {
+              calendarId: "primary",
+              singleEvents: true,
+              maxResults: 250,
+              pageToken,
+              timeMin: new Date(from.getTime() - DAY_MS).toISOString(),
+              timeMax: new Date(
+                now.getTime() + UPCOMING_DAYS * DAY_MS,
+              ).toISOString(),
+            },
+            callOptions(signal),
+          );
+          for (const event of res.data.items || []) {
+            const item = calendarItem(event);
+            if (!item || item.end <= from) continue;
+            yield item.sync;
+            totalFetched++;
+            if (totalFetched % 50 === 0) {
+              yield { kind: "progress", fetched: totalFetched };
+            }
+          }
+          pageToken = res.data.nextPageToken || undefined;
+        } while (pageToken);
+        calendarListedAt = now.toISOString();
+        yield { kind: "upcoming_listed" };
         stagesSucceeded++;
       } catch (err: unknown) {
         signal.throwIfAborted();
@@ -986,6 +1207,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       contactsSyncToken,
       contactsFields: PERSON_FIELDS,
       calendarSyncToken,
+      calendarListedAt,
       gmailHistoryId,
       gmailBackfill,
       lastSyncAt:

@@ -214,6 +214,8 @@ steps, with the redirect address to copy.
    review. For personal Gmail choose External, then **Publish app**: while
    the app stays in testing, every sign-in stops after a week, and Google
    answers "Access blocked" to any account not listed under **Test users**.
+   Even a test user's sign-in ends after a week, and the connector asks to
+   reconnect, so publish the app.
    At sign-in, Google shows "Google hasn't verified this app", which is
    normal for your own server: choose **Continue**. An unverified app takes
    up to 100 people.
@@ -252,13 +254,15 @@ gets a second connector, and the first keeps its own access. To add summaries
 later, connect the same account again with **Generate AI summaries** on, and
 Contrack updates its connector. The **AI message summaries** switch under
 **Edit** works only after such a sign-in. Without one, Google refuses the
-message bodies, and the sync writes no summary.
+message bodies, and **Edit** offers **Reconnect with summaries**.
 
 **Edit** also sets **Synced data types** (**Google Contacts (People API)**,
 **Gmail messages**, **Google Calendar events**) and the options below.
 
 Google Contacts become untracked contacts, with their photos copied to your
-server. A Google contact that shares an email address or a phone number with
+server, their birthdays, addresses, notes and websites, and their labels as
+tags. Google's letter tile is not a photo, so such a contact gets the drawn
+avatar. A Google contact that shares an email address or a phone number with
 one of your contacts is linked to that contact, not added again. When Google
 sends a synced person again, such as after a change in Google, the sync
 writes Google's details over a contact it created, its emails and phones
@@ -268,7 +272,13 @@ fills in what is empty and adds the addresses it learns. So does a
 contact you merged, and one that two connectors link. When you delete a
 contact in Google, a contact the sync created moves to the Trash, and a
 linked one stays. A new contact from Google gets the same duplicate check as
-a contact you add, when **Check new contacts automatically** is on.
+a contact you add, when **Check new contacts automatically** is on. A
+suggested person that you save in Google Contacts becomes a contact.
+
+Google Calendar meetings with your contacts become meetings on their
+timelines after they end. The next 60 days of meetings with someone besides
+you appear in the **Coming up** card on Pulse. Birthdays, focus time, and out
+of office are left out.
 
 ### CardDAV
 

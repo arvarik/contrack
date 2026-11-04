@@ -66,7 +66,18 @@ interface Person {
   emailAddresses?: (Primary & { value?: string; type?: string })[];
   phoneNumbers?: (Primary & { value?: string; type?: string })[];
   organizations?: (Primary & { name?: string; title?: string })[];
-  photos?: (Primary & { url?: string })[];
+  /** `default` marks Google's letter tile for a card with no photo. */
+  photos?: (Primary & { url?: string; default?: boolean })[];
+  birthdays?: (Primary & {
+    date?: { year?: number; month?: number; day?: number };
+    text?: string;
+  })[];
+  addresses?: (Primary & { formattedValue?: string; type?: string })[];
+  biographies?: (Primary & { value?: string })[];
+  urls?: (Primary & { value?: string; type?: string })[];
+  memberships?: {
+    contactGroupMembership?: { contactGroupResourceName?: string };
+  }[];
 }
 
 export interface PeopleConnectionsQuery {
@@ -95,17 +106,18 @@ interface GmailMessage {
 interface CalendarPerson {
   email?: string;
   displayName?: string;
+  self?: boolean;
 }
 
-interface CalendarEvent {
+export interface CalendarEvent {
   id?: string;
   status?: string;
+  eventType?: string;
   summary?: string;
   iCalUID?: string;
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   attendees?: (CalendarPerson & {
-    self?: boolean;
     resource?: boolean;
     responseStatus?: string;
   })[];
@@ -119,6 +131,7 @@ export interface CalendarEventsQuery {
   pageToken?: string;
   syncToken?: string;
   timeMin?: string;
+  timeMax?: string;
 }
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users";
@@ -154,6 +167,25 @@ export const google = {
             options,
           ),
       },
+    },
+    contactGroups: {
+      list: (
+        query: { pageSize: number; groupFields: string },
+        options: CallOptions,
+      ) =>
+        get<{
+          contactGroups?: {
+            resourceName?: string;
+            name?: string;
+            formattedName?: string;
+            groupType?: string;
+          }[];
+        }>(
+          auth,
+          "https://people.googleapis.com/v1/contactGroups",
+          query,
+          options,
+        ),
     },
   }),
   gmail: (auth: OAuth2Client) => ({

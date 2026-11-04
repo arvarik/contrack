@@ -21,6 +21,7 @@ import {
 } from "../../../../server/connectors/ingest.ts";
 import { mergeContacts } from "../../../../server/services/dedupe/merging.ts";
 import { defaultAvatarUrl } from "../../../../server/utils/avatarUrl.ts";
+import { urlDigest } from "../../../../server/utils/remoteImage.ts";
 import type { HydratedContact } from "../../../../server/repositories/types.ts";
 import { listCorrespondents } from "../../../../server/connectors/service.ts";
 import type { SyncEvent } from "../../../../server/connectors/types.ts";
@@ -236,6 +237,49 @@ describe("connectors ingestStream", () => {
     );
   });
 
+  it("links the same event from another of the owner's connectors of its kind instead of logging it twice", async () => {
+    const otherId = "conn-" + crypto.randomUUID().slice(0, 8);
+    sqlite
+      .prepare(
+        `INSERT INTO connectors (id, ownerId, kind, name, status, config, createdAt, updatedAt)
+         VALUES (?, ?, 'ics', 'Second Calendar', 'active', '{}', datetime('now'), datetime('now'))`,
+      )
+      .run(otherId, ownerId);
+    const event: SyncEvent = {
+      kind: "interaction",
+      externalId: "shared-invite-1",
+      type: "meeting",
+      title: "Planning",
+      date: "2026-02-02T10:00:00Z",
+      participants: [{ email: "alice@example.com", name: "Alice" }],
+    };
+    const once = async (id: string) =>
+      ingestStream(
+        scope,
+        { id, ownerId, kind: "ics", config: {} },
+        (async function* (): AsyncGenerator<SyncEvent> {
+          yield event;
+        })(),
+        buildContactMatcher(scope),
+        { emails: ["me@example.com"], phones: [] },
+      );
+    await once(connectorId);
+    const second = await once(otherId);
+    expect(second.stats.interactions ?? 0).toBe(0);
+    expect(
+      sqlite
+        .prepare("SELECT COUNT(*) AS n FROM interactions WHERE ownerId = ?")
+        .get(ownerId),
+    ).toEqual({ n: 1 });
+    expect(
+      sqlite
+        .prepare(
+          "SELECT COUNT(DISTINCT localId) AS n FROM connector_links WHERE ownerId = ? AND externalId = 'shared-invite-1'",
+        )
+        .get(ownerId),
+    ).toEqual({ n: 1 });
+  });
+
   it("promotes unknown correspondents to ghost contacts when crossing ghostThreshold", async () => {
     const matcher = buildContactMatcher(scope);
     const selfAddresses = { emails: ["me@example.com"], phones: [] };
@@ -402,6 +446,50 @@ describe("connectors ingestStream", () => {
       { externalId: "event-a", title: "Future Event A Updated" },
       { externalId: "event-c", title: "Future Event C" },
     ]);
+  });
+
+  it("replaces a Google connector's upcoming rows once the run listed its window", async () => {
+    const google = {
+      id: connectorId,
+      ownerId,
+      kind: "google" as const,
+      config: {},
+    };
+    const upcoming = (externalId: string): SyncEvent => ({
+      kind: "upcoming",
+      externalId,
+      title: externalId,
+      startsAt: "2099-03-01T10:00:00Z",
+      endsAt: "2099-03-01T11:00:00Z",
+      participants: [],
+    });
+    async function* stream(...events: SyncEvent[]) {
+      yield* events;
+    }
+    const ingest = (...events: SyncEvent[]) =>
+      ingestStream(
+        scope,
+        google,
+        stream(...events),
+        buildContactMatcher(scope),
+        {
+          emails: [],
+          phones: [],
+        },
+      );
+
+    // The second row is an instance of a series cancelled since.
+    await ingest(
+      upcoming("google:calendar:kept"),
+      upcoming("google:calendar:series_20990301T100000Z"),
+    );
+    await ingest(upcoming("google:calendar:kept"), { kind: "upcoming_listed" });
+
+    expect(
+      sqlite
+        .prepare("SELECT externalId FROM upcoming_events WHERE connectorId = ?")
+        .all(connectorId),
+    ).toEqual([{ externalId: "google:calendar:kept" }]);
   });
 
   it("commits in transactions of 100 events, so a stream that fails keeps every full batch", async () => {
@@ -740,6 +828,106 @@ describe("connectors ingestStream", () => {
     expect(
       column("SELECT email FROM contact_emails WHERE contactId = ?", bobId),
     ).toEqual(["robert@builder.example"]);
+  });
+
+  it("adds Google's labels and links to a contact the sync made, and keeps the owner's", async () => {
+    await ingest([card("people/bob", "Bob Builder", "bob@builder.example")]);
+    const [bobId] = column(
+      "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = 'people/bob'",
+      connectorId,
+    );
+    sqlite
+      .prepare(
+        "INSERT INTO contact_tags (id, contactId, tag) VALUES (?, ?, 'VIP')",
+      )
+      .run(crypto.randomUUID(), bobId);
+    sqlite
+      .prepare(
+        `INSERT INTO contact_social_links (id, contactId, platform, url)
+         VALUES (?, ?, 'github', 'https://github.com/bob')`,
+      )
+      .run(crypto.randomUUID(), bobId);
+
+    await ingest([
+      card("people/bob", "Bob Builder", "bob@builder.example", {
+        tags: ["Friends"],
+        socialLinks: [
+          { url: "https://github.com/bob" },
+          { url: "https://bob.example" },
+        ],
+      }),
+    ]);
+
+    expect(
+      column(
+        "SELECT tag FROM contact_tags WHERE contactId = ? ORDER BY tag",
+        bobId,
+      ),
+    ).toEqual(["Friends", "VIP"]);
+    expect(
+      column(
+        "SELECT url FROM contact_social_links WHERE contactId = ? ORDER BY url",
+        bobId,
+      ),
+    ).toEqual(["https://bob.example", "https://github.com/bob"]);
+  });
+
+  it("makes a suggested person a contact when a Google card names them, so later edits apply", async () => {
+    const stranger = { email: "sam@stranger.example", name: "sam" };
+    await ingest([mail("m-1", [stranger]), mail("m-2", [stranger])], {
+      ghostThreshold: 2,
+    });
+    const [ghostId] = column(
+      "SELECT id FROM contacts WHERE ownerId = ? AND isGhost = 1",
+      ownerId,
+    );
+
+    await ingest([card("people/sam", "Sam Stranger", "sam@stranger.example")]);
+    expect(
+      sqlite
+        .prepare("SELECT name, isGhost FROM contacts WHERE id = ?")
+        .get(ghostId),
+    ).toEqual({ name: "Sam Stranger", isGhost: 0 });
+
+    await ingest([
+      card("people/sam", "Samuel Stranger", "sam@stranger.example"),
+    ]);
+    expect(column("SELECT name FROM contacts WHERE id = ?", ghostId)).toEqual([
+      "Samuel Stranger",
+    ]);
+  });
+
+  it("puts the drawn avatar back over a saved copy of Google's letter tile, and keeps any other photo", async () => {
+    const tile = "https://lh3.googleusercontent.com/cm/ABC123=s100";
+    const ana = card("people/ana", "Ana Lee", "ana@example.com");
+    const bo = card("people/bo", "Bo Ray", "bo@example.com");
+    await ingest([ana, bo]);
+    const idOf = (externalId: string) =>
+      column(
+        "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = ?",
+        connectorId,
+        externalId,
+      )[0];
+    const avatarOf = (externalId: string) =>
+      column("SELECT avatarUrl FROM contacts WHERE id = ?", idOf(externalId));
+    const setAvatar = sqlite.prepare(
+      "UPDATE contacts SET avatarUrl = ? WHERE id = ?",
+    );
+    // An earlier sync saved the tile, under the digest of its URL.
+    setAvatar.run(
+      `/uploads/u/${ownerId}/avatars/remote-${urlDigest(tile)}.jpg`,
+      idOf("people/ana"),
+    );
+    const uploaded = `/uploads/u/${ownerId}/avatars/avatar-1-2.jpg`;
+    setAvatar.run(uploaded, idOf("people/bo"));
+
+    await ingest([
+      { ...ana, defaultPhotoUrl: tile },
+      { ...bo, defaultPhotoUrl: tile },
+    ] as SyncEvent[]);
+
+    expect(avatarOf("people/ana")).toEqual([defaultAvatarUrl("Ana Lee")]);
+    expect(avatarOf("people/bo")).toEqual([uploaded]);
   });
 
   it("trashes a contact the sync created when Google deletes it, and only unlinks one it matched", async () => {

@@ -19,6 +19,7 @@ import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
 import * as secretBox from "../utils/secretBox.ts";
 import { googleCallbackUrl } from "../utils/publicOrigin.ts";
+import { parseServerTime } from "../../shared/dates.ts";
 import { isDocker, kindsFor } from "../connectors/registry.ts";
 import { startSync } from "../connectors/scheduler.ts";
 import { getGoogleOAuthCredentials } from "../services/integrationSettings.ts";
@@ -229,18 +230,37 @@ const backToConnectors = (res: Response, reason: GoogleFailure) =>
 function googleConnectorFor(scope: Scope, email: string) {
   const rows = sqlite
     .prepare(
-      "SELECT id, secret FROM connectors WHERE ownerId = ? AND kind = 'google'",
+      "SELECT id, secret, config FROM connectors WHERE ownerId = ? AND kind = 'google'",
     )
-    .all(scope.ownerId) as { id: string; secret: string | null }[];
+    .all(scope.ownerId) as {
+    id: string;
+    secret: string | null;
+    config: string | null;
+  }[];
+  const wanted = email.toLowerCase();
   for (const row of rows) {
-    if (!row.secret) continue;
+    let secret: GoogleSecret | null = null;
     try {
-      const secret = JSON.parse(secretBox.open(row.secret)) as GoogleSecret;
-      if (secret.email?.toLowerCase() === email.toLowerCase()) {
-        return { id: row.id, secret };
-      }
+      secret = row.secret
+        ? (JSON.parse(secretBox.open(row.secret)) as GoogleSecret)
+        : null;
     } catch {
-      // A secret that cannot be opened holds no account to match.
+      // A secret the key no longer opens: the config still names the account.
+    }
+    let accountEmail: unknown;
+    try {
+      accountEmail = row.config
+        ? JSON.parse(row.config).accountEmail
+        : undefined;
+    } catch {
+      accountEmail = undefined;
+    }
+    if (
+      secret?.email?.toLowerCase() === wanted ||
+      (typeof accountEmail === "string" &&
+        accountEmail.toLowerCase() === wanted)
+    ) {
+      return { id: row.id, secret };
     }
   }
   return null;
@@ -279,9 +299,16 @@ connectorsRouter.get(
     // Immediately consume the state
     sqlite.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
-    // A state another account started is refused like a stale one.
-    const ageMs = Date.now() - new Date(stateRow.createdAt).getTime();
-    if (stateRow.ownerId !== req.principal!.user.id || ageMs > 15 * 60 * 1000) {
+    // A state another account started is refused like a stale one. SQLite
+    // wrote createdAt in UTC with no zone, which `new Date()` reads as local
+    // time: east of UTC every state was hours old, and west of it none aged.
+    const createdMs = parseServerTime(stateRow.createdAt)?.getTime() ?? 0;
+    const ageMs = Date.now() - createdMs;
+    if (
+      stateRow.ownerId !== req.principal!.user.id ||
+      ageMs < 0 ||
+      ageMs > 15 * 60 * 1000
+    ) {
       return backToConnectors(res, "expired");
     }
 
@@ -329,8 +356,20 @@ connectorsRouter.get(
 
     const scope = scopeOf(req);
     const existing = googleConnectorFor(scope, userEmail);
-    const hasGmailReadonly = (tokens.scope || "").includes("gmail.readonly");
+    // Google's consent screen lets each scope be unticked. A stage whose scope
+    // is missing would fail on every run, so it is turned off.
+    const granted = tokens.scope || "";
+    const hasGmailReadonly = granted.includes("gmail.readonly");
+    const grants = {
+      syncContacts: granted.includes("contacts.readonly"),
+      syncEmail: hasGmailReadonly || granted.includes("gmail.metadata"),
+      syncCalendar: granted.includes("calendar"),
+    };
 
+    if (existing && !tokens.refresh_token && !existing.secret?.refreshToken) {
+      log.warn("Connectors", "Google consent brought no refresh token");
+      return backToConnectors(res, "failed");
+    }
     if (existing) {
       // Google sends a refresh token on the first consent only, so a sign-in
       // that brings none keeps the one this account has.
@@ -340,18 +379,29 @@ connectorsRouter.get(
         {
           status: "active",
           secret: {
-            refreshToken: tokens.refresh_token || existing.secret.refreshToken,
+            refreshToken: tokens.refresh_token || existing.secret!.refreshToken,
             accessToken: tokens.access_token || undefined,
             expiryDate: tokens.expiry_date || undefined,
             email: userEmail,
           } satisfies GoogleSecret,
-          config: {
-            ...(getConnector(scope, existing.id)?.config as Record<
+          config: (() => {
+            const config = getConnector(scope, existing.id)?.config as Record<
               string,
               unknown
-            >),
-            summaries: hasGmailReadonly,
-          },
+            >;
+            return {
+              ...config,
+              // A stage stays as the owner set it, unless its scope is gone.
+              syncContacts:
+                config.syncContacts !== false && grants.syncContacts,
+              syncEmail: config.syncEmail !== false && grants.syncEmail,
+              syncCalendar:
+                config.syncCalendar !== false && grants.syncCalendar,
+              summaries: hasGmailReadonly,
+              mailBodies: hasGmailReadonly,
+              accountEmail: userEmail,
+            };
+          })(),
         },
         req.ip,
       );
@@ -368,10 +418,10 @@ connectorsRouter.get(
           kind: "google",
           name: `Google (${userEmail})`,
           config: {
-            syncContacts: true,
-            syncEmail: true,
-            syncCalendar: true,
+            ...grants,
             summaries: hasGmailReadonly,
+            mailBodies: hasGmailReadonly,
+            accountEmail: userEmail,
             lookbackDays: 90,
             rollup: true,
             ghostThreshold: 3,

@@ -6,9 +6,10 @@
  * 4. Counts unknown participants as correspondents, one per mailbox, and
  *    promotes them to ghost contacts past ghostThreshold. Bulk mail, a robot
  *    or relay sender and a broadcast to many strangers count nobody.
- * 5. Writes a synced person over the contact the sync made for it, and only
- *    fills in a contact the sync linked by a shared address. Trashes the
- *    former when its source deletes it, and unlinks the latter.
+ * 5. Writes a synced person over the contact the sync made for it, or over a
+ *    suggested person it names, and only fills in a contact the sync linked
+ *    by a shared address. Trashes the former when its source deletes it, and
+ *    unlinks the latter.
  * 6. Refreshes upcoming_events, replacing stale rows.
  * 7. Commits in transactions of 100 events.
  * 8. Copies each contact photo to the owner's uploads before the event is
@@ -29,7 +30,7 @@ import { dispatchEvents, recordEvent } from "../events/index.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage, newContactId } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
-import { isDefaultAvatarFor } from "../utils/avatarUrl.ts";
+import { defaultAvatarUrl, isDefaultAvatarFor } from "../utils/avatarUrl.ts";
 import {
   isBase64DataUri,
   processBase64Avatar,
@@ -207,6 +208,11 @@ function createLimiter(limit: number) {
   };
 }
 
+/** The file a remote photo is saved as: the digest of its URL. */
+function photoFileName(remoteUrl: string): string {
+  return `remote-${urlDigest(remoteUrl)}.jpg`;
+}
+
 /**
  * Copy a connector's contact photo into the owner's avatars folder and return
  * the local URL. A browser that loads a googleusercontent.com URL tells Google
@@ -222,7 +228,7 @@ export async function saveContactPhoto(
   remoteUrl: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const filename = `remote-${urlDigest(remoteUrl)}.jpg`;
+  const filename = photoFileName(remoteUrl);
   const outPath = path.join(ownerUploadDir(scope.ownerId, "avatars"), filename);
   await ensureLocalImage(
     remoteUrl,
@@ -318,10 +324,19 @@ export async function ingestStream(
     errors: 0,
   };
 
+  /** The owner's other connectors of this kind: two Google accounts. */
+  const siblingConnectorIds = (
+    sqlite
+      .prepare(
+        `SELECT id FROM connectors WHERE ownerId = ? AND kind = ? AND id != ?`,
+      )
+      .all(scope.ownerId, connector.kind, connector.id) as Array<{ id: string }>
+  ).map((r) => r.id);
   const seenUpcomingExternalIds = new Set<string>();
   const ingestedContactIds = new Set<string>();
   const failures: string[] = [];
   let hasUpcomingEvents = false;
+  let upcomingListed = false;
 
   /** The link of the card `externalId` to a contact, if the card has one. */
   function contactLink(externalId: string) {
@@ -424,22 +439,114 @@ export async function ingestStream(
   }
 
   /**
+   * Google's labels and links added to the ones a contact has. Google is
+   * pull-only, so the tags the owner gives a contact and the links research
+   * finds never reach the card, and a change to the card must not drop them.
+   * CardDAV can push them to the card, and its card still replaces them.
+   */
+  function withLocalTagsAndLinks(
+    contactId: string,
+    remote: ContactPayload,
+  ): ContactPayload {
+    if (connector.kind !== "google") return remote;
+    const out = { ...remote };
+    if (remote.tags) {
+      const tags = sqlite
+        .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+        .pluck()
+        .all(contactId) as string[];
+      out.tags = [...tags, ...remote.tags];
+    }
+    if (remote.socialLinks) {
+      const links = sqlite
+        .prepare(
+          "SELECT platform, url, handle FROM contact_social_links WHERE contactId = ?",
+        )
+        .all(contactId) as Array<{
+        platform: string;
+        url: string;
+        handle: string | null;
+      }>;
+      const known = new Set(links.map((l) => l.url.toLowerCase()));
+      out.socialLinks = [
+        ...links.map((l) => ({ ...l, handle: l.handle ?? undefined })),
+        ...remote.socialLinks.filter(
+          (l) => !known.has((typeof l === "string" ? l : l.url).toLowerCase()),
+        ),
+      ];
+    }
+    return out;
+  }
+
+  /**
+   * Puts the drawn avatar back on a contact whose photo is the saved copy of
+   * this card's placeholder. Before the adapter could tell Google's letter
+   * tile from a photo, a sync saved the tile like one. The copy's file name is
+   * the digest of the URL it came from, so a match proves the photo is that
+   * tile. The owner's own photos have other names and never match.
+   */
+  function restoreDrawnAvatar(contactId: string, placeholderUrl: string) {
+    const row = sqlite
+      .prepare(
+        `SELECT name, pronouns, avatarUrl FROM contacts WHERE id = ? AND ownerId = ?`,
+      )
+      .get(contactId, scope.ownerId) as
+      | { name: string; pronouns: string | null; avatarUrl: string | null }
+      | undefined;
+    const copy = `/uploads/u/${scope.ownerId}/avatars/${photoFileName(placeholderUrl)}`;
+    if (row && row.avatarUrl === copy) {
+      contactService.updateContact(scope, contactId, {
+        avatarUrl: defaultAvatarUrl(row.name, row.pronouns),
+      });
+    }
+  }
+
+  /**
    * A synced person the connector already links. A contact the sync made is
-   * the source's to write, emails and phones included. One the sync only
-   * linked, because it shared an address, is the owner's: the sync fills what
-   * is empty and adds the addresses it has, and changes nothing else.
+   * the source's to write, emails and phones included. A suggested person
+   * (ghost) the card matches becomes such a contact: the owner saved them in
+   * their address book. Any other contact the sync only linked, because it
+   * shared an address, is the owner's: the sync fills what is empty and adds
+   * the addresses it has, and changes nothing else.
    */
   function syncLinkedContact(
     contactId: string,
     remote: ContactPayload,
     externalId: string,
+    placeholderUrl?: string,
   ): void {
     try {
+      if (placeholderUrl) restoreDrawnAvatar(contactId, placeholderUrl);
       if (madeBySync(contactId, externalId)) {
-        contactService.updateContact(scope, contactId, remote);
+        contactService.updateContact(
+          scope,
+          contactId,
+          withLocalTagsAndLinks(contactId, remote),
+        );
         return;
       }
       const local = contactService.getContactById(scope, contactId);
+      if (local?.isGhost) {
+        contactService.updateContact(scope, contactId, {
+          ...withLocalTagsAndLinks(contactId, remote),
+          isGhost: false,
+        });
+        // The source row that madeBySync reads, so later edits to the card
+        // apply.
+        sqlite
+          .prepare(
+            `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(
+            crypto.randomUUID(),
+            contactId,
+            connector.kind,
+            externalId,
+            new Date().toISOString(),
+          );
+        return;
+      }
       const fill = local ? fillFromRemote(local, remote) : null;
       if (fill) contactService.updateContact(scope, contactId, fill);
     } catch {
@@ -481,12 +588,8 @@ export async function ingestStream(
       return;
     }
 
-    if (event.kind === "upcoming_cancelled") {
-      sqlite
-        .prepare(
-          `DELETE FROM upcoming_events WHERE connectorId = ? AND ownerId = ? AND externalId = ?`,
-        )
-        .run(connector.id, scope.ownerId, event.externalId);
+    if (event.kind === "upcoming_listed") {
+      upcomingListed = true;
       return;
     }
 
@@ -576,6 +679,39 @@ export async function ingestStream(
              WHERE connectorId = ? AND ownerId = ? AND kind = 'interaction' AND externalId = ?`,
           )
           .run(nowIso, connector.id, scope.ownerId, event.externalId);
+        stats.skipped = (stats.skipped ?? 0) + 1;
+        return;
+      }
+
+      // The same mail or invite reached through another of the owner's
+      // connectors of this kind, such as two Google accounts on one thread,
+      // is that interaction: it is linked here too, and not logged twice.
+      let shared: { localId: string } | undefined;
+      for (const siblingId of siblingConnectorIds) {
+        shared = sqlite
+          .prepare(
+            `SELECT localId FROM connector_links
+             WHERE connectorId = ? AND kind = 'interaction' AND externalId = ?
+               AND ownerId = ? AND localId IS NOT NULL`,
+          )
+          .get(siblingId, event.externalId, scope.ownerId) as
+          { localId: string } | undefined;
+        if (shared) break;
+      }
+      if (shared) {
+        sqlite
+          .prepare(
+            `INSERT INTO connector_links (
+              connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
+            ) VALUES (?, ?, 'interaction', ?, ?, 1, ?)`,
+          )
+          .run(
+            connector.id,
+            scope.ownerId,
+            event.externalId,
+            shared.localId,
+            nowIso,
+          );
         stats.skipped = (stats.skipped ?? 0) + 1;
         return;
       }
@@ -901,7 +1037,12 @@ export async function ingestStream(
           : undefined;
         const prevAvatarUrl = prevAvatarRow?.avatarUrl ?? null;
 
-        syncLinkedContact(targetLocalId, cPayload, event.externalId);
+        syncLinkedContact(
+          targetLocalId,
+          cPayload,
+          event.externalId,
+          event.defaultPhotoUrl,
+        );
 
         if (
           prevAvatarUrl &&
@@ -958,7 +1099,12 @@ export async function ingestStream(
         // A first match fills in at once: a source sends an unchanged person
         // only once, so a fill left for a later sync never came.
         if (contactId) {
-          syncLinkedContact(contactId, cPayload, event.externalId);
+          syncLinkedContact(
+            contactId,
+            cPayload,
+            event.externalId,
+            event.defaultPhotoUrl,
+          );
         } else {
           cPayload.name ||= cEmails[0] || cPhones[0] || "Unknown";
           cPayload.sources = [
@@ -1065,9 +1211,11 @@ export async function ingestStream(
   if (batch.length > 0) await flush();
 
   // Refresh upcoming events: remove stale upcoming events for this connector.
-  // ICS feeds always return the full calendar snapshot, whereas Google Calendar
-  // uses incremental `syncToken` deltas and only yields changed/cancelled events.
-  if (connector.kind === "google") {
+  // An ICS feed is the whole calendar, and a Google run that listed its window
+  // (`upcoming_listed`) yielded all of it, so a row the run did not yield is
+  // gone. A Google run that did not list it, with Calendar off or failed,
+  // removes every row or the ended ones.
+  if (connector.kind === "google" && !upcomingListed) {
     const nowIso = new Date().toISOString();
     const todayIso = nowIso.slice(0, 10);
     sqlite.transaction(() => {
@@ -1087,7 +1235,7 @@ export async function ingestStream(
           .run(connector.id, scope.ownerId, todayIso, nowIso);
       }
     })();
-  } else if (hasUpcomingEvents || connector.kind === "ics") {
+  } else if (hasUpcomingEvents || upcomingListed || connector.kind === "ics") {
     sqlite.transaction(() => {
       if (seenUpcomingExternalIds.size === 0) {
         sqlite

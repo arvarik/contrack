@@ -20,6 +20,12 @@ export type SyncEvent =
       externalId: string;
       contact: Record<string, unknown>;
       photoUrl?: string;
+      /**
+       * The source's placeholder image for a card with no photo, such as
+       * Google's letter tile. Ingest never saves it. It only takes back a
+       * copy of it that an earlier sync saved as the contact's photo.
+       */
+      defaultPhotoUrl?: string;
     }
   | {
       kind: "contact_deleted";
@@ -57,8 +63,11 @@ export type SyncEvent =
       participants: Participant[];
     }
   | {
-      kind: "upcoming_cancelled";
-      externalId: string;
+      /**
+       * The adapter yielded every upcoming event in its window: ingest drops
+       * the connector's upcoming rows that this run did not yield.
+       */
+      kind: "upcoming_listed";
     }
   | {
       kind: "progress";
@@ -79,6 +88,11 @@ export interface SyncContext<C = unknown, S = unknown> {
   secret: S | null;
   cursor: unknown | null;
   since: string; // ISO string; on first run: now minus config.lookbackDays (default 90)
+  /**
+   * Now minus config.lookbackDays on every run. A stage with no cursor of its
+   * own, such as one turned on after the first sync, starts here.
+   */
+  firstSince?: string;
   selfAddresses: { emails: string[]; phones: string[] };
   signal: AbortSignal;
   log: (msg: string) => void;
@@ -137,4 +151,9 @@ export interface ConnectorAdapter<C = unknown, S = unknown> {
   }>;
   sync(ctx: SyncContext<C, S>): AsyncGenerator<SyncEvent, unknown | null>;
   push?(ctx: PushContext<C, S>): Promise<PushResult>;
+  /**
+   * Gives up the access a sign-in granted, when the connector is removed, so
+   * the account no longer lists Contrack. Best effort: a failure is logged.
+   */
+  revoke?(secret: S): Promise<void>;
 }
