@@ -173,10 +173,10 @@ const stmts = {
     "SELECT id, platform, url, handle, source FROM contact_social_links WHERE contactId = ?",
   ),
   education: sqlite.prepare(
-    "SELECT id, school, degree, fieldOfStudy, startDate, endDate, description FROM contact_education WHERE contactId = ?",
+    "SELECT id, school, degree, fieldOfStudy, startDate, endDate, description, source FROM contact_education WHERE contactId = ?",
   ),
   experience: sqlite.prepare(
-    "SELECT id, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience WHERE contactId = ?",
+    "SELECT id, company, role, startDate, endDate, isCurrent, description, location, source FROM contact_experience WHERE contactId = ?",
   ),
   sources: sqlite.prepare(
     "SELECT id, platform, externalId, connectedOn, importedAt FROM contact_sources WHERE contactId = ?",
@@ -428,7 +428,7 @@ export const contactRepo = {
       endDate: string | null;
       description: string | null;
     }>(
-      "SELECT id, contactId, school, degree, fieldOfStudy, startDate, endDate, description FROM contact_education",
+      "SELECT id, contactId, school, degree, fieldOfStudy, startDate, endDate, description, source FROM contact_education",
       "contactId",
     );
 
@@ -443,7 +443,7 @@ export const contactRepo = {
       description: string | null;
       location: string | null;
     }>(
-      "SELECT id, contactId, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience",
+      "SELECT id, contactId, company, role, startDate, endDate, isCurrent, description, location, source FROM contact_experience",
       "contactId",
     );
 
@@ -632,8 +632,8 @@ export const contactRepo = {
     const deferred =
       sqlite
         .prepare(
-          // Callers (createContact, bulkCreateContacts, updateContact,
-          // bulkUpdateContacts) have already verified ownership of contactId.
+          // Callers (createContact, bulkCreateContacts, updateContact) have
+          // already verified ownership of contactId.
           // tenant-lint: allow owner-checked by caller
           "UPDATE contacts SET scoreDirty = COALESCE(scoreDirty, 0) - 2 WHERE id = ? AND COALESCE(scoreDirty, 0) >= 0",
         )

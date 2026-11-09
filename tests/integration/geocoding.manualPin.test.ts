@@ -68,8 +68,8 @@ async function person(name: string, extra: Record<string, unknown> = {}) {
 }
 
 /** The same contact, with the pin placed by hand. */
-async function placedByHand(name: string) {
-  const id = await person(name, LONDON);
+async function placedByHand(name: string, extra = {}) {
+  const id = await person(name, { ...LONDON, ...extra });
   const res = await request(app)
     .patch(`/api/contacts/${id}/location`)
     .send(PARIS);
@@ -230,12 +230,12 @@ describe("an edit to a contact whose pin was placed by hand", () => {
   });
 
   it("hands the pin back and syncs location and addresses across bulkUpdate, patch, and update", async () => {
-    const id = await placedByHand("Bulk Moved Person");
+    const id = await placedByHand("Bulk Moved Person", {
+      addresses: [{ address: "London, UK", label: "home", isPrimary: true }],
+    });
     const scope = scopeForOwnerId(pinRow(id).ownerId);
 
-    contactService.bulkUpdateContacts(scope, [id], {
-      addresses: [{ address: "Rome, Italy", label: "home", isPrimary: true }],
-    });
+    contactService.bulkUpdateContacts(scope, [id], { location: "Rome, Italy" });
 
     expect(queued).toHaveBeenCalledWith(id, "Rome, Italy");
     expect(pinRow(id)).toMatchObject({ ...PARIS, geoSource: null });

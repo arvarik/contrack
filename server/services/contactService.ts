@@ -14,7 +14,6 @@ import type {
   ContactPayload,
   NewContactPayload,
   ContactRow,
-  ChildRecordsPayload,
 } from "../repositories/types.ts";
 import { pinState, queueGeocode, type PinState } from "./geocoding/index.ts";
 import {
@@ -693,14 +692,10 @@ export const contactService = {
     try {
       const owned = contactRepo.findManyOwned(scope, ids).map((r) => r.id);
       const update = buildContactUpdate(data);
-      if (data.location === undefined && Array.isArray(data.addresses)) {
-        update.location = primaryAddressText(data.addresses);
-      }
       const changed = changedFields(update, data);
       if (typeof data.name === "string")
         update.phoneticHash = doubleMetaphone(data.name).primary;
-      const touchesAddress =
-        data.location !== undefined || Array.isArray(data.addresses);
+      const touchesAddress = data.location !== undefined;
       // buildContactUpdate returns only keys from a fixed allow list
       // (utils/helpers.ts), so only column names reach the SET clause.
       const updateFn = sqlite.transaction(() => {
@@ -718,13 +713,7 @@ export const contactService = {
             ? pinState(scope.ownerId, id)
             : undefined;
           if (stmt.run(...values, id, scope.ownerId).changes) {
-            if (Array.isArray(data.addresses)) {
-              contactRepo._replaceChildRecordsUnsafe(id, {
-                addresses: data.addresses,
-              } as ChildRecordsPayload);
-            } else if (data.location !== undefined) {
-              syncLocationToAddresses(id, data.location);
-            }
+            if (touchesAddress) syncLocationToAddresses(id, data.location);
             const released =
               pinBefore !== undefined
                 ? releaseMovedPin(scope, id, pinBefore)

@@ -836,16 +836,6 @@ function rowsFor(
   const digits = (value: string) => value.replace(/\D/g, "");
   const url = (value: string) => value.toLowerCase().replace(/\/$/, "");
   const date = (value?: string | null) => (value ?? "").slice(0, 20);
-  const researchRows = (table: string) =>
-    new Set(
-      sqlite
-        .prepare(
-          // tenant-lint: allow owner-checked by caller
-          `SELECT id FROM ${table} WHERE contactId = ? AND source = 'ai-search'`,
-        )
-        .pluck()
-        .all(contact.id),
-    );
   switch (entry.field) {
     case "emails":
       return contact.emails
@@ -859,30 +849,26 @@ function rowsFor(
       return contact.socialLinks
         .filter((row) => url(row.url) === url(entry.value))
         .map((row) => row.id);
-    case "education": {
-      const own = researchRows("contact_education");
+    case "education":
       return contact.education
         .filter(
           (row) =>
-            own.has(row.id) &&
+            row.source === "ai-search" &&
             sameText(row.school.slice(0, 300), entry.value) &&
             sameText(row.degree?.slice(0, 200), entry.detail) &&
             date(row.endDate) === date(entry.date),
         )
         .map((row) => row.id);
-    }
-    case "experience": {
-      const own = researchRows("contact_experience");
+    case "experience":
       return contact.experience
         .filter(
           (row) =>
-            own.has(row.id) &&
+            row.source === "ai-search" &&
             sameText(row.company.slice(0, 300), entry.value) &&
             sameText(row.role?.slice(0, 200), entry.detail) &&
             date(row.startDate) === date(entry.date),
         )
         .map((row) => row.id);
-    }
     case "tags":
       return contact.tags
         .filter((row) => sameText(row.tag, entry.value))

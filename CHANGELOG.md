@@ -20,6 +20,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A new contact gets a random id, so its URL no longer holds the name. A
   contact added before keeps its id, and the server log writes that id
   without the name.
+- The API returns the `source` of each school and job, as it does for
+  emails and phones.
 
 ### Fixed
 
@@ -33,6 +35,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Not this person** keeps a school or job you corrected or typed yourself.
 - A contact edited later on the day of its last duplicate check is checked
   again.
+- The MCP `updatedSince` filter finds a contact edited later on that day.
 
 ## [2.0.6] - 2026-11-04
 

@@ -50,6 +50,7 @@ const job = (
   role: `Role ${id}`,
   location: null,
   description: null,
+  source: null,
   ...dates,
 });
 
@@ -62,6 +63,7 @@ const school = (
   degree: null,
   fieldOfStudy: null,
   description: null,
+  source: null,
   ...dates,
 });
 

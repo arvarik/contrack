@@ -85,7 +85,7 @@ export const mcpService = {
       params.push(options.industry);
     }
     if (options.updatedSince) {
-      q += " AND updatedAt >= ?";
+      q += " AND julianday(updatedAt) >= julianday(?)";
       params.push(options.updatedSince);
     }
     if (options.tracked !== undefined) {

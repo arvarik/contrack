@@ -226,6 +226,7 @@ const contactEducationSchema = z.strictObject({
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   description: z.string().nullable(),
+  source: z.string().nullable(),
 });
 
 const contactExperienceSchema = z.strictObject({
@@ -237,6 +238,7 @@ const contactExperienceSchema = z.strictObject({
   isCurrent: z.boolean(),
   description: z.string().nullable(),
   location: z.string().nullable(),
+  source: z.string().nullable(),
 });
 
 const contactSourceSchema = z.strictObject({

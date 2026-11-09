@@ -5061,7 +5061,8 @@
                 "fieldOfStudy": { "type": ["string", "null"] },
                 "startDate": { "type": ["string", "null"] },
                 "endDate": { "type": ["string", "null"] },
-                "description": { "type": ["string", "null"] }
+                "description": { "type": ["string", "null"] },
+                "source": { "type": ["string", "null"] }
               },
               "required": [
                 "id",
@@ -5070,7 +5071,8 @@
                 "fieldOfStudy",
                 "startDate",
                 "endDate",
-                "description"
+                "description",
+                "source"
               ],
               "additionalProperties": false
             }
@@ -5087,7 +5089,8 @@
                 "endDate": { "type": ["string", "null"] },
                 "isCurrent": { "type": "boolean" },
                 "description": { "type": ["string", "null"] },
-                "location": { "type": ["string", "null"] }
+                "location": { "type": ["string", "null"] },
+                "source": { "type": ["string", "null"] }
               },
               "required": [
                 "id",
@@ -5097,7 +5100,8 @@
                 "endDate",
                 "isCurrent",
                 "description",
-                "location"
+                "location",
+                "source"
               ],
               "additionalProperties": false
             }
