@@ -95,8 +95,13 @@ leaves out:
 
 1. In Folk, open the group or view you want to move, click **Export CSV**, and
    download the file.
-2. In Contrack, open **Settings → Import** (or press `⌘K` and type `Import`),
-   upload the CSV file, and let the duplicate detector merge any overlapping
-   contacts.
-3. Use [Pulse](../pulse.md) or **Network** to turn on **Track** and set cadences
+2. Contrack reads a CSV file only in the column layout of a Google Contacts
+   export, and it skips a column whose name it does not know. Before you
+   upload Folk's file, rename its columns to the Google names: **First Name**,
+   **Last Name**, **E-mail 1 - Value**, **Phone 1 - Value**,
+   **Organization Name**, **Organization Title** and **Notes**.
+3. In Contrack, open **Settings → Import** (or press `⌘K` and type `Import`),
+   choose the **Google** tab, upload the CSV file, and let the duplicate
+   detector merge any overlapping contacts.
+4. Use [Pulse](../pulse.md) or **Network** to turn on **Track** and set cadences
    for the relationships you want to keep warm.
