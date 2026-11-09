@@ -9,7 +9,7 @@
 # by Dependabot); package.json requires 26.13 or later.
 
 # Stage 1: Build the frontend
-FROM node:26-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS builder
+FROM node:26-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS builder
 
 WORKDIR /app
 
@@ -40,7 +40,17 @@ RUN npm run build
 # Stage 2: Production runtime
 # No apt packages needed: better-sqlite3 bundles its own SQLite, and Node
 # ships with a built-in CA store for outbound TLS.
-FROM node:26-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS runtime
+FROM node:26-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS runtime
+
+# Debian's security update of zlib1g (1:1.3.dfsg+really1.3.1-1+deb13u1) fixes
+# CVE-2026-76844, CVE-2026-85091 and CVE-2026-27171, and the node image above
+# does not carry it yet. This step upgrades only that package, and fails when
+# the fixed version did not install. Remove it once the base image has it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
+    && rm -rf /var/lib/apt/lists/* \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" \
+         ge 1:1.3.dfsg+really1.3.1-1+deb13u1
 
 WORKDIR /app
 
