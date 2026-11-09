@@ -563,7 +563,7 @@ export async function ingestStream(
           `INSERT INTO contact_phones (id, contactId, phone, isPrimary)
            VALUES (?, ?, ?, 1)`,
         )
-        .run(crypto.randomUUID(), ghostId, normalizePhone(p.phone));
+        .run(crypto.randomUUID(), ghostId, p.phone.trim());
     }
     recordEvent(scope, "contact.created", ghostId, {
       origin: "connector",
