@@ -498,7 +498,7 @@ export const contactService = {
     source: string = "manual",
     options: { autoEnrich?: boolean } = {},
   ) {
-    const id = newContactId(body.name);
+    const id = newContactId();
     const values = buildInsertValues(scope, body, id, {
       manual: source === "manual",
     });
@@ -583,7 +583,7 @@ export const contactService = {
     try {
       /** One row. A savepoint when nested in the batch below. */
       const insertOne = sqlite.transaction((c: NewContactPayload) => {
-        const id = newContactId(c.name);
+        const id = newContactId();
         // An import, so never tracked by the preference.
         const values = buildInsertValues(scope, c, id, { manual: false });
 

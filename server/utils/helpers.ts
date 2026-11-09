@@ -5,23 +5,6 @@
 import crypto from "crypto";
 
 /**
- * Lowercase ASCII slug for a contact's name, capped at 32 characters so a
- * long name or email address still makes a readable URL path.
- */
-export function contactSlug(name: string): string {
-  const slug = name
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    // The line above leaves no two dashes in a row, so one dash is the run.
-    .replace(/^-|-$/g, "")
-    .slice(0, 32)
-    .replace(/-$/, "");
-  return slug || "contact";
-}
-
-/**
  * `text` without the leading and trailing characters that `strip` matches.
  * Linear, where a `[...]+$` regex retries a long run from each of its
  * positions (quadratic, a ReDoS on a hostile name or header). `strip` tests
@@ -36,11 +19,11 @@ export function trimChars(text: string, strip: RegExp): string {
 }
 
 /**
- * Human-readable contact ID (`<name-slug>-<8-hex>`) with a short random suffix
- * so two people with the same name never share an ID or URL.
+ * A new contact's id: random, with no part of the name, because ids reach the
+ * server log, the events table and the address bar.
  */
-export function newContactId(name: string): string {
-  return `${contactSlug(name)}-${crypto.randomUUID().slice(0, 8)}`;
+export function newContactId(): string {
+  return crypto.randomUUID();
 }
 
 /**

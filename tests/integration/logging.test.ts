@@ -47,9 +47,6 @@ it("logs a contact, a note and two searches by id and count only", async () => {
 
   expect(lines.some((line) => line.includes(contact.body.id))).toBe(true);
   expect(lines.some((line) => line.includes("/api/nothing-here →"))).toBe(true);
-  expect(
-    lines
-      .map((line) => line.replaceAll(contact.body.id, "<id>"))
-      .filter((line) => /quixmarker/i.test(line)),
-  ).toEqual([]);
+  // The id too: it holds no part of the name.
+  expect(lines.filter((line) => /quixmarker/i.test(line))).toEqual([]);
 });

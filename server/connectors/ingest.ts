@@ -530,7 +530,7 @@ export async function ingestStream(
    */
   function createGhost(p: Participant, nowIso: string): string {
     const ghostName = p.name || p.email || p.phone || "Unknown";
-    const ghostId = newContactId(ghostName);
+    const ghostId = newContactId();
     // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
     const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
       Math.floor(Math.random() * 5)

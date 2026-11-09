@@ -75,6 +75,14 @@ function detailsText(meta: Record<string, unknown>): string {
   }
 }
 
+/**
+ * A contact id from before ids were random: a slug of the name, at most 32
+ * characters, then 8 hex digits (`ada-lovelace-1a2b3c4d`). A line writes it as
+ * `contact-1a2b3c4d`, which still finds the row. The 32-character cap also
+ * keeps the search linear.
+ */
+const NAMED_ID = /\b[a-z0-9][a-z0-9-]{0,31}-([0-9a-f]{8})\b/g;
+
 function write(
   level: LogLevel,
   tag: string,
@@ -105,8 +113,11 @@ export const log = {
     const ts = new Date().toISOString();
     const color = process.stdout.isTTY ? LOG_COLORS[level] : "";
     const reset = color ? RESET : "";
-    const metaStr = meta ? detailsText(meta) : "";
-    console.log(`${color}[${ts}] [${level}] [${tag}]${reset} ${msg}${metaStr}`);
+    const text = `${msg}${meta ? detailsText(meta) : ""}`.replace(
+      NAMED_ID,
+      "contact-$1",
+    );
+    console.log(`${color}[${ts}] [${level}] [${tag}]${reset} ${text}`);
   },
   debug: (tag: string, msg: string, meta?: Record<string, unknown>) =>
     write("DEBUG", tag, msg, meta),
