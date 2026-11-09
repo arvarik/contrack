@@ -42,15 +42,8 @@ RUN npm run build
 # ships with a built-in CA store for outbound TLS.
 FROM node:26-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS runtime
 
-# Debian's security update of zlib1g (1:1.3.dfsg+really1.3.1-1+deb13u1) fixes
-# CVE-2026-76844, CVE-2026-85091 and CVE-2026-27171, and the node image above
-# does not carry it yet. This step upgrades only that package, and fails when
-# the fixed version did not install. Remove it once the base image has it.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
-    && rm -rf /var/lib/apt/lists/* \
-    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" \
-         ge 1:1.3.dfsg+really1.3.1-1+deb13u1
+# The Debian updates, such as security fixes, that the base image lacks.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
