@@ -59,7 +59,7 @@ interface UpdateInteractionPayload {
   title?: string;
   content?: string;
 }
-import { getErrorMessage, newContactId } from "../utils/helpers.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 
 // Private helpers
 
@@ -134,7 +134,7 @@ async function runMentionExtraction(
         // Not confident: the ghost is made either way, because the note has to
         // point at something and a mention with no contact is a mention the
         // timeline cannot show. What changes is whether anybody is told.
-        const ghostId = newContactId();
+        const ghostId = crypto.randomUUID();
         // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
         const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
           Math.floor(Math.random() * 5)

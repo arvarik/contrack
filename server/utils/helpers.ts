@@ -2,8 +2,6 @@
 // and child rows, URL utilities), utils/nlp/ (names), AppError.ts and
 // middleware/errorHandler.ts.
 
-import crypto from "crypto";
-
 /**
  * `text` without the leading and trailing characters that `strip` matches.
  * Linear, where a `[...]+$` regex retries a long run from each of its
@@ -16,14 +14,6 @@ export function trimChars(text: string, strip: RegExp): string {
   while (start < end && strip.test(text[start]!)) start++;
   while (end > start && strip.test(text[end - 1]!)) end--;
   return text.slice(start, end);
-}
-
-/**
- * A new contact's id: random, with no part of the name, because ids reach the
- * server log, the events table and the address bar.
- */
-export function newContactId(): string {
-  return crypto.randomUUID();
 }
 
 /**

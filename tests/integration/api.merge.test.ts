@@ -73,11 +73,10 @@ describe("merge → audit log → undo", () => {
     expect(slim.some((c) => c.id === duplicateId)).toBe(false);
 
     // Undo the manual merge
-    const beforeUndo = (
-      sqlite.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM events").get() as {
-        id: number;
-      }
-    ).id;
+    const beforeUndo = sqlite
+      .prepare("SELECT COALESCE(MAX(id), 0) FROM events")
+      .pluck()
+      .get();
     const undo = await request(app).post(
       `/api/dedupe/merge-log/${entry.id}/undo`,
     );
@@ -645,13 +644,12 @@ describe("undo after the survivor changed a child row", () => {
     expect(undo.status).toBe(200);
     expect(undo.body.conflicts).toEqual([]);
     const emailsOf = (id: string) =>
-      (
-        sqlite
-          .prepare(
-            "SELECT email FROM contact_emails WHERE contactId = ? ORDER BY email",
-          )
-          .all(id) as { email: string }[]
-      ).map((row) => row.email);
+      sqlite
+        .prepare(
+          "SELECT email FROM contact_emails WHERE contactId = ? ORDER BY email",
+        )
+        .pluck()
+        .all(id);
     expect(emailsOf(primaryId)).toEqual([
       "added.p@test.com",
       "saved.p@test.com",

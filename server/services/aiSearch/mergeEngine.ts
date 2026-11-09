@@ -838,14 +838,13 @@ function rowsFor(
   const date = (value?: string | null) => (value ?? "").slice(0, 20);
   const researchRows = (table: string) =>
     new Set(
-      (
-        sqlite
-          .prepare(
-            // tenant-lint: allow owner-checked by caller
-            `SELECT id FROM ${table} WHERE contactId = ? AND source = 'ai-search'`,
-          )
-          .all(contact.id) as { id: string }[]
-      ).map((row) => row.id),
+      sqlite
+        .prepare(
+          // tenant-lint: allow owner-checked by caller
+          `SELECT id FROM ${table} WHERE contactId = ? AND source = 'ai-search'`,
+        )
+        .pluck()
+        .all(contact.id),
     );
   switch (entry.field) {
     case "emails":

@@ -18,6 +18,7 @@ import { log } from "../../utils/logger.ts";
 import {
   contactRepo,
   isChildRowModified,
+  RELATION_REGISTRY,
 } from "../../repositories/contactRepository.ts";
 import { AppError, NotFoundError } from "../../utils/AppError.ts";
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
@@ -1121,19 +1122,15 @@ export function undoSoftMerge(
     _stmts.restoreDuplicate.run(entry.duplicateId, scope.ownerId);
 
     // The events, so the subscribers and every other listener see the undo:
-    // the duplicate is back, and the primary lost the relations that moved
-    // back and the fields step 4 reverted. Interactions and tasks moved back
-    // too, but they are not contact fields.
+    // the duplicate is back, and the primary lost the contact lists that
+    // moved back and the fields step 4 reverted.
     recordEvent(scope, "contact.restored", entry.duplicateId, {});
-    const movedBack = Object.entries(snapshot?.changes?.movedRecords ?? {})
-      .filter(
-        ([relation, ids]) =>
-          relation !== "interactions" &&
-          relation !== "actionItems" &&
-          ids.length > 0,
-      )
-      .map(([relation]) => relation);
-    const changed = [...movedBack, ...revertedFields];
+    const moved: Record<string, string[] | undefined> =
+      snapshot?.changes?.movedRecords ?? {};
+    const changed = [
+      ...Object.keys(RELATION_REGISTRY).filter((key) => moved[key]?.length),
+      ...revertedFields,
+    ];
     if (changed.length > 0) {
       recordEvent(scope, "contact.updated", entry.primaryId, {
         changed,
@@ -1167,7 +1164,6 @@ export function undoSoftMerge(
   dispatchEvents();
 
   scheduleSearchIndex(entry.primaryId);
-  scheduleSearchIndex(entry.duplicateId);
 
   log.info(
     "DedupeSuggestions",

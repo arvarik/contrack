@@ -47,13 +47,13 @@ const avatarOf = (id: string) =>
 
 /** The `contact.updated` payloads recorded for one contact. */
 const updatesOf = (id: string) =>
-  (
-    sqlite
-      .prepare(
-        "SELECT payload FROM events WHERE type = 'contact.updated' AND subjectId = ?",
-      )
-      .all(id) as { payload: string }[]
-  ).map((row) => JSON.parse(row.payload) as unknown);
+  sqlite
+    .prepare(
+      "SELECT payload FROM events WHERE type = 'contact.updated' AND subjectId = ?",
+    )
+    .pluck()
+    .all(id)
+    .map((payload) => JSON.parse(payload as string));
 
 const AVATAR_CHANGED = { changed: ["avatarUrl"], bulk: true };
 

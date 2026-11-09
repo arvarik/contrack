@@ -10,9 +10,9 @@
 // left alone.
 
 import { sqlite } from "../db.ts";
-import { dispatchEvents, recordEvent } from "../events/index.ts";
+import { recordEvent } from "../events/index.ts";
+import { dispatchAsBatch } from "../events/contactSubscribers.ts";
 import { scopeForOwnerId } from "../tenancy/scope.ts";
-import { aiCache } from "../utils/aiCache.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { isTransientImageError } from "../utils/remoteImage.ts";
@@ -77,15 +77,7 @@ export async function localizeStoredGooglePhotos(): Promise<PhotoSweepResult> {
       result.cleared++;
     }
   }
-  if (result.saved + result.cleared > 0) {
-    // One cache flush for the whole sweep, as for any batch write.
-    aiCache.enterBatchMode();
-    try {
-      dispatchEvents();
-    } finally {
-      aiCache.exitBatchMode();
-    }
-  }
+  if (result.saved + result.cleared > 0) dispatchAsBatch();
   return result;
 }
 

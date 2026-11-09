@@ -3,6 +3,7 @@
 // insert() for type-safe columns, and SQLite 0/1 becomes a boolean in one
 // place.
 
+import type Database from "better-sqlite3";
 import { sqlite } from "../db.ts";
 import * as schema from "../db/schema.ts";
 import type { Scope } from "../tenancy/scope.ts";
@@ -57,6 +58,20 @@ const ROW_CONTENT: Record<string, string[]> = {
   contact_attributes: ["name", "value"],
   interactions: ["type", "title", "content", "date"],
 };
+
+/**
+ * Statements compiled once, by their SQL. A sync saves the lists of every
+ * contact it made, and compiling a statement costs more than running it.
+ */
+const compiled = new Map<string, Database.Statement>();
+function prepared(sql: string): Database.Statement {
+  let statement = compiled.get(sql);
+  if (!statement) {
+    statement = sqlite.prepare(sql);
+    compiled.set(sql, statement);
+  }
+  return statement;
+}
 
 /** True when two rows of one table say different things. */
 export function isChildRowModified(
@@ -663,32 +678,32 @@ export const contactRepo = {
     )
       .filter((key) => Array.isArray(body[key]))
       .map((key) => RELATION_REGISTRY[key].dbName);
+    if (tables.length === 0) return;
     const rowsOf = (table: string) =>
-      sqlite
+      prepared(
         // tenant-lint: allow owner-checked by caller
-        .prepare(`SELECT * FROM ${table} WHERE contactId = ?`)
-        .all(contactId) as Record<string, unknown>[];
-    const before = tables.map((table) => ({ table, old: rowsOf(table) }));
-    for (const table of tables)
-      sqlite
+        `SELECT * FROM ${table} WHERE contactId = ?`,
+      ).all(contactId) as Record<string, unknown>[];
+    contactRepo.withDeferredChildFts(contactId, () => {
+      const before = tables.map((table) => ({ table, old: rowsOf(table) }));
+      for (const table of tables) {
         // tenant-lint: allow owner-checked by caller
-        .prepare(`DELETE FROM ${table} WHERE contactId = ?`)
-        .run(contactId);
-    contactRepo._insertChildRecordsUnsafe(contactId, body);
-    for (const { table, old } of before) {
-      for (const row of rowsOf(table)) {
-        const i = old.findIndex((o) => !isChildRowModified(table, row, o));
-        if (i < 0) continue;
-        const [kept] = old.splice(i, 1);
-        const columns = ["id", "source", "addedAt"].filter((c) => c in kept);
-        sqlite
-          .prepare(
+        prepared(`DELETE FROM ${table} WHERE contactId = ?`).run(contactId);
+      }
+      contactRepo._insertChildRecordsUnsafe(contactId, body);
+      for (const { table, old } of before) {
+        for (const row of rowsOf(table)) {
+          const i = old.findIndex((o) => !isChildRowModified(table, row, o));
+          if (i < 0) continue;
+          const [kept] = old.splice(i, 1);
+          const columns = ["id", "source", "addedAt"].filter((c) => c in kept);
+          prepared(
             // tenant-lint: allow owner-checked by caller
             `UPDATE ${table} SET ${columns.map((c) => `${c} = ?`).join(", ")} WHERE id = ?`,
-          )
-          .run(...columns.map((c) => kept[c]), row.id);
+          ).run(...columns.map((c) => kept[c]), row.id);
+        }
       }
-    }
+    });
   },
 
   /**

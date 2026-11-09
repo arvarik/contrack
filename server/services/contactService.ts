@@ -23,11 +23,7 @@ import {
 } from "../utils/avatarProcessor.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
-import {
-  buildContactUpdate,
-  getErrorMessage,
-  newContactId,
-} from "../utils/helpers.ts";
+import { buildContactUpdate, getErrorMessage } from "../utils/helpers.ts";
 import { defaultAvatarUrl, isDefaultAvatarFor } from "./avatarService.ts";
 import {
   removeFromIndexQueue,
@@ -53,7 +49,7 @@ import { dispatchEvents, recordEvent } from "../events/index.ts";
 // the duplicate check, the geocoder, the score, the owner's caches and
 // auto-enrichment. They register when this module loads, so every process
 // that writes a contact through this service runs them.
-import "../events/contactSubscribers.ts";
+import { dispatchAsBatch } from "../events/contactSubscribers.ts";
 
 // Every write below records an event inside its transaction and calls
 // dispatchEvents() after the transaction returns, before it reads its answer.
@@ -84,19 +80,6 @@ function changedFields(
  * contacts, and not for the whole file.
  */
 const IMPORT_BATCH_ROWS = 250;
-
-/**
- * Dispatch the events of a write that touched many contacts with the AI
- * cache in batch mode, so the invalidations collapse into one per tier.
- */
-function dispatchAsBatch(): void {
-  aiCache.enterBatchMode();
-  try {
-    dispatchEvents();
-  } finally {
-    aiCache.exitBatchMode();
-  }
-}
 
 /** The statements of `followUpTo`, prepared once, on first use. */
 let followUpPrepared: {
@@ -498,7 +481,7 @@ export const contactService = {
     source: string = "manual",
     options: { autoEnrich?: boolean } = {},
   ) {
-    const id = newContactId();
+    const id = crypto.randomUUID();
     const values = buildInsertValues(scope, body, id, {
       manual: source === "manual",
     });
@@ -583,7 +566,7 @@ export const contactService = {
     try {
       /** One row. A savepoint when nested in the batch below. */
       const insertOne = sqlite.transaction((c: NewContactPayload) => {
-        const id = newContactId();
+        const id = crypto.randomUUID();
         // An import, so never tracked by the preference.
         const values = buildInsertValues(scope, c, id, { manual: false });
 
@@ -736,11 +719,9 @@ export const contactService = {
             : undefined;
           if (stmt.run(...values, id, scope.ownerId).changes) {
             if (Array.isArray(data.addresses)) {
-              contactRepo.withDeferredChildFts(id, () => {
-                contactRepo._replaceChildRecordsUnsafe(id, {
-                  addresses: data.addresses,
-                } as ChildRecordsPayload);
-              });
+              contactRepo._replaceChildRecordsUnsafe(id, {
+                addresses: data.addresses,
+              } as ChildRecordsPayload);
             } else if (data.location !== undefined) {
               syncLocationToAddresses(id, data.location);
             }
@@ -781,9 +762,6 @@ export const contactService = {
     const changed = changedFields(updateData, body as Record<string, unknown>);
     const touchesAddress =
       body.location !== undefined || Array.isArray(body.addresses);
-    const childKeys = (
-      Object.keys(RELATION_REGISTRY) as (keyof typeof RELATION_REGISTRY)[]
-    ).filter((key) => body[key] !== undefined && Array.isArray(body[key]));
 
     const txn = sqlite.transaction(() => {
       const pinBefore = touchesAddress
@@ -800,15 +778,7 @@ export const contactService = {
         )
         .run();
 
-      if (childKeys.length > 0) {
-        contactRepo.withDeferredChildFts(id, () => {
-          const childPayload: ChildRecordsPayload = {};
-          for (const key of childKeys) {
-            (childPayload as Record<string, unknown>)[key] = body[key];
-          }
-          contactRepo._replaceChildRecordsUnsafe(id, childPayload);
-        });
-      }
+      contactRepo._replaceChildRecordsUnsafe(id, body);
       if (!Array.isArray(body.addresses) && body.location !== undefined) {
         syncLocationToAddresses(id, body.location);
       }

@@ -48,6 +48,7 @@ import { DEFAULT_RESEARCH_DEPTH } from "../../shared/researchDepth.ts";
 import { enqueueJob, registerJobs } from "../jobs/runner.ts";
 import { DEDUPE_CHECK_JOB } from "../jobs/dedupe.ts";
 import {
+  dispatchEvents,
   registerSubscribers,
   type AnyDomainEvent,
   type Subscriber,
@@ -368,3 +369,16 @@ registerSubscribers(CONTACT_SUBSCRIBERS);
 // The duplicate check's job, so runJobNow and the runner know the kind
 // wherever a contact can be written.
 registerJobs([DEDUPE_CHECK_JOB]);
+
+/**
+ * Dispatch the events of a write that touched many contacts with the AI
+ * cache in batch mode, so the invalidations collapse into one per tier.
+ */
+export function dispatchAsBatch(): void {
+  aiCache.enterBatchMode();
+  try {
+    dispatchEvents();
+  } finally {
+    aiCache.exitBatchMode();
+  }
+}

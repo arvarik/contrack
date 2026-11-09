@@ -12,27 +12,15 @@
 import { sqlite } from "../db.ts";
 import type { TagSummary } from "../../shared/contracts/tags.ts";
 import type { Scope } from "../tenancy/scope.ts";
-import { aiCache } from "../utils/aiCache.ts";
-import { dispatchEvents, recordEvent } from "../events/index.ts";
-// The reactions to a contact write register when this module loads, as in
-// contactService.ts. A rename or a delete records `contact.updated` for every
-// contact it changed, so the search index, the owner's caches and every other
-// listener react as they do to any other tag edit.
-import "../events/contactSubscribers.ts";
+import { recordEvent } from "../events/index.ts";
+import { dispatchAsBatch } from "../events/contactSubscribers.ts";
 
 /**
- * After a rename or delete committed: run the subscribers for the events it
- * recorded. In the cache's batch mode, a thousand contacts cost one flush.
+ * After a rename or delete committed: the subscribers react to the
+ * `contact.updated` it recorded for each contact, as to any other tag edit.
  */
 function dispatchTagChange(ids: string[]): { affected: number } {
-  if (ids.length > 0) {
-    aiCache.enterBatchMode();
-    try {
-      dispatchEvents();
-    } finally {
-      aiCache.exitBatchMode();
-    }
-  }
+  if (ids.length > 0) dispatchAsBatch();
   return { affected: ids.length };
 }
 
