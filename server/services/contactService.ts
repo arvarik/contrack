@@ -14,7 +14,6 @@ import type {
   ContactPayload,
   NewContactPayload,
   ContactRow,
-  ChildRecordsPayload,
 } from "../repositories/types.ts";
 import { pinState, queueGeocode, type PinState } from "./geocoding/index.ts";
 import {
@@ -23,11 +22,7 @@ import {
 } from "../utils/avatarProcessor.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
-import {
-  buildContactUpdate,
-  getErrorMessage,
-  newContactId,
-} from "../utils/helpers.ts";
+import { buildContactUpdate, getErrorMessage } from "../utils/helpers.ts";
 import { defaultAvatarUrl, isDefaultAvatarFor } from "./avatarService.ts";
 import {
   removeFromIndexQueue,
@@ -53,7 +48,7 @@ import { dispatchEvents, recordEvent } from "../events/index.ts";
 // the duplicate check, the geocoder, the score, the owner's caches and
 // auto-enrichment. They register when this module loads, so every process
 // that writes a contact through this service runs them.
-import "../events/contactSubscribers.ts";
+import { dispatchAsBatch } from "../events/contactSubscribers.ts";
 
 // Every write below records an event inside its transaction and calls
 // dispatchEvents() after the transaction returns, before it reads its answer.
@@ -84,19 +79,6 @@ function changedFields(
  * contacts, and not for the whole file.
  */
 const IMPORT_BATCH_ROWS = 250;
-
-/**
- * Dispatch the events of a write that touched many contacts with the AI
- * cache in batch mode, so the invalidations collapse into one per tier.
- */
-function dispatchAsBatch(): void {
-  aiCache.enterBatchMode();
-  try {
-    dispatchEvents();
-  } finally {
-    aiCache.exitBatchMode();
-  }
-}
 
 /** The statements of `followUpTo`, prepared once, on first use. */
 let followUpPrepared: {
@@ -498,7 +480,7 @@ export const contactService = {
     source: string = "manual",
     options: { autoEnrich?: boolean } = {},
   ) {
-    const id = newContactId(body.name);
+    const id = crypto.randomUUID();
     const values = buildInsertValues(scope, body, id, {
       manual: source === "manual",
     });
@@ -583,7 +565,7 @@ export const contactService = {
     try {
       /** One row. A savepoint when nested in the batch below. */
       const insertOne = sqlite.transaction((c: NewContactPayload) => {
-        const id = newContactId(c.name);
+        const id = crypto.randomUUID();
         // An import, so never tracked by the preference.
         const values = buildInsertValues(scope, c, id, { manual: false });
 
@@ -710,14 +692,10 @@ export const contactService = {
     try {
       const owned = contactRepo.findManyOwned(scope, ids).map((r) => r.id);
       const update = buildContactUpdate(data);
-      if (data.location === undefined && Array.isArray(data.addresses)) {
-        update.location = primaryAddressText(data.addresses);
-      }
       const changed = changedFields(update, data);
       if (typeof data.name === "string")
         update.phoneticHash = doubleMetaphone(data.name).primary;
-      const touchesAddress =
-        data.location !== undefined || Array.isArray(data.addresses);
+      const touchesAddress = data.location !== undefined;
       // buildContactUpdate returns only keys from a fixed allow list
       // (utils/helpers.ts), so only column names reach the SET clause.
       const updateFn = sqlite.transaction(() => {
@@ -730,24 +708,12 @@ export const contactService = {
           `UPDATE contacts SET ${setClauses}
             WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
         );
-        const deleteAddrStmt = Array.isArray(data.addresses)
-          ? sqlite.prepare("DELETE FROM contact_addresses WHERE contactId = ?")
-          : null;
         for (const id of owned) {
           const pinBefore = touchesAddress
             ? pinState(scope.ownerId, id)
             : undefined;
           if (stmt.run(...values, id, scope.ownerId).changes) {
-            if (Array.isArray(data.addresses)) {
-              contactRepo.withDeferredChildFts(id, () => {
-                deleteAddrStmt!.run(id);
-                contactRepo._insertChildRecordsUnsafe(id, {
-                  addresses: data.addresses,
-                } as ChildRecordsPayload);
-              });
-            } else if (data.location !== undefined) {
-              syncLocationToAddresses(id, data.location);
-            }
+            if (touchesAddress) syncLocationToAddresses(id, data.location);
             const released =
               pinBefore !== undefined
                 ? releaseMovedPin(scope, id, pinBefore)
@@ -785,9 +751,6 @@ export const contactService = {
     const changed = changedFields(updateData, body as Record<string, unknown>);
     const touchesAddress =
       body.location !== undefined || Array.isArray(body.addresses);
-    const childKeys = (
-      Object.keys(RELATION_REGISTRY) as (keyof typeof RELATION_REGISTRY)[]
-    ).filter((key) => body[key] !== undefined && Array.isArray(body[key]));
 
     const txn = sqlite.transaction(() => {
       const pinBefore = touchesAddress
@@ -804,19 +767,7 @@ export const contactService = {
         )
         .run();
 
-      if (childKeys.length > 0) {
-        contactRepo.withDeferredChildFts(id, () => {
-          const childPayload: ChildRecordsPayload = {};
-          for (const key of childKeys) {
-            const config = RELATION_REGISTRY[key];
-            sqlite
-              .prepare(`DELETE FROM ${config.dbName} WHERE contactId = ?`)
-              .run(id);
-            (childPayload as Record<string, unknown>)[key] = body[key];
-          }
-          contactRepo._insertChildRecordsUnsafe(id, childPayload);
-        });
-      }
+      contactRepo._replaceChildRecordsUnsafe(id, body);
       if (!Array.isArray(body.addresses) && body.location !== undefined) {
         syncLocationToAddresses(id, body.location);
       }

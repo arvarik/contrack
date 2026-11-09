@@ -103,9 +103,9 @@ Contrack is designed so both live comfortably together:
 - **Selective tracking.** You can hold 2,000 contacts from your phone and email
   without noise, and turn on **Track** only for the 50 friends, family members
   and collaborators you actively want to keep up with.
-- **Connected people.** Mentioning `@Sarah Chen` inside a note on her partner's
-  page links both timelines and lists them under **Connected people** on each
-  contact page (see [Contacts](../contacts.md)).
+- **Linked notes.** Mentioning `@Sarah Chen` inside a note on her partner's
+  page shows the note on both timelines (see
+  [@mentions](../contacts.md#mentions)).
 - **Household and team accounts.** A single self-hosted instance can host
   separate accounts for family members or teammates, where each account's
   contacts, notes and connectors stay completely isolated in the database (see

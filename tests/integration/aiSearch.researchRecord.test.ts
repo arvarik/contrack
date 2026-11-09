@@ -640,6 +640,34 @@ describe("Not this person", () => {
     );
   });
 
+  it("keeps a job the person corrected or typed, though its company, role and start match the run's", async () => {
+    const job = {
+      company: "Harbor Point Partners",
+      role: "Analyst",
+      startDate: "2020-01",
+    };
+    merge({ experience: [job] });
+    const runAt = record().runs[0].at;
+    // The person corrects the end of research's job, and types the same job
+    // at another office.
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({
+        experience: [
+          { ...job, endDate: "2023-06" },
+          { ...job, location: "Boston" },
+        ],
+      })
+      .expect(200);
+
+    expect((await reject(runAt)).status).toBe(200);
+    expect(
+      enrichmentContact(scope(), id)
+        .experience.map((row) => row.endDate ?? row.location)
+        .sort(),
+    ).toEqual(["2023-06", "Boston"]);
+  });
+
   it("keeps an About the person added to, and clears one left as the run wrote it", async () => {
     const about = `A trader at Harbor Point. ${"Writes about markets. ".repeat(20)}`;
     merge({ about, headline: "Trader" });

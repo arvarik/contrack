@@ -29,7 +29,7 @@ import type { ContactPayload, HydratedContact } from "../repositories/types.ts";
 import { doubleMetaphone, normalizePhone } from "../utils/nlp/index.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
 import { log } from "../utils/logger.ts";
-import { getErrorMessage, newContactId } from "../utils/helpers.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
 import { defaultAvatarUrl, isDefaultAvatarFor } from "../utils/avatarUrl.ts";
 import {
@@ -530,7 +530,7 @@ export async function ingestStream(
    */
   function createGhost(p: Participant, nowIso: string): string {
     const ghostName = p.name || p.email || p.phone || "Unknown";
-    const ghostId = newContactId(ghostName);
+    const ghostId = crypto.randomUUID();
     // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
     const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
       Math.floor(Math.random() * 5)
@@ -563,7 +563,7 @@ export async function ingestStream(
           `INSERT INTO contact_phones (id, contactId, phone, isPrimary)
            VALUES (?, ?, ?, 1)`,
         )
-        .run(crypto.randomUUID(), ghostId, normalizePhone(p.phone));
+        .run(crypto.randomUUID(), ghostId, p.phone.trim());
     }
     recordEvent(scope, "contact.created", ghostId, {
       origin: "connector",

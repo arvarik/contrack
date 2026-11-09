@@ -1,6 +1,6 @@
 // Integration: domain events and their subscribers.
 // A write records an event in its own transaction, and the subscribers react
-// after the commit (server/events/). Three guarantees:
+// after the commit (server/events/). Four guarantees:
 //
 //   1. A rename through PATCH and through PUT gets the same reactions: the
 //      dedupe vector, the search index and the duplicate check.
@@ -9,6 +9,9 @@
 //      rollback.
 //   3. A subscriber that throws does not undo the write, and runs again at
 //      the next dispatch.
+//   4. A tag rename and a tag delete, which change contacts outside
+//      contactService, record an event for every contact they change, so the
+//      same subscribers react.
 //
 // The search index is proved by its own call: the `search_vector_update`
 // trigger queues a renamed contact too, so the queue row alone would pass
@@ -57,8 +60,8 @@ const { dispatchEvents, recordEvent, registerSubscriber } =
 
 const app = makeTestApp();
 
-async function addContact(name: string): Promise<string> {
-  const res = await request(app).post("/api/contacts").send({ name });
+async function addContact(name: string, tags?: string[]): Promise<string> {
+  const res = await request(app).post("/api/contacts").send({ name, tags });
   expect(res.status).toBe(201);
   return res.body.id as string;
 }
@@ -194,5 +197,43 @@ describe("a subscriber that throws", () => {
 
     expect(tries).toBe(2);
     expect(handled).toEqual([id]);
+  });
+});
+
+describe("a tag rename and a tag delete", () => {
+  it("record contact.updated for every contact they change, and the search index follows", async () => {
+    const one = await addContact("Tag Events One", ["evt-old"]);
+    const both = await addContact("Tag Events Both", ["evt-old", "evt-new"]);
+    const other = await addContact("Tag Events Other", ["evt-other"]);
+    const tagsChanged = [one, both]
+      .sort()
+      .map((id) => ({ id, payload: { changed: ["tags"], bulk: true } }));
+
+    for (const send of [
+      () => request(app).patch("/api/tags/evt-old").send({ to: "evt-new" }),
+      () => request(app).delete("/api/tags/evt-new"),
+    ]) {
+      const mark = sqlite
+        .prepare("SELECT COALESCE(MAX(id), 0) FROM events")
+        .pluck()
+        .get();
+      indexed.mockClear();
+      await send().expect(200, { affected: 2 });
+
+      const updated = sqlite
+        .prepare(
+          `SELECT subjectId AS id, payload FROM events
+            WHERE id > ? AND type = 'contact.updated' ORDER BY subjectId`,
+        )
+        .all(mark) as { id: string; payload: string }[];
+      expect(
+        updated.map((row) => ({ ...row, payload: JSON.parse(row.payload) })),
+      ).toEqual(tagsChanged);
+      // tagService no longer queues the index itself, so these calls prove the
+      // subscriber reacted to the events.
+      expect(indexed).toHaveBeenCalledWith(one);
+      expect(indexed).toHaveBeenCalledWith(both);
+      expect(indexed).not.toHaveBeenCalledWith(other);
+    }
   });
 });

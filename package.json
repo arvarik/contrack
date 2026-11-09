@@ -150,7 +150,7 @@
     "chrono-node": "^2.10.2",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
-    "domhandler": "^5.0.3",
+    "domhandler": "^6.0.1",
     "dompurify": "^3.4.16",
     "fontkit": "^2.0.4",
     "husky": "^9.1.7",

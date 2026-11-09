@@ -112,11 +112,12 @@ native Apple client apps:
 
 ## Moving from Clay to Contrack
 
-1. In Clay, open **Settings → Export** and export your contacts as a **CSV** or
-   **vCard** (`.vcf`) file.
+1. In Clay, open **Settings → Export** and export your contacts as a **vCard**
+   (`.vcf`) file. Contrack reads a vCard from any address book, and it reads a
+   CSV file only in the column layout of a Google or LinkedIn export.
 2. In Contrack, open **Settings → Import** (or press `⌘K` and type `Import`),
-   upload the exported file, and review any suggested merges in the duplicate
-   check.
+   choose the **Apple** tab, which reads any vCard, upload the file, and review
+   any suggested merges in the duplicate check.
 3. Connect Google or IMAP/ICS accounts in **Settings → Connectors** if you want
    automatic email and calendar timelines, then mark your priority relationships
    as **Tracked** on [Pulse](../pulse.md).

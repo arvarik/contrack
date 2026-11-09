@@ -104,8 +104,12 @@ phone, it shows a short header and three tabs: **Timeline**, **Details** and
 **Dossier**. Under 1024 px wide, **Back** names the page it returns to, and
 returns to the same place in the list.
 
-Each contact has a readable URL slug built from their name and a short random
-suffix, such as `/contact/lori-daugherty-8f3a1c2e`. A link to a merged contact
+Each contact has a random id in its URL, such as
+`/contact/0b5f3d2e-9c1a-4e8b-a2f7-5d6c3b1e9a04`. The id holds no part of the
+name, so the name stays out of the server log, a proxy's log and the browser
+history. A contact added before ids were random keeps its id, which starts
+with the name, and the server log writes it as `contact-` and its last 8
+characters. A link to a merged contact
 opens the contact it merged into. When a contact does not load, the page says
 "Could not load the contact" and offers **Try again**.
 
@@ -197,8 +201,10 @@ The **Contact actions** menu, the three dots, holds these items in order:
 A placed contact shows a small map with **Open in map** and **Adjust pin**. A
 contact with an address and no pin says "Not on the map yet" and offers
 **Set location**. See [Move a pin by hand](map.md#move-a-pin-by-hand). The
-About text, schools and past jobs come from imports, **Add from text** and
-research, and have no box to type them in.
+About text comes from imports, connectors, **Add from text** and research.
+Schools and past jobs come only from research and **Add from text**, because
+no import reads them. None of these has a box to type in, except **Add a
+school** on the Research card after a research run.
 
 ## Notes and the timeline
 

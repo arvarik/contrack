@@ -3,6 +3,7 @@
 // insert() for type-safe columns, and SQLite 0/1 becomes a boolean in one
 // place.
 
+import type Database from "better-sqlite3";
 import { sqlite } from "../db.ts";
 import * as schema from "../db/schema.ts";
 import type { Scope } from "../tenancy/scope.ts";
@@ -27,6 +28,61 @@ export const RELATION_REGISTRY = {
   experience: { table: schema.contactExperience, dbName: "contact_experience" },
   sources: { table: schema.contactSources, dbName: "contact_sources" },
 } as const;
+
+/** The columns that make a child row what it says, by table. */
+const ROW_CONTENT: Record<string, string[]> = {
+  contact_emails: ["email", "label"],
+  contact_phones: ["phone", "label"],
+  contact_addresses: ["address", "label"],
+  contact_social_links: ["platform", "url"],
+  contact_education: [
+    "school",
+    "degree",
+    "fieldOfStudy",
+    "startDate",
+    "endDate",
+    "description",
+  ],
+  contact_experience: [
+    "company",
+    "role",
+    "location",
+    "description",
+    "startDate",
+    "endDate",
+    "isCurrent",
+  ],
+  contact_sources: ["platform", "externalId"],
+  contact_tags: ["tag"],
+  contact_interests: ["interest"],
+  contact_attributes: ["name", "value"],
+  interactions: ["type", "title", "content", "date"],
+};
+
+/**
+ * Statements compiled once, by their SQL. A sync saves the lists of every
+ * contact it made, and compiling a statement costs more than running it.
+ */
+const compiled = new Map<string, Database.Statement>();
+function prepared(sql: string): Database.Statement {
+  let statement = compiled.get(sql);
+  if (!statement) {
+    statement = sqlite.prepare(sql);
+    compiled.set(sql, statement);
+  }
+  return statement;
+}
+
+/** True when two rows of one table say different things. */
+export function isChildRowModified(
+  table: string,
+  currentRow: Record<string, unknown>,
+  originalRow: Record<string, unknown>,
+): boolean {
+  return (ROW_CONTENT[table] ?? []).some(
+    (k) => (currentRow[k] ?? "") + "" !== (originalRow[k] ?? "") + "",
+  );
+}
 
 // URL utilities for social links
 
@@ -117,10 +173,10 @@ const stmts = {
     "SELECT id, platform, url, handle, source FROM contact_social_links WHERE contactId = ?",
   ),
   education: sqlite.prepare(
-    "SELECT id, school, degree, fieldOfStudy, startDate, endDate, description FROM contact_education WHERE contactId = ?",
+    "SELECT id, school, degree, fieldOfStudy, startDate, endDate, description, source FROM contact_education WHERE contactId = ?",
   ),
   experience: sqlite.prepare(
-    "SELECT id, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience WHERE contactId = ?",
+    "SELECT id, company, role, startDate, endDate, isCurrent, description, location, source FROM contact_experience WHERE contactId = ?",
   ),
   sources: sqlite.prepare(
     "SELECT id, platform, externalId, connectedOn, importedAt FROM contact_sources WHERE contactId = ?",
@@ -372,7 +428,7 @@ export const contactRepo = {
       endDate: string | null;
       description: string | null;
     }>(
-      "SELECT id, contactId, school, degree, fieldOfStudy, startDate, endDate, description FROM contact_education",
+      "SELECT id, contactId, school, degree, fieldOfStudy, startDate, endDate, description, source FROM contact_education",
       "contactId",
     );
 
@@ -387,7 +443,7 @@ export const contactRepo = {
       description: string | null;
       location: string | null;
     }>(
-      "SELECT id, contactId, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience",
+      "SELECT id, contactId, company, role, startDate, endDate, isCurrent, description, location, source FROM contact_experience",
       "contactId",
     );
 
@@ -576,8 +632,8 @@ export const contactRepo = {
     const deferred =
       sqlite
         .prepare(
-          // Callers (createContact, bulkCreateContacts, updateContact,
-          // bulkUpdateContacts) have already verified ownership of contactId.
+          // Callers (createContact, bulkCreateContacts, updateContact) have
+          // already verified ownership of contactId.
           // tenant-lint: allow owner-checked by caller
           "UPDATE contacts SET scoreDirty = COALESCE(scoreDirty, 0) - 2 WHERE id = ? AND COALESCE(scoreDirty, 0) >= 0",
         )
@@ -605,6 +661,49 @@ export const contactRepo = {
       contactRepo._insertChildRecordsUnsafe(contactId, body, sourceName),
     );
     txn();
+  },
+
+  /**
+   * INTERNAL: the caller must hold an open transaction. Replace each list in
+   * `body` with the new one. A row the new list holds unchanged keeps its id,
+   * `source` and `addedAt`, so a merge undo still finds the rows it moved and
+   * research still knows the rows it wrote. A new or edited row is `manual`.
+   */
+  _replaceChildRecordsUnsafe(
+    contactId: string,
+    body: ChildRecordsPayload,
+  ): void {
+    const tables = (
+      Object.keys(RELATION_REGISTRY) as (keyof typeof RELATION_REGISTRY)[]
+    )
+      .filter((key) => Array.isArray(body[key]))
+      .map((key) => RELATION_REGISTRY[key].dbName);
+    if (tables.length === 0) return;
+    const rowsOf = (table: string) =>
+      prepared(
+        // tenant-lint: allow owner-checked by caller
+        `SELECT * FROM ${table} WHERE contactId = ?`,
+      ).all(contactId) as Record<string, unknown>[];
+    contactRepo.withDeferredChildFts(contactId, () => {
+      const before = tables.map((table) => ({ table, old: rowsOf(table) }));
+      for (const table of tables) {
+        // tenant-lint: allow owner-checked by caller
+        prepared(`DELETE FROM ${table} WHERE contactId = ?`).run(contactId);
+      }
+      contactRepo._insertChildRecordsUnsafe(contactId, body);
+      for (const { table, old } of before) {
+        for (const row of rowsOf(table)) {
+          const i = old.findIndex((o) => !isChildRowModified(table, row, o));
+          if (i < 0) continue;
+          const [kept] = old.splice(i, 1);
+          const columns = ["id", "source", "addedAt"].filter((c) => c in kept);
+          prepared(
+            // tenant-lint: allow owner-checked by caller
+            `UPDATE ${table} SET ${columns.map((c) => `${c} = ?`).join(", ")} WHERE id = ?`,
+          ).run(...columns.map((c) => kept[c]), row.id);
+        }
+      }
+    });
   },
 
   /**

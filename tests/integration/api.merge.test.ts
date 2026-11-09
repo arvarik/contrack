@@ -73,6 +73,10 @@ describe("merge → audit log → undo", () => {
     expect(slim.some((c) => c.id === duplicateId)).toBe(false);
 
     // Undo the manual merge
+    const beforeUndo = sqlite
+      .prepare("SELECT COALESCE(MAX(id), 0) FROM events")
+      .pluck()
+      .get();
     const undo = await request(app).post(
       `/api/dedupe/merge-log/${entry.id}/undo`,
     );
@@ -80,6 +84,30 @@ describe("merge → audit log → undo", () => {
     expect(undo.body.success).toBe(true);
     expect(undo.body.restoredContactId).toBe(duplicateId);
     expect(undo.body.conflicts).toHaveLength(0);
+
+    // The undo records its events, so the caches and every other listener
+    // follow: the duplicate is back, and the primary lost what moved back.
+    const undoEvents = sqlite
+      .prepare(
+        "SELECT type, subjectId, payload FROM events WHERE id > ? ORDER BY id",
+      )
+      .all(beforeUndo) as {
+      type: string;
+      subjectId: string;
+      payload: string;
+    }[];
+    expect(undoEvents).toContainEqual({
+      type: "contact.restored",
+      subjectId: duplicateId,
+      payload: "{}",
+    });
+    const primaryUpdate = undoEvents.find(
+      (e) => e.type === "contact.updated" && e.subjectId === primaryId,
+    );
+    expect(JSON.parse(primaryUpdate?.payload ?? "null")).toEqual({
+      changed: expect.arrayContaining(["emails", "phones"]),
+      bulk: false,
+    });
 
     // Duplicate is restored to the active list
     slim = await slimContacts();
@@ -593,6 +621,42 @@ async function mergeThenFindLogId(
 }
 
 describe("undo after the survivor changed a child row", () => {
+  it("moves a row back when the survivor saved its list with the row unchanged", async () => {
+    const primaryId = await createContact({
+      name: "Saved List Primary",
+      emails: ["saved.p@test.com"],
+    });
+    const duplicateId = await createContact({
+      name: "Saved List Duplicate",
+      emails: ["saved.d@test.com"],
+    });
+    const logId = await mergeThenFindLogId(primaryId, duplicateId);
+
+    // Adding an email on the survivor saves its whole list.
+    await request(app)
+      .put(`/api/contacts/${primaryId}`)
+      .send({
+        emails: ["saved.p@test.com", "saved.d@test.com", "added.p@test.com"],
+      })
+      .expect(200);
+
+    const undo = await request(app).post(`/api/dedupe/merge-log/${logId}/undo`);
+    expect(undo.status).toBe(200);
+    expect(undo.body.conflicts).toEqual([]);
+    const emailsOf = (id: string) =>
+      sqlite
+        .prepare(
+          "SELECT email FROM contact_emails WHERE contactId = ? ORDER BY email",
+        )
+        .pluck()
+        .all(id);
+    expect(emailsOf(primaryId)).toEqual([
+      "added.p@test.com",
+      "saved.p@test.com",
+    ]);
+    expect(emailsOf(duplicateId)).toEqual(["saved.d@test.com"]);
+  });
+
   it("puts back every kind of child row that the survivor deleted", async () => {
     const primaryId = await createContact({ name: "Deleted Rows Primary" });
     const duplicateId = await createContact({ name: "Deleted Rows Duplicate" });

@@ -824,7 +824,10 @@ const sameText = (a?: string | null, b?: string | null) =>
 
 /**
  * The saved rows an entry names, as research wrote them. A row the person
- * edited since reads differently, and is not one of them.
+ * edited since reads differently, and is not one of them. An entry names a
+ * school or a job by three of its fields, so those rows must also still be
+ * research's own: a save that changed one, or a row the person typed, is
+ * `manual`.
  */
 function rowsFor(
   contact: HydratedContact,
@@ -850,6 +853,7 @@ function rowsFor(
       return contact.education
         .filter(
           (row) =>
+            row.source === "ai-search" &&
             sameText(row.school.slice(0, 300), entry.value) &&
             sameText(row.degree?.slice(0, 200), entry.detail) &&
             date(row.endDate) === date(entry.date),
@@ -859,6 +863,7 @@ function rowsFor(
       return contact.experience
         .filter(
           (row) =>
+            row.source === "ai-search" &&
             sameText(row.company.slice(0, 300), entry.value) &&
             sameText(row.role?.slice(0, 200), entry.detail) &&
             date(row.startDate) === date(entry.date),

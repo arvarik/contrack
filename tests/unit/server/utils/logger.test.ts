@@ -68,6 +68,18 @@ describe("log", () => {
     expect(details.error.stack).toContain("logger.test.ts");
   });
 
+  it("writes an older contact id, which starts with the name, without the name", () => {
+    const id = "ada-lovelace-1a2b3c4d";
+    const [line] = printed(() =>
+      log.info("Test", `PUT /api/contacts/${id} → updated`, { contactId: id }),
+    );
+    expect(line).not.toMatch(/lovelace/);
+    expect(line.match(/contact-1a2b3c4d/g)).toHaveLength(2);
+    // A random id stays as it is.
+    const uuid = "0b5f3d2e-9c1a-4e8b-a2f7-5d6c3b1e9a04";
+    expect(printed(() => log.info("Test", uuid))[0]).toContain(uuid);
+  });
+
   it("colors a line only when stdout is a terminal", () => {
     const own = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
     try {

@@ -55,6 +55,7 @@ export interface HydratedContact extends Omit<
     startDate: string | null;
     endDate: string | null;
     description: string | null;
+    source: string | null;
   }>;
   experience: Array<{
     id: string;
@@ -65,6 +66,7 @@ export interface HydratedContact extends Omit<
     isCurrent: boolean;
     description: string | null;
     location: string | null;
+    source: string | null;
   }>;
   sources: Array<{
     id: string;

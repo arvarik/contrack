@@ -215,6 +215,22 @@ describe("MCP Server (/api/mcp)", () => {
     await ok("update_contact", { id: contactId, fields: { isTracked: false } });
   });
 
+  it("list_contacts counts an edit later on the day of updatedSince", async () => {
+    // `updatedAt` is SQLite text and `updatedSince` is ISO text. As plain
+    // text, a space sorts before `T`, so a later time on that day compared
+    // lower.
+    const contactId = seedA.contactIds[2];
+    sqlite
+      .prepare(
+        "UPDATE contacts SET updatedAt = '2099-01-01 18:30:00' WHERE id = ?",
+      )
+      .run(contactId);
+    const since = await ok("list_contacts", {
+      updatedSince: "2099-01-01T18:00:00Z",
+    });
+    expect(since.contacts.map((c) => c.id)).toEqual([contactId]);
+  });
+
   it("list_contacts, get_timeline and list_action_items page with a cursor", async () => {
     const first = await ok("list_contacts", { limit: 2 });
     const second = await ok("list_contacts", {

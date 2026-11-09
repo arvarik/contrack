@@ -15,9 +15,14 @@ import * as schema from "../../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
-import { contactRepo } from "../../repositories/contactRepository.ts";
+import {
+  contactRepo,
+  isChildRowModified,
+  RELATION_REGISTRY,
+} from "../../repositories/contactRepository.ts";
 import { AppError, NotFoundError } from "../../utils/AppError.ts";
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
+import { dispatchEvents, recordEvent } from "../../events/index.ts";
 import type {
   ContactRow,
   HydratedContact,
@@ -677,48 +682,6 @@ function restoreChildRow(
     .run(...names.map((name) => values[name] ?? null));
 }
 
-function isChildRowModified(
-  table: string,
-  currentRow: Record<string, unknown>,
-  originalRow: Record<string, unknown>,
-): boolean {
-  const compareKeys: Record<string, string[]> = {
-    contact_emails: ["email", "label"],
-    contact_phones: ["phone", "label"],
-    contact_addresses: ["address", "label"],
-    contact_social_links: ["platform", "url"],
-    contact_education: [
-      "school",
-      "degree",
-      "fieldOfStudy",
-      "startDate",
-      "endDate",
-      "description",
-    ],
-    contact_experience: [
-      "company",
-      "role",
-      "location",
-      "description",
-      "startDate",
-      "endDate",
-      "isCurrent",
-    ],
-    contact_sources: ["platform", "externalId"],
-    contact_tags: ["tag"],
-    contact_interests: ["interest"],
-    contact_attributes: ["name", "value"],
-    interactions: ["type", "title", "content", "date"],
-  };
-  const keys = compareKeys[table] ?? [];
-  for (const k of keys) {
-    const cur = (currentRow[k] ?? "") + "";
-    const orig = (originalRow[k] ?? "") + "";
-    if (cur !== orig) return true;
-  }
-  return false;
-}
-
 /**
  * Undo a merge: show the duplicate again, move back the records the survivor
  * has not changed since, keep its later edits, recompute follow-ups, and report
@@ -797,6 +760,8 @@ export function undoSoftMerge(
     }
   }
 
+  // The primary's fields that step 4 puts back, for its event.
+  const revertedFields: string[] = [];
   // All or nothing: a step that throws rolls every step back, and the merge
   // stays as it was.
   const txn = sqlite.transaction(() => {
@@ -1121,6 +1086,7 @@ export function undoSoftMerge(
           }
         }
         if (Object.keys(scalarReverts).length > 0) {
+          revertedFields.push(...Object.keys(scalarReverts));
           scalarReverts.updatedAt = new Date().toISOString();
           db.update(schema.contacts)
             .set(scalarReverts as Partial<ContactRow>)
@@ -1155,6 +1121,23 @@ export function undoSoftMerge(
     // 6. Restore the duplicate contact's visibility
     _stmts.restoreDuplicate.run(entry.duplicateId, scope.ownerId);
 
+    // The events, so the subscribers and every other listener see the undo:
+    // the duplicate is back, and the primary lost the contact lists that
+    // moved back and the fields step 4 reverted.
+    recordEvent(scope, "contact.restored", entry.duplicateId, {});
+    const moved: Record<string, string[] | undefined> =
+      snapshot?.changes?.movedRecords ?? {};
+    const changed = [
+      ...Object.keys(RELATION_REGISTRY).filter((key) => moved[key]?.length),
+      ...revertedFields,
+    ];
+    if (changed.length > 0) {
+      recordEvent(scope, "contact.updated", entry.primaryId, {
+        changed,
+        bulk: false,
+      });
+    }
+
     // 7. Mark the merge log entry as undone
     _stmts.undoMergeLog.run(mergeLogId, scope.ownerId);
 
@@ -1178,9 +1161,9 @@ export function undoSoftMerge(
   });
 
   txn();
+  dispatchEvents();
 
   scheduleSearchIndex(entry.primaryId);
-  scheduleSearchIndex(entry.duplicateId);
 
   log.info(
     "DedupeSuggestions",

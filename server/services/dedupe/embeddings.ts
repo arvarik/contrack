@@ -373,7 +373,10 @@ export function findNearestNeighbors(
 
 // Staleness
 
-/** Contacts edited since their embedding was made. */
+/**
+ * Contacts edited since their embedding was made. `updatedAt` is SQLite text
+ * and `embeddedAt` is ISO text, so the two compare as times, not as text.
+ */
 function findStaleEmbeddings(scope: Scope): string[] {
   const rows = sqlite
     .prepare(
@@ -382,7 +385,7 @@ function findStaleEmbeddings(scope: Scope): string[] {
     FROM dedupe_embedding_meta m
     JOIN contacts c ON c.id = m.contactId
     WHERE c.ownerId = ?
-      AND c.updatedAt > m.embeddedAt
+      AND julianday(c.updatedAt) > julianday(m.embeddedAt)
       AND c.isGhost = 0
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
       AND c.canonicalId IS NULL

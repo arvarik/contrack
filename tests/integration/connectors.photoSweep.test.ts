@@ -45,6 +45,18 @@ const avatarOf = (id: string) =>
     }
   ).avatarUrl;
 
+/** The `contact.updated` payloads recorded for one contact. */
+const updatesOf = (id: string) =>
+  sqlite
+    .prepare(
+      "SELECT payload FROM events WHERE type = 'contact.updated' AND subjectId = ?",
+    )
+    .pluck()
+    .all(id)
+    .map((payload) => JSON.parse(payload as string));
+
+const AVATAR_CHANGED = { changed: ["avatarUrl"], bulk: true };
+
 beforeEach(async () => {
   sqlite.exec("DELETE FROM contacts");
   ownerId = crypto.randomUUID();
@@ -83,6 +95,8 @@ describe("localizeStoredGooglePhotos", () => {
     );
     const file = resolveUploadPath(avatar!);
     expect(file && fs.existsSync(file)).toBe(true);
+    // An event, as for any other contact write, so every listener sees it.
+    expect(updatesOf(id)).toEqual([AVATAR_CHANGED]);
   });
 
   it("clears a photo Google no longer serves, and keeps one that may come back", async () => {
@@ -94,6 +108,8 @@ describe("localizeStoredGooglePhotos", () => {
     expect(result).toEqual({ saved: 0, cleared: 1, deferred: 1 });
     expect(avatarOf(gone)).toBeNull();
     expect(avatarOf(busy)).toBe(BUSY);
+    expect(updatesOf(gone)).toEqual([AVATAR_CHANGED]);
+    expect(updatesOf(busy)).toEqual([]);
   });
 
   it("leaves every avatar that is not a Google photo alone", async () => {
@@ -122,5 +138,7 @@ describe("localizeStoredGooglePhotos", () => {
     await localizeStoredGooglePhotos();
 
     expect(avatarOf(id)).toBe("/api/avatar/lorelei/new.svg");
+    // The sweep wrote nothing, so it records nothing.
+    expect(updatesOf(id)).toEqual([]);
   });
 });

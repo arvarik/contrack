@@ -12,18 +12,20 @@
 import { sqlite } from "../db.ts";
 import type { TagSummary } from "../../shared/contracts/tags.ts";
 import type { Scope } from "../tenancy/scope.ts";
-import { aiCache } from "../utils/aiCache.ts";
-import { scheduleSearchIndex } from "./search/indexQueue.ts";
+import { recordEvent } from "../events/index.ts";
+import { dispatchAsBatch } from "../events/contactSubscribers.ts";
 
-/** After a rename or delete changed these contacts: drop cached answers, reindex. */
-function afterTagChange(scope: Scope, ids: string[]): { affected: number } {
-  if (ids.length === 0) return { affected: 0 };
-  for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"]) {
-    aiCache.invalidateForOwner(tier, scope.ownerId);
-  }
-  for (const id of ids) scheduleSearchIndex(id);
+/**
+ * After a rename or delete committed: the subscribers react to the
+ * `contact.updated` it recorded for each contact, as to any other tag edit.
+ */
+function dispatchTagChange(ids: string[]): { affected: number } {
+  if (ids.length > 0) dispatchAsBatch();
   return { affected: ids.length };
 }
+
+/** The event a rename or a delete records for each contact it changed. */
+const TAGS_CHANGED = { changed: ["tags"], bulk: true };
 
 const _stmts = {
   // `count` is the contacts the Network list shows. A rename and a delete
@@ -117,10 +119,11 @@ export const tagService = {
           _stmts.updateTagForContact.run(to, contactId, from);
         }
         _stmts.touchContact.run(contactId, scope.ownerId);
+        recordEvent(scope, "contact.updated", contactId, TAGS_CHANGED);
       }
     })();
 
-    return afterTagChange(scope, affectedIds);
+    return dispatchTagChange(affectedIds);
   },
 
   deleteTag(scope: Scope, tag: string): { affected: number } {
@@ -143,9 +146,10 @@ export const tagService = {
       _stmts.deleteTagForOwner.run(targetTag, scope.ownerId);
       for (const id of affectedIds) {
         _stmts.touchContact.run(id, scope.ownerId);
+        recordEvent(scope, "contact.updated", id, TAGS_CHANGED);
       }
     })();
 
-    return afterTagChange(scope, affectedIds);
+    return dispatchTagChange(affectedIds);
   },
 };

@@ -9,6 +9,7 @@
  *   Notes, follow-ups and list places move over whole.
  */
 import type { Contact, SuggestedContact } from "../../../types";
+import { normalizePhone } from "../../../../shared/phone";
 
 /**
  * A contact on the duplicate screens. Only a suggestion's contacts count
@@ -59,12 +60,6 @@ export interface MergeOutcome {
 const norm = (value: string | null | undefined) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
-/** The last ten digits, as the server compares numbers (`normalizePhone`). */
-const phoneKey = (phone: string) => {
-  const digits = phone.replace(/\D/g, "");
-  return digits.length > 10 ? digits.slice(-10) : digits;
-};
-
 const value = (contact: Contact, field: SingleField): string =>
   (contact[field] ?? "").trim();
 
@@ -106,7 +101,9 @@ export function mergeOutcome(
   }
 
   const emails = new Set((keeper.emails ?? []).map((e) => norm(e.email)));
-  const phones = new Set((keeper.phones ?? []).map((p) => phoneKey(p.phone)));
+  const phones = new Set(
+    (keeper.phones ?? []).map((p) => normalizePhone(p.phone)),
+  );
   const links = new Set(
     (keeper.socialLinks ?? []).map(
       (l) => `${norm(l.platform)}::${norm(l.url)}`,
@@ -132,7 +129,7 @@ export function mergeOutcome(
   for (const other of others) {
     for (const e of other.emails ?? []) take(emails, norm(e.email), "emails");
     for (const p of other.phones ?? [])
-      take(phones, phoneKey(p.phone), "phones");
+      take(phones, normalizePhone(p.phone), "phones");
     for (const l of other.socialLinks ?? []) {
       take(links, `${norm(l.platform)}::${norm(l.url)}`, "links");
     }

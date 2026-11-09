@@ -27,6 +27,11 @@ describe("tagService", () => {
     sqlite
       .prepare("DELETE FROM contacts WHERE ownerId IN (?, ?)")
       .run(owner1, owner2);
+    // A rename or a delete records an event per contact, and an event names
+    // its owner, so the events go before the users.
+    sqlite
+      .prepare("DELETE FROM events WHERE ownerId IN (?, ?)")
+      .run(owner1, owner2);
     sqlite.prepare("DELETE FROM users WHERE id IN (?, ?)").run(owner1, owner2);
 
     // Insert owners

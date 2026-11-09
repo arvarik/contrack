@@ -131,7 +131,7 @@ describe("connectors ingestStream", () => {
 
   const mail = (
     externalId: string,
-    participants: Array<{ email: string; name?: string }>,
+    participants: Array<{ email?: string; phone?: string; name?: string }>,
     extra: Record<string, unknown> = {},
   ): SyncEvent => ({
     kind: "interaction",
@@ -441,6 +441,21 @@ describe("connectors ingestStream", () => {
     expect(column("SELECT name FROM contacts WHERE id = ?", ghost.id)).toEqual([
       "Samuel Stranger",
     ]);
+  });
+
+  it("keeps the whole number of a ghost seen by phone", async () => {
+    const stranger = { phone: "+33 6 12 34 56 78" };
+    await ingest([mail("m-1", [stranger]), mail("m-2", [stranger])], {
+      ghostThreshold: 2,
+    });
+    expect(
+      column(
+        `SELECT cp.phone FROM contact_phones cp
+           JOIN contacts c ON c.id = cp.contactId
+          WHERE c.ownerId = ? AND c.isGhost = 1`,
+        ownerId,
+      ),
+    ).toEqual(["+33 6 12 34 56 78"]);
   });
 
   it("puts the drawn avatar back over a saved copy of Google's letter tile, and keeps any other photo", async () => {

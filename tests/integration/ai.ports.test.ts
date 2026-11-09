@@ -137,6 +137,20 @@ describe("the embedder", () => {
     await ask(true);
     expect(calls).toEqual([{ use: "query", texts: [QUESTION] }]);
   });
+
+  it("embeds again a contact edited later on the day of its dedupe vector", async () => {
+    // `updatedAt` is SQLite text and `embeddedAt` is ISO text. As plain text,
+    // a space sorts before `T`, so any time on the same day compared lower.
+    sqlite.exec(`
+      UPDATE dedupe_embedding_meta SET embeddedAt = '2026-11-09T18:00:00.000Z';
+      UPDATE contacts SET updatedAt = CASE name
+        WHEN 'Ada Okafor' THEN '2026-11-09 18:30:00'
+        ELSE '2026-11-09 17:30:00' END;
+    `);
+    setEmbedder(recording(true));
+    expect(await reEmbedStaleContacts(scope())).toBe(1);
+    expect(calls.flatMap((call) => call.texts).join()).toContain("Ada Okafor");
+  });
 });
 
 describe("the reranker", () => {

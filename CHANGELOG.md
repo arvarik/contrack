@@ -9,6 +9,34 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- The Docker image moves to the newest Node 26 Debian base, and takes the
+  newer Debian updates when it builds. This fixes CVE-2026-109518 in `apt`, and
+  CVE-2026-76844, CVE-2026-85091 and CVE-2026-27171 in `zlib1g`.
+
+### Changed
+
+- A new contact gets a random id, so its URL no longer holds the name. A
+  contact added before keeps its id, and the server log writes that id
+  without the name.
+- The API returns the `source` of each school and job, as it does for
+  emails and phones.
+
+### Fixed
+
+- Undoing a merge clears the AI answers and briefings cached while the two
+  contacts were one.
+- Undoing a merge moves a row back to the other contact after the kept
+  contact's list was saved. Before, the same email or phone ended up on both.
+- One phone number written with and without its country code matches, also
+  for countries whose numbers are not 10 digits long, such as France and
+  Spain. A contact made from a synced message keeps the whole number.
+- **Not this person** keeps a school or job you corrected or typed yourself.
+- A contact edited later on the day of its last duplicate check is checked
+  again.
+- The MCP `updatedSince` filter finds a contact edited later on that day.
+
 ## [2.0.6] - 2026-11-04
 
 Upgrading runs one database migration when the server starts. The first
