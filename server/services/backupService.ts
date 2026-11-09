@@ -76,21 +76,6 @@ function countRows(db: Database.Database, table: string): number | null {
   }
 }
 
-let _liveCountsStmt: Database.Statement | null = null;
-function getLiveCountsStmt(): Database.Statement {
-  if (!_liveCountsStmt) {
-    _liveCountsStmt = sqlite.prepare(
-      // Verify backup compares instance-wide row counts between the live DB and the
-      // snapshot file.
-      // tenant-lint: allow instance sweep
-      `SELECT (SELECT COUNT(*) FROM contacts) AS contacts,
-              (SELECT COUNT(*) FROM interactions) AS interactions,
-              (SELECT COUNT(*) FROM settings) AS settings`,
-    );
-  }
-  return _liveCountsStmt;
-}
-
 const verificationCache = new Map<
   string,
   { mtimeMs: number; verification: BackupVerification }
@@ -116,15 +101,10 @@ export function verifyBackup(file: string): BackupVerification {
   const rows: Record<string, number> = {};
   const liveRows: Record<string, number> = {};
 
-  try {
-    const counts = getLiveCountsStmt().get() as Record<string, number>;
-    for (const table of COUNTED_TABLES) {
-      liveRows[table] = counts[table] ?? 0;
-    }
-  } catch {
-    for (const table of COUNTED_TABLES) {
-      liveRows[table] = countRows(sqlite, table) ?? 0;
-    }
+  // Every counted table, instance-wide, from the live database: the check
+  // below compares each one with the snapshot.
+  for (const table of COUNTED_TABLES) {
+    liveRows[table] = countRows(sqlite, table) ?? 0;
   }
 
   // Opening a snapshot creates its WAL companions, even read only, because it
