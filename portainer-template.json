@@ -1,0 +1,56 @@
+{
+  "version": "3",
+  "templates": [
+    {
+      "type": 1,
+      "title": "Contrack",
+      "name": "contrack",
+      "description": "Self-hosted personal CRM with contacts, notes, reminders, interaction history, and local semantic search in one SQLite file. Optional AI providers and calendar, IMAP, and CardDAV connectors. Source: https://github.com/arvarik/contrack",
+      "categories": ["Productivity", "Tools"],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/arvarik/contrack/main/public/icon-512.png",
+      "image": "ghcr.io/arvarik/contrack:2",
+      "restart_policy": "unless-stopped",
+      "ports": ["3210:3210/tcp"],
+      "volumes": [{ "container": "/app/data" }],
+      "env": [
+        {
+          "name": "AUTH_REQUIRED",
+          "label": "Require sign-in",
+          "description": "Keep enabled when reachable beyond localhost. On first visit, Contrack opens a setup screen to create the admin account.",
+          "default": "true",
+          "select": [
+            {
+              "text": "Yes (create admin on first visit)",
+              "value": "true",
+              "default": true
+            },
+            {
+              "text": "No (localhost only)",
+              "value": "false"
+            }
+          ]
+        },
+        {
+          "name": "PUBLIC_URL",
+          "label": "Public URL (optional)",
+          "description": "Root origin people open (e.g. https://crm.example.com, with no path) when behind a reverse proxy. Needed for passkeys, emailed links, and OAuth.",
+          "default": ""
+        },
+        {
+          "name": "TRUST_PROXY_HOPS",
+          "label": "Reverse proxy hops",
+          "description": "0 for direct access, or 1 behind one reverse proxy so rate limits, secure cookies, and audit logs use forwarded headers.",
+          "default": "0"
+        },
+        {
+          "name": "ALLOWED_HOSTS",
+          "label": "Allowed hosts (optional)",
+          "description": "Comma-separated extra hostnames (such as a Tailscale .ts.net name) allowed before the first account is created or while sign-in is off.",
+          "default": ""
+        }
+      ],
+      "note": "Open <code>http://&lt;your-host&gt;:3210</code> right after deploying: <b>the first visitor to open port <code>3210</code> creates the admin account</b>, so complete setup before exposing the port publicly.<br><br>All persistent data (SQLite database, uploads, snapshots, and generated <code>secret.key</code>) is stored in <code>/app/data</code>, and local search models are bundled in the image. AI keys, OpenID Connect, outgoing mail, and connectors can be configured in <code>Settings</code> inside the app. Behind an HTTPS reverse proxy, set <code>PUBLIC_URL</code> and <code>TRUST_PROXY_HOPS=1</code>. See the <a href=\"https://github.com/arvarik/contrack/blob/main/docs/self-hosting.md\" target=\"_blank\">self-hosting docs</a>."
+    }
+  ]
+}

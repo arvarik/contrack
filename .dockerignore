@@ -54,6 +54,7 @@ scripts
 !scripts/model-smoke.ts
 Dockerfile
 docker-compose.yml
+portainer-template.json
 .dockerignore
 AGENTS.md
 CHANGELOG.md
