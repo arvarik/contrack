@@ -824,7 +824,10 @@ const sameText = (a?: string | null, b?: string | null) =>
 
 /**
  * The saved rows an entry names, as research wrote them. A row the person
- * edited since reads differently, and is not one of them.
+ * edited since reads differently, and is not one of them. An entry names a
+ * school or a job by three of its fields, so those rows must also still be
+ * research's own: a save that changed one, or a row the person typed, is
+ * `manual`.
  */
 function rowsFor(
   contact: HydratedContact,
@@ -833,6 +836,17 @@ function rowsFor(
   const digits = (value: string) => value.replace(/\D/g, "");
   const url = (value: string) => value.toLowerCase().replace(/\/$/, "");
   const date = (value?: string | null) => (value ?? "").slice(0, 20);
+  const researchRows = (table: string) =>
+    new Set(
+      (
+        sqlite
+          .prepare(
+            // tenant-lint: allow owner-checked by caller
+            `SELECT id FROM ${table} WHERE contactId = ? AND source = 'ai-search'`,
+          )
+          .all(contact.id) as { id: string }[]
+      ).map((row) => row.id),
+    );
   switch (entry.field) {
     case "emails":
       return contact.emails
@@ -846,24 +860,30 @@ function rowsFor(
       return contact.socialLinks
         .filter((row) => url(row.url) === url(entry.value))
         .map((row) => row.id);
-    case "education":
+    case "education": {
+      const own = researchRows("contact_education");
       return contact.education
         .filter(
           (row) =>
+            own.has(row.id) &&
             sameText(row.school.slice(0, 300), entry.value) &&
             sameText(row.degree?.slice(0, 200), entry.detail) &&
             date(row.endDate) === date(entry.date),
         )
         .map((row) => row.id);
-    case "experience":
+    }
+    case "experience": {
+      const own = researchRows("contact_experience");
       return contact.experience
         .filter(
           (row) =>
+            own.has(row.id) &&
             sameText(row.company.slice(0, 300), entry.value) &&
             sameText(row.role?.slice(0, 200), entry.detail) &&
             date(row.startDate) === date(entry.date),
         )
         .map((row) => row.id);
+    }
     case "tags":
       return contact.tags
         .filter((row) => sameText(row.tag, entry.value))
