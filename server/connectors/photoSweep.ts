@@ -10,7 +10,9 @@
 // left alone.
 
 import { sqlite } from "../db.ts";
+import { dispatchEvents, recordEvent } from "../events/index.ts";
 import { scopeForOwnerId } from "../tenancy/scope.ts";
+import { aiCache } from "../utils/aiCache.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { isTransientImageError } from "../utils/remoteImage.ts";
@@ -36,9 +38,21 @@ export async function localizeStoredGooglePhotos(): Promise<PhotoSweepResult> {
     .all(GOOGLE_PHOTO) as { id: string; ownerId: string; avatarUrl: string }[];
 
   // Written only if the avatar is still the URL the sweep read, so a change
-  // the person made during the download wins.
+  // the person made during the download wins. A write records
+  // `contact.updated`, so every listener sees the new avatar, as it does for
+  // any other contact write.
   const replace = sqlite.prepare(
     "UPDATE contacts SET avatarUrl = ? WHERE id = ? AND ownerId = ? AND avatarUrl = ?",
+  );
+  const write = sqlite.transaction(
+    (row: (typeof rows)[number], avatarUrl: string | null) => {
+      if (replace.run(avatarUrl, row.id, row.ownerId, row.avatarUrl).changes) {
+        recordEvent(scopeForOwnerId(row.ownerId), "contact.updated", row.id, {
+          changed: ["avatarUrl"],
+          bulk: true,
+        });
+      }
+    },
   );
 
   const result: PhotoSweepResult = { saved: 0, cleared: 0, deferred: 0 };
@@ -48,7 +62,7 @@ export async function localizeStoredGooglePhotos(): Promise<PhotoSweepResult> {
         scopeForOwnerId(row.ownerId),
         row.avatarUrl,
       );
-      replace.run(local, row.id, row.ownerId, row.avatarUrl);
+      write(row, local);
       result.saved++;
     } catch (err) {
       if (isTransientImageError(err)) {
@@ -59,8 +73,17 @@ export async function localizeStoredGooglePhotos(): Promise<PhotoSweepResult> {
         "Connectors",
         `A stored contact photo is gone, so the contact shows its generated avatar: ${getErrorMessage(err)}`,
       );
-      replace.run(null, row.id, row.ownerId, row.avatarUrl);
+      write(row, null);
       result.cleared++;
+    }
+  }
+  if (result.saved + result.cleared > 0) {
+    // One cache flush for the whole sweep, as for any batch write.
+    aiCache.enterBatchMode();
+    try {
+      dispatchEvents();
+    } finally {
+      aiCache.exitBatchMode();
     }
   }
   return result;

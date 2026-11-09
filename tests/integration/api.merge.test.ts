@@ -73,6 +73,11 @@ describe("merge → audit log → undo", () => {
     expect(slim.some((c) => c.id === duplicateId)).toBe(false);
 
     // Undo the manual merge
+    const beforeUndo = (
+      sqlite.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM events").get() as {
+        id: number;
+      }
+    ).id;
     const undo = await request(app).post(
       `/api/dedupe/merge-log/${entry.id}/undo`,
     );
@@ -80,6 +85,30 @@ describe("merge → audit log → undo", () => {
     expect(undo.body.success).toBe(true);
     expect(undo.body.restoredContactId).toBe(duplicateId);
     expect(undo.body.conflicts).toHaveLength(0);
+
+    // The undo records its events, so the caches and every other listener
+    // follow: the duplicate is back, and the primary lost what moved back.
+    const undoEvents = sqlite
+      .prepare(
+        "SELECT type, subjectId, payload FROM events WHERE id > ? ORDER BY id",
+      )
+      .all(beforeUndo) as {
+      type: string;
+      subjectId: string;
+      payload: string;
+    }[];
+    expect(undoEvents).toContainEqual({
+      type: "contact.restored",
+      subjectId: duplicateId,
+      payload: "{}",
+    });
+    const primaryUpdate = undoEvents.find(
+      (e) => e.type === "contact.updated" && e.subjectId === primaryId,
+    );
+    expect(JSON.parse(primaryUpdate?.payload ?? "null")).toEqual({
+      changed: expect.arrayContaining(["emails", "phones"]),
+      bulk: false,
+    });
 
     // Duplicate is restored to the active list
     slim = await slimContacts();

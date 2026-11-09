@@ -18,6 +18,7 @@ import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { AppError, NotFoundError } from "../../utils/AppError.ts";
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
+import { dispatchEvents, recordEvent } from "../../events/index.ts";
 import type {
   ContactRow,
   HydratedContact,
@@ -797,6 +798,8 @@ export function undoSoftMerge(
     }
   }
 
+  // The primary's fields that step 4 puts back, for its event.
+  const revertedFields: string[] = [];
   // All or nothing: a step that throws rolls every step back, and the merge
   // stays as it was.
   const txn = sqlite.transaction(() => {
@@ -1121,6 +1124,7 @@ export function undoSoftMerge(
           }
         }
         if (Object.keys(scalarReverts).length > 0) {
+          revertedFields.push(...Object.keys(scalarReverts));
           scalarReverts.updatedAt = new Date().toISOString();
           db.update(schema.contacts)
             .set(scalarReverts as Partial<ContactRow>)
@@ -1155,6 +1159,27 @@ export function undoSoftMerge(
     // 6. Restore the duplicate contact's visibility
     _stmts.restoreDuplicate.run(entry.duplicateId, scope.ownerId);
 
+    // The events, so the subscribers and every other listener see the undo:
+    // the duplicate is back, and the primary lost the relations that moved
+    // back and the fields step 4 reverted. Interactions and tasks moved back
+    // too, but they are not contact fields.
+    recordEvent(scope, "contact.restored", entry.duplicateId, {});
+    const movedBack = Object.entries(snapshot?.changes?.movedRecords ?? {})
+      .filter(
+        ([relation, ids]) =>
+          relation !== "interactions" &&
+          relation !== "actionItems" &&
+          ids.length > 0,
+      )
+      .map(([relation]) => relation);
+    const changed = [...movedBack, ...revertedFields];
+    if (changed.length > 0) {
+      recordEvent(scope, "contact.updated", entry.primaryId, {
+        changed,
+        bulk: false,
+      });
+    }
+
     // 7. Mark the merge log entry as undone
     _stmts.undoMergeLog.run(mergeLogId, scope.ownerId);
 
@@ -1178,6 +1203,7 @@ export function undoSoftMerge(
   });
 
   txn();
+  dispatchEvents();
 
   scheduleSearchIndex(entry.primaryId);
   scheduleSearchIndex(entry.duplicateId);

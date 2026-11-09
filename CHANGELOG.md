@@ -9,6 +9,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Undoing a merge clears the AI answers and briefings cached while the two
+  contacts were one.
+
 ## [2.0.6] - 2026-11-04
 
 Upgrading runs one database migration when the server starts. The first

@@ -13,17 +13,31 @@ import { sqlite } from "../db.ts";
 import type { TagSummary } from "../../shared/contracts/tags.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { aiCache } from "../utils/aiCache.ts";
-import { scheduleSearchIndex } from "./search/indexQueue.ts";
+import { dispatchEvents, recordEvent } from "../events/index.ts";
+// The reactions to a contact write register when this module loads, as in
+// contactService.ts. A rename or a delete records `contact.updated` for every
+// contact it changed, so the search index, the owner's caches and every other
+// listener react as they do to any other tag edit.
+import "../events/contactSubscribers.ts";
 
-/** After a rename or delete changed these contacts: drop cached answers, reindex. */
-function afterTagChange(scope: Scope, ids: string[]): { affected: number } {
-  if (ids.length === 0) return { affected: 0 };
-  for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"]) {
-    aiCache.invalidateForOwner(tier, scope.ownerId);
+/**
+ * After a rename or delete committed: run the subscribers for the events it
+ * recorded. In the cache's batch mode, a thousand contacts cost one flush.
+ */
+function dispatchTagChange(ids: string[]): { affected: number } {
+  if (ids.length > 0) {
+    aiCache.enterBatchMode();
+    try {
+      dispatchEvents();
+    } finally {
+      aiCache.exitBatchMode();
+    }
   }
-  for (const id of ids) scheduleSearchIndex(id);
   return { affected: ids.length };
 }
+
+/** The event a rename or a delete records for each contact it changed. */
+const TAGS_CHANGED = { changed: ["tags"], bulk: true };
 
 const _stmts = {
   // `count` is the contacts the Network list shows. A rename and a delete
@@ -117,10 +131,11 @@ export const tagService = {
           _stmts.updateTagForContact.run(to, contactId, from);
         }
         _stmts.touchContact.run(contactId, scope.ownerId);
+        recordEvent(scope, "contact.updated", contactId, TAGS_CHANGED);
       }
     })();
 
-    return afterTagChange(scope, affectedIds);
+    return dispatchTagChange(affectedIds);
   },
 
   deleteTag(scope: Scope, tag: string): { affected: number } {
@@ -143,9 +158,10 @@ export const tagService = {
       _stmts.deleteTagForOwner.run(targetTag, scope.ownerId);
       for (const id of affectedIds) {
         _stmts.touchContact.run(id, scope.ownerId);
+        recordEvent(scope, "contact.updated", id, TAGS_CHANGED);
       }
     })();
 
-    return afterTagChange(scope, affectedIds);
+    return dispatchTagChange(affectedIds);
   },
 };

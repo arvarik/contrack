@@ -59,7 +59,7 @@ export const EVENT_SCHEMAS = {
    * and true for a delete that cannot be undone.
    */
   "contact.deleted": z.strictObject({ permanent: z.boolean() }),
-  /** A contact came back from the trash. */
+  /** A contact came back: from the trash, or by undoing the merge that hid it. */
   "contact.restored": z.strictObject({}),
   /**
    * Two contacts became one. The subject is the contact that stays, and
