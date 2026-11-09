@@ -730,9 +730,6 @@ export const contactService = {
           `UPDATE contacts SET ${setClauses}
             WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
         );
-        const deleteAddrStmt = Array.isArray(data.addresses)
-          ? sqlite.prepare("DELETE FROM contact_addresses WHERE contactId = ?")
-          : null;
         for (const id of owned) {
           const pinBefore = touchesAddress
             ? pinState(scope.ownerId, id)
@@ -740,8 +737,7 @@ export const contactService = {
           if (stmt.run(...values, id, scope.ownerId).changes) {
             if (Array.isArray(data.addresses)) {
               contactRepo.withDeferredChildFts(id, () => {
-                deleteAddrStmt!.run(id);
-                contactRepo._insertChildRecordsUnsafe(id, {
+                contactRepo._replaceChildRecordsUnsafe(id, {
                   addresses: data.addresses,
                 } as ChildRecordsPayload);
               });
@@ -808,13 +804,9 @@ export const contactService = {
         contactRepo.withDeferredChildFts(id, () => {
           const childPayload: ChildRecordsPayload = {};
           for (const key of childKeys) {
-            const config = RELATION_REGISTRY[key];
-            sqlite
-              .prepare(`DELETE FROM ${config.dbName} WHERE contactId = ?`)
-              .run(id);
             (childPayload as Record<string, unknown>)[key] = body[key];
           }
-          contactRepo._insertChildRecordsUnsafe(id, childPayload);
+          contactRepo._replaceChildRecordsUnsafe(id, childPayload);
         });
       }
       if (!Array.isArray(body.addresses) && body.location !== undefined) {

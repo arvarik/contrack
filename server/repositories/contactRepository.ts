@@ -28,6 +28,47 @@ export const RELATION_REGISTRY = {
   sources: { table: schema.contactSources, dbName: "contact_sources" },
 } as const;
 
+/** The columns that make a child row what it says, by table. */
+const ROW_CONTENT: Record<string, string[]> = {
+  contact_emails: ["email", "label"],
+  contact_phones: ["phone", "label"],
+  contact_addresses: ["address", "label"],
+  contact_social_links: ["platform", "url"],
+  contact_education: [
+    "school",
+    "degree",
+    "fieldOfStudy",
+    "startDate",
+    "endDate",
+    "description",
+  ],
+  contact_experience: [
+    "company",
+    "role",
+    "location",
+    "description",
+    "startDate",
+    "endDate",
+    "isCurrent",
+  ],
+  contact_sources: ["platform", "externalId"],
+  contact_tags: ["tag"],
+  contact_interests: ["interest"],
+  contact_attributes: ["name", "value"],
+  interactions: ["type", "title", "content", "date"],
+};
+
+/** True when two rows of one table say different things. */
+export function isChildRowModified(
+  table: string,
+  currentRow: Record<string, unknown>,
+  originalRow: Record<string, unknown>,
+): boolean {
+  return (ROW_CONTENT[table] ?? []).some(
+    (k) => (currentRow[k] ?? "") + "" !== (originalRow[k] ?? "") + "",
+  );
+}
+
 // URL utilities for social links
 
 /**
@@ -605,6 +646,49 @@ export const contactRepo = {
       contactRepo._insertChildRecordsUnsafe(contactId, body, sourceName),
     );
     txn();
+  },
+
+  /**
+   * INTERNAL: the caller must hold an open transaction. Replace each list in
+   * `body` with the new one. A row the new list holds unchanged keeps its id,
+   * `source` and `addedAt`, so a merge undo still finds the rows it moved and
+   * research still knows the rows it wrote. A new or edited row is `manual`.
+   */
+  _replaceChildRecordsUnsafe(
+    contactId: string,
+    body: ChildRecordsPayload,
+  ): void {
+    const tables = (
+      Object.keys(RELATION_REGISTRY) as (keyof typeof RELATION_REGISTRY)[]
+    )
+      .filter((key) => Array.isArray(body[key]))
+      .map((key) => RELATION_REGISTRY[key].dbName);
+    const rowsOf = (table: string) =>
+      sqlite
+        // tenant-lint: allow owner-checked by caller
+        .prepare(`SELECT * FROM ${table} WHERE contactId = ?`)
+        .all(contactId) as Record<string, unknown>[];
+    const before = tables.map((table) => ({ table, old: rowsOf(table) }));
+    for (const table of tables)
+      sqlite
+        // tenant-lint: allow owner-checked by caller
+        .prepare(`DELETE FROM ${table} WHERE contactId = ?`)
+        .run(contactId);
+    contactRepo._insertChildRecordsUnsafe(contactId, body);
+    for (const { table, old } of before) {
+      for (const row of rowsOf(table)) {
+        const i = old.findIndex((o) => !isChildRowModified(table, row, o));
+        if (i < 0) continue;
+        const [kept] = old.splice(i, 1);
+        const columns = ["id", "source", "addedAt"].filter((c) => c in kept);
+        sqlite
+          .prepare(
+            // tenant-lint: allow owner-checked by caller
+            `UPDATE ${table} SET ${columns.map((c) => `${c} = ?`).join(", ")} WHERE id = ?`,
+          )
+          .run(...columns.map((c) => kept[c]), row.id);
+      }
+    }
   },
 
   /**

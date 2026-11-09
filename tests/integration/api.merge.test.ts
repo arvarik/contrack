@@ -622,6 +622,43 @@ async function mergeThenFindLogId(
 }
 
 describe("undo after the survivor changed a child row", () => {
+  it("moves a row back when the survivor saved its list with the row unchanged", async () => {
+    const primaryId = await createContact({
+      name: "Saved List Primary",
+      emails: ["saved.p@test.com"],
+    });
+    const duplicateId = await createContact({
+      name: "Saved List Duplicate",
+      emails: ["saved.d@test.com"],
+    });
+    const logId = await mergeThenFindLogId(primaryId, duplicateId);
+
+    // Adding an email on the survivor saves its whole list.
+    await request(app)
+      .put(`/api/contacts/${primaryId}`)
+      .send({
+        emails: ["saved.p@test.com", "saved.d@test.com", "added.p@test.com"],
+      })
+      .expect(200);
+
+    const undo = await request(app).post(`/api/dedupe/merge-log/${logId}/undo`);
+    expect(undo.status).toBe(200);
+    expect(undo.body.conflicts).toEqual([]);
+    const emailsOf = (id: string) =>
+      (
+        sqlite
+          .prepare(
+            "SELECT email FROM contact_emails WHERE contactId = ? ORDER BY email",
+          )
+          .all(id) as { email: string }[]
+      ).map((row) => row.email);
+    expect(emailsOf(primaryId)).toEqual([
+      "added.p@test.com",
+      "saved.p@test.com",
+    ]);
+    expect(emailsOf(duplicateId)).toEqual(["saved.d@test.com"]);
+  });
+
   it("puts back every kind of child row that the survivor deleted", async () => {
     const primaryId = await createContact({ name: "Deleted Rows Primary" });
     const duplicateId = await createContact({ name: "Deleted Rows Duplicate" });

@@ -15,7 +15,10 @@ import * as schema from "../../db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
-import { contactRepo } from "../../repositories/contactRepository.ts";
+import {
+  contactRepo,
+  isChildRowModified,
+} from "../../repositories/contactRepository.ts";
 import { AppError, NotFoundError } from "../../utils/AppError.ts";
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
 import { dispatchEvents, recordEvent } from "../../events/index.ts";
@@ -676,48 +679,6 @@ function restoreChildRow(
       `INSERT INTO ${table} (${names.join(", ")}) VALUES (${names.map(() => "?").join(", ")})`,
     )
     .run(...names.map((name) => values[name] ?? null));
-}
-
-function isChildRowModified(
-  table: string,
-  currentRow: Record<string, unknown>,
-  originalRow: Record<string, unknown>,
-): boolean {
-  const compareKeys: Record<string, string[]> = {
-    contact_emails: ["email", "label"],
-    contact_phones: ["phone", "label"],
-    contact_addresses: ["address", "label"],
-    contact_social_links: ["platform", "url"],
-    contact_education: [
-      "school",
-      "degree",
-      "fieldOfStudy",
-      "startDate",
-      "endDate",
-      "description",
-    ],
-    contact_experience: [
-      "company",
-      "role",
-      "location",
-      "description",
-      "startDate",
-      "endDate",
-      "isCurrent",
-    ],
-    contact_sources: ["platform", "externalId"],
-    contact_tags: ["tag"],
-    contact_interests: ["interest"],
-    contact_attributes: ["name", "value"],
-    interactions: ["type", "title", "content", "date"],
-  };
-  const keys = compareKeys[table] ?? [];
-  for (const k of keys) {
-    const cur = (currentRow[k] ?? "") + "";
-    const orig = (originalRow[k] ?? "") + "";
-    if (cur !== orig) return true;
-  }
-  return false;
 }
 
 /**
