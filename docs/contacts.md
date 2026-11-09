@@ -197,8 +197,10 @@ The **Contact actions** menu, the three dots, holds these items in order:
 A placed contact shows a small map with **Open in map** and **Adjust pin**. A
 contact with an address and no pin says "Not on the map yet" and offers
 **Set location**. See [Move a pin by hand](map.md#move-a-pin-by-hand). The
-About text, schools and past jobs come from imports, **Add from text** and
-research, and have no box to type them in.
+About text comes from imports, connectors, **Add from text** and research.
+Schools and past jobs come only from research and **Add from text**, because
+no import reads them. None of these has a box to type in, except **Add a
+school** on the Research card after a research run.
 
 ## Notes and the timeline
 
