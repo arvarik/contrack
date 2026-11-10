@@ -107,14 +107,21 @@ async function ownNotes(
   }
 }
 
-/** The month group heading for a date: "August", or "December 2025". */
-function monthHeading(iso: string): string {
-  const date = new Date(iso);
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleString("en-US", {
-    month: "long",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
+/**
+ * The month group heading the page shows for a date: "August", or
+ * "December 2025". The page works it out in the browser's time zone, as the
+ * timeline does. This process runs in UTC on CI, where the first hours of a
+ * month in UTC are still the month before in the browser.
+ */
+function monthHeading(page: Page, iso: string): Promise<string> {
+  return page.evaluate((iso) => {
+    const date = new Date(iso);
+    const sameYear = date.getFullYear() === new Date().getFullYear();
+    return date.toLocaleString(undefined, {
+      month: "long",
+      ...(sameYear ? {} : { year: "numeric" }),
+    });
+  }, iso);
 }
 
 test.describe("desktop", () => {
@@ -1105,7 +1112,10 @@ test.describe("the timeline", () => {
       page.getByRole("heading", { level: 2, name: "This week" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 2, name: monthHeading(daysAgo(40)) }),
+      page.getByRole("heading", {
+        level: 2,
+        name: await monthHeading(page, daysAgo(40)),
+      }),
     ).toBeVisible();
     // The entry's tooltip is its full date.
     await expect(page.locator("li", { has: first })).toHaveAttribute(
