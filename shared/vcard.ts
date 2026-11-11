@@ -148,7 +148,9 @@ function splitLines(text: string): string[] {
     if (i < segments.length - 1) {
       while (end > 0 && segment.charCodeAt(end - 1) === 13) end--;
     }
-    for (const line of segment.slice(0, end).split("\r")) lines.push(line);
+    const line = end === segment.length ? segment : segment.slice(0, end);
+    if (!line.includes("\r")) lines.push(line);
+    else for (const part of line.split("\r")) lines.push(part);
   }
   return lines;
 }

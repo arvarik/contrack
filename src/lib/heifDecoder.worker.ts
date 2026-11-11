@@ -10,6 +10,8 @@
  * only when a photo needs it.
  */
 
+import { errorText } from "./utils";
+
 /** The answer to one photo: its pixels, or why there are none. */
 export type DecodeAnswer = { bitmap: ImageBitmap } | { error: string };
 
@@ -18,7 +20,7 @@ export type DecodeAnswer = { bitmap: ImageBitmap } | { error: string };
  * text, "Error: HEIF processing error", and with nothing when it cannot start.
  */
 function failureText(err: unknown): string {
-  const text = err instanceof Error ? err.message : err ? String(err) : "";
+  const text = errorText(err, err ? String(err) : "");
   return text.replace(/^Error:\s*/, "") || "no decoder could read it";
 }
 
