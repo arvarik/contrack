@@ -15,6 +15,24 @@ vi.mock("../../server/utils/urlSafety.ts", async (importOriginal) => ({
   safeFetch: safeFetchMock,
 }));
 
+/** Set to make the avatars folder fail the way a full disk does. */
+const disk = vi.hoisted(() => ({ full: false }));
+vi.mock("../../server/utils/paths.ts", async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import("../../server/utils/paths.ts")>();
+  return {
+    ...real,
+    ensureDir: (dir: string) => {
+      if (disk.full && dir.endsWith("avatars")) {
+        throw Object.assign(new Error("ENOSPC: no space left on device"), {
+          code: "ENOSPC",
+        });
+      }
+      return real.ensureDir(dir);
+    },
+  };
+});
+
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -120,6 +138,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  disk.full = false;
   vi.restoreAllMocks();
 });
 
@@ -208,6 +227,23 @@ describe("Google contact photos", () => {
     expect(result.stats).toMatchObject({ contacts: 1, photosNotRead: 1 });
     expect(avatarOf("people/c7")).toMatch(/^\/api\/avatar\//);
     expect(safeFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not count an inline photo the server failed to save, as on a full disk", async () => {
+    // The photo reads. The next sync can save it, so it is not "not read".
+    disk.full = true;
+
+    const result = await sync([
+      contactEvent(
+        "people/c8",
+        "Dot Builder",
+        `data:image/jpeg;base64,${photo.toString("base64")}`,
+      ),
+    ]);
+
+    expect(result.stats.contacts).toBe(1);
+    expect(result.stats.photosNotRead).toBeUndefined();
+    expect(avatarOf("people/c8")).toMatch(/^\/api\/avatar\//);
   });
 
   it("replaces a remote URL an older sync stored, on the next sync", async () => {

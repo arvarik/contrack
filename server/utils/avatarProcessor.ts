@@ -14,6 +14,7 @@ import { getErrorMessage } from "./helpers.ts";
 import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
 import { ValidationError } from "./AppError.ts";
 import { assertReadableImage } from "./imageFormats.ts";
+import { writeFileAtomically } from "./remoteImage.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
 // Raster image types only. SVG is left out on purpose: it can carry scripts and
@@ -34,58 +35,79 @@ const PROFILE_PHOTO_SIZE = 512;
 const PROFILE_PHOTO_QUALITY = 82;
 
 /**
- * Process a base64 data-URI avatar: resize, compress, save. Returns the URL
- * path (`/uploads/u/<ownerId>/avatars/abc123.jpg`), or null on failure.
+ * Save a base64 data-URI photo from a vCard as a 256 px JPEG under the
+ * caller's avatars folder, and return its URL path
+ * (`/uploads/u/<ownerId>/avatars/import-<digest>.jpg`).
+ *
+ * Throws a ValidationError when the photo cannot be read: not a base64 image,
+ * a format the server does not read, or bytes that do not decode. Any other
+ * error, such as a full disk, is the server's own, and a later try can work.
  */
-export async function processBase64Avatar(
+export async function saveBase64Avatar(
   scope: Scope,
   dataUri: string,
-): Promise<string | null> {
+): Promise<string> {
+  const match = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!match) throw new ValidationError("Not a base64 image");
+  const inputBuffer = Buffer.from(match[2], "base64");
+
+  // Content-addressed filename so re-importing or re-syncing the same photo
+  // reuses the file on disk rather than writing a new file every run. Only
+  // bytes that passed the check below are written under this name, and the
+  // write is atomic, so a file there is the finished copy.
+  const hash = crypto
+    .createHash("sha256")
+    .update(inputBuffer)
+    .digest("hex")
+    .slice(0, 16);
+  const filename = `import-${hash}.jpg`;
+  // The owner comes from the caller's scope, so the file lands in the same
+  // directory the stored URL will point at.
+  const outputPath = path.join(
+    ownerUploadDir(scope.ownerId, "avatars"),
+    filename,
+  );
+  if (fs.existsSync(outputPath)) {
+    return ownerUploadUrl(scope.ownerId, "avatars", filename);
+  }
+
+  // By its bytes: the type the data URI names is the file's claim.
+  await assertReadableImage(inputBuffer);
+  let jpeg: Buffer;
   try {
-    // Parse the data URI
-    const match = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!match) return null;
-
-    const base64Data = match[2];
-    const inputBuffer = Buffer.from(base64Data, "base64");
-    // By its bytes: the type the data URI names is the file's claim.
-    await assertReadableImage(inputBuffer);
-
-    // The owner comes from the caller's scope, so the file lands in the same
-    // directory the stored URL will point at.
-    const avatarDir = ownerUploadDir(scope.ownerId, "avatars");
-    ensureDir(avatarDir);
-
-    // Content-addressed filename so re-importing or re-syncing the same photo
-    // reuses the file on disk rather than writing a new file every run.
-    const hash = crypto
-      .createHash("sha256")
-      .update(inputBuffer)
-      .digest("hex")
-      .slice(0, 16);
-    const filename = `import-${hash}.jpg`;
-    const outputPath = path.join(avatarDir, filename);
-
-    if (fs.existsSync(outputPath)) {
-      return ownerUploadUrl(scope.ownerId, "avatars", filename);
-    }
-
-    // Resize + convert to JPEG
-    const info = await sharp(inputBuffer)
+    jpeg = await sharp(inputBuffer)
       .rotate()
       .resize(AVATAR_SIZE, AVATAR_SIZE, {
         fit: "cover",
         position: "center",
       })
       .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
-      .toFile(outputPath);
+      .toBuffer();
+  } catch (err) {
+    throw new ValidationError("The image could not be decoded", {
+      cause: err,
+    });
+  }
+  // A write cut short leaves no half photo under the name that is reused.
+  await writeFileAtomically(outputPath, jpeg);
 
-    log.debug(
-      "AvatarProcessor",
-      `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(info.size / 1024)}KB (${filename})`,
-    );
+  log.debug(
+    "AvatarProcessor",
+    `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(jpeg.length / 1024)}KB (${filename})`,
+  );
+  return ownerUploadUrl(scope.ownerId, "avatars", filename);
+}
 
-    return ownerUploadUrl(scope.ownerId, "avatars", filename);
+/**
+ * `saveBase64Avatar` for an import: the URL, or null on any failure, which
+ * leaves the contact its drawn avatar. Either way the photo is not saved.
+ */
+export async function processBase64Avatar(
+  scope: Scope,
+  dataUri: string,
+): Promise<string | null> {
+  try {
+    return await saveBase64Avatar(scope, dataUri);
   } catch (err: unknown) {
     log.warn(
       "AvatarProcessor",

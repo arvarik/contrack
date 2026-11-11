@@ -32,10 +32,8 @@ import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
 import { defaultAvatarUrl, isDefaultAvatarFor } from "../utils/avatarUrl.ts";
-import {
-  isBase64DataUri,
-  processBase64Avatar,
-} from "../utils/avatarProcessor.ts";
+import { isBase64DataUri, saveBase64Avatar } from "../utils/avatarProcessor.ts";
+import { ValidationError } from "../utils/AppError.ts";
 import {
   ensureLocalImage,
   imageHost,
@@ -176,7 +174,7 @@ export function fillFromRemote(
   return Object.keys(out).length > 0 ? out : null;
 }
 
-/** Contact avatars: 256 px square, the size processBase64Avatar writes. */
+/** Contact avatars: 256 px square, the size saveBase64Avatar writes. */
 const PHOTO_SIZE = 256;
 const PHOTO_JPEG_QUALITY = 80;
 /** A contact photo is tens of kilobytes. The cap refuses anything else. */
@@ -218,7 +216,7 @@ function photoFileName(remoteUrl: string): string {
  * Copy a connector's contact photo into the owner's avatars folder and return
  * the local URL. A browser that loads a googleusercontent.com URL tells Google
  * each time somebody opens the contact. The copy is re-encoded like
- * processBase64Avatar: a 256 px cover JPEG. The file name is the digest of the
+ * saveBase64Avatar: a 256 px cover JPEG. The file name is the digest of the
  * remote URL: an unchanged photo keeps its URL, so its file is reused with no
  * network call, and a changed photo gets a new file.
  *
@@ -250,7 +248,8 @@ export async function saveContactPhoto(
  * usable copy, and the contact keeps the avatar it has. The one exception is
  * the sync's own abort, which is rethrown so the run stops. `onNotRead` hears
  * of a photo that will not read on another try either, such as a HEIC photo,
- * so the run can count it. A network failure is not counted.
+ * so the run can count it. A network failure is not counted, and nor is a
+ * failure of the server's own, such as a full disk.
  */
 async function localContactPhoto(
   scope: Scope,
@@ -259,9 +258,18 @@ async function localContactPhoto(
   onNotRead: () => void,
 ): Promise<string | undefined> {
   if (isBase64DataUri(remoteUrl)) {
-    const saved = await processBase64Avatar(scope, remoteUrl);
-    if (!saved) onNotRead();
-    return saved ?? undefined;
+    try {
+      return await saveBase64Avatar(scope, remoteUrl);
+    } catch (err) {
+      const detail = `Inline contact photo was not saved: ${getErrorMessage(err)}`;
+      if (err instanceof ValidationError) {
+        log.debug("Connectors", detail);
+        onNotRead();
+      } else {
+        log.warn("Connectors", detail);
+      }
+      return undefined;
+    }
   }
   try {
     return await saveContactPhoto(scope, remoteUrl, signal);
