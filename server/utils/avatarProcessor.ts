@@ -28,6 +28,50 @@ export const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
   "image/avif": ".avif",
 };
 
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
+/**
+ * The type of a contact photo by its first bytes, one of
+ * AVATAR_MIME_EXTENSIONS, or null. The upload keeps the file as it came, so
+ * this is what stops an SVG or a page sent as image/png, which the app would
+ * then serve from its own origin. It reads signatures only: AVIF has no
+ * decoder here while sharp's HEIF loader is blocked (imageFormats.ts).
+ */
+export function avatarTypeOf(head: Buffer): string | null {
+  const ascii = (from: number, to: number) => head.toString("latin1", from, to);
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (head.subarray(0, 8).equals(PNG_SIGNATURE)) return "image/png";
+  if (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a") return "image/gif";
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
+  if (head.length >= 12 && ascii(4, 8) === "ftyp") {
+    // AVIF names itself as the major brand, or as a compatible brand after
+    // the minor version at bytes 12 to 16.
+    const end = Math.min(head.readUInt32BE(0), head.length);
+    for (let at = 8; at + 4 <= end; at += 4) {
+      if (at !== 12 && ["avif", "avis"].includes(ascii(at, at + 4))) {
+        return "image/avif";
+      }
+    }
+  }
+  return null;
+}
+
+/** The first bytes of a file, enough for `avatarTypeOf`. */
+export async function readFileHead(file: string, bytes = 64): Promise<Buffer> {
+  const handle = await fs.promises.open(file, "r");
+  try {
+    const head = Buffer.alloc(bytes);
+    const { bytesRead } = await handle.read(head, 0, bytes, 0);
+    return head.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
 const JPEG_QUALITY = 80;
 

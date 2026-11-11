@@ -3,11 +3,13 @@
 // no contact's name to a third party such as `api.dicebear.com`. These tests
 // pin the route's contract.
 
+import fs from "fs";
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { doubleMetaphone } from "../../server/utils/nlp/index.ts";
+import { ownerUploadDir } from "../../server/utils/paths.ts";
 
 const app = makeTestApp();
 
@@ -236,5 +238,50 @@ describe("the default avatar follows the name and pronouns", () => {
       .prepare("SELECT phoneticHash FROM contacts WHERE id = ?")
       .get(contact.id) as { phoneticHash: string };
     expect(row.phoneticHash).toBe(doubleMetaphone("Siobhan Phonetic").primary);
+  });
+});
+
+describe("POST /api/contacts/:id/avatar", () => {
+  const PNG_1X1 = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+
+  /** The files in the owner's avatars folder. */
+  const avatarFiles = (ownerId: string) => {
+    const dir = ownerUploadDir(ownerId, "avatars");
+    return fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
+  };
+
+  it("keeps a PNG, and refuses an SVG sent as one with no file left behind", async () => {
+    const created = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Sven Upload" });
+    const { id, ownerId, avatarUrl: drawn } = created.body;
+    expect(ownerId).toEqual(expect.any(String));
+
+    // The app serves the file as it came, from its own origin, so the bytes
+    // have to be a picture, whatever the part's type says.
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+    );
+    const before = avatarFiles(ownerId);
+    const refused = await request(app)
+      .post(`/api/contacts/${id}/avatar`)
+      .attach("avatar", svg, { filename: "x.png", contentType: "image/png" });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.code).toBe("VALIDATION_ERROR");
+    expect(avatarFiles(ownerId)).toEqual(before);
+    const unchanged = await request(app).get(`/api/contacts/${id}`);
+    expect(unchanged.body.avatarUrl).toBe(drawn);
+
+    const kept = await request(app)
+      .post(`/api/contacts/${id}/avatar`)
+      .attach("avatar", PNG_1X1, {
+        filename: "me.png",
+        contentType: "image/png",
+      });
+    expect(kept.status).toBe(200);
+    expect(kept.body.avatarUrl).toMatch(/\/avatars\/avatar-.+\.png$/);
   });
 });

@@ -17,6 +17,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The server never draws an SVG it was sent. An SVG named as another image
   type is refused as an account photo, and a contact gets a drawn avatar for
   one in a vCard.
+- A contact photo upload must be a JPEG, PNG, GIF, WebP or AVIF image by its
+  bytes, not only by the type the upload names, so an SVG or a page sent as
+  a PNG is refused and never served from your Contrack.
 
 ### Added
 

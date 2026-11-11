@@ -8,7 +8,10 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { extractVCardContacts, foldLine } from "../../../../shared/vcard.ts";
-import { processBase64Avatar } from "../../../../server/utils/avatarProcessor.ts";
+import {
+  avatarTypeOf,
+  processBase64Avatar,
+} from "../../../../server/utils/avatarProcessor.ts";
 import { scopeForOwnerId } from "../../../../server/tenancy/scope.ts";
 import { resolveUploadPath } from "../../../../server/utils/paths.ts";
 
@@ -97,5 +100,37 @@ describe("processBase64Avatar", () => {
   ])("saves nothing for %s", async (_label, bytes) => {
     const dataUri = `data:image/png;base64,${(await bytes()).toString("base64")}`;
     expect(await processBase64Avatar(scope, dataUri)).toBeNull();
+  });
+});
+
+describe("avatarTypeOf", () => {
+  /** The first bytes of an ISO BMFF file with these brands. */
+  const ftyp = (major: string, ...compatible: string[]) => {
+    const size = 16 + 4 * compatible.length;
+    const head = Buffer.alloc(size);
+    head.writeUInt32BE(size, 0);
+    head.write(`ftyp${major}`, 4, "latin1");
+    head.write(compatible.join(""), 16, "latin1");
+    return head;
+  };
+
+  it.each<[string, Promise<Buffer> | Buffer, string | null]>([
+    ["a JPEG", makeImage("jpeg"), "image/jpeg"],
+    ["a PNG", makeImage("png"), "image/png"],
+    ["a GIF", makeImage("gif"), "image/gif"],
+    ["a WebP", makeImage("webp"), "image/webp"],
+    ["an AVIF", makeImage("avif"), "image/avif"],
+    [
+      "an AVIF that names itself only as compatible",
+      ftyp("mif1", "miaf", "avif"),
+      "image/avif",
+    ],
+    ["a TIFF, which a browser does not draw", makeImage("tiff"), null],
+    ["an iPhone HEIC", ftyp("heic", "mif1", "heic"), null],
+    ["an SVG", Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), null],
+    ["an HTML page", Buffer.from("<!doctype html><script>x</script>"), null],
+    ["an empty file", Buffer.alloc(0), null],
+  ])("reads %s", async (_label, bytes, type) => {
+    expect(avatarTypeOf((await bytes).subarray(0, 64))).toBe(type);
   });
 });

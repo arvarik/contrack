@@ -10,6 +10,7 @@ import {
   type Request,
   type Response,
 } from "express";
+import fs from "fs";
 import multer from "multer";
 import {
   ensureDir,
@@ -53,10 +54,17 @@ import {
 } from "../../shared/researchDepth.ts";
 import { researchDepthSchema } from "../../shared/contracts/common.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
-import { AVATAR_MIME_EXTENSIONS } from "../utils/avatarProcessor.ts";
+import {
+  AVATAR_MIME_EXTENSIONS,
+  avatarTypeOf,
+  readFileHead,
+} from "../utils/avatarProcessor.ts";
 
 // Avatars go to uploads/u/<ownerId>/avatars/, so the destination callback
 // creates the caller's folder.
+
+const AVATAR_TYPES_ALLOWED =
+  "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed";
 
 const avatarStorage = multer.diskStorage({
   // The owner comes from req.principal, which multer hands this callback, so no
@@ -78,11 +86,7 @@ const uploadAvatar = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for avatars
   fileFilter: (_req, file, cb) => {
     if (file.mimetype in AVATAR_MIME_EXTENSIONS) return cb(null, true);
-    cb(
-      new ValidationError(
-        "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed",
-      ),
-    );
+    cb(new ValidationError(AVATAR_TYPES_ALLOWED));
   },
 });
 
@@ -613,6 +617,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     if (!req.file) throw new AppError("No image file provided", 400);
+    // By its bytes: the part's type is the client's claim, and the file is
+    // kept and served as it came.
+    if (!avatarTypeOf(await readFileHead(req.file.path))) {
+      await fs.promises.rm(req.file.path, { force: true });
+      throw new ValidationError(AVATAR_TYPES_ALLOWED);
+    }
 
     const updated = contactService.updateAvatar(
       scopeOf(req),
