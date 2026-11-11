@@ -5,7 +5,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import { Camera } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
+import { readablePhotoFile } from "../../lib/heifPhoto";
 import { DROPZONE_INPUT } from "../../lib/styles";
 
 interface AccountPhotoFieldProps {
@@ -17,11 +18,16 @@ interface AccountPhotoFieldProps {
   showRemoveCurrent?: boolean;
 }
 
+// AVIF and HEIC become a JPEG in the browser before they are sent: the server
+// reads neither.
 const ACCEPTED_TYPES = {
   "image/jpeg": [".jpg", ".jpeg"],
   "image/png": [".png"],
   "image/gif": [".gif"],
   "image/webp": [".webp"],
+  "image/avif": [".avif"],
+  "image/heic": [".heic"],
+  "image/heif": [".heif"],
 };
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -40,6 +46,8 @@ export const AccountPhotoField = ({
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
+  /** Set while a HEIC photo becomes a JPEG. */
+  const [reading, setReading] = useState(false);
 
   // Manage object URL lifecycle so memory does not leak
   useEffect(() => {
@@ -59,21 +67,29 @@ export const AccountPhotoField = ({
   }, [value, currentUrl]);
 
   const onDrop = useCallback(
-    (accepted: File[], rejections: FileRejection[]) => {
+    async (accepted: File[], rejections: FileRejection[]) => {
       if (rejections.length > 0) {
         const first = rejections[0].errors[0];
         if (first?.code === "file-too-large") {
           setError("Image must be under 10 MB");
         } else if (first?.code === "file-invalid-type") {
-          setError("Only JPEG, PNG, GIF, or WebP images are allowed");
+          setError(
+            "Only JPEG, PNG, GIF, WebP, AVIF or HEIC images are allowed",
+          );
         } else {
           setError(first?.message || "Invalid image file");
         }
         return;
       }
-      if (accepted.length > 0) {
-        setError(null);
-        onChange(accepted[0]);
+      if (accepted.length === 0) return;
+      setError(null);
+      setReading(true);
+      try {
+        onChange(await readablePhotoFile(accepted[0]));
+      } catch (err) {
+        setError(`Could not read the photo: ${errorText(err)}`);
+      } finally {
+        setReading(false);
       }
     },
     [onChange],
@@ -85,6 +101,7 @@ export const AccountPhotoField = ({
     maxSize: MAX_BYTES,
     maxFiles: 1,
     multiple: false,
+    disabled: reading,
     // Paste-to-upload is on by default since react-dropzone 19.2. Off, as
     // before, until it is a decision rather than a side effect.
     noPaste: true,
@@ -172,6 +189,12 @@ export const AccountPhotoField = ({
           )}
         </div>
       </div>
+
+      {reading && (
+        <p role="status" className="text-xs text-on-surface-variant">
+          Reading the photo…
+        </p>
+      )}
 
       {error && (
         <p

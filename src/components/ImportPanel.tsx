@@ -26,6 +26,7 @@ import {
   type ImportSource,
   type ImportedContact,
 } from "../lib/importers";
+import { convertHeifPhotos } from "../lib/heifPhoto";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, NetworkError, apiFetch } from "../api/client";
 import { refreshDuplicates } from "../api/suggestions";
@@ -389,6 +390,17 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     } catch (err: unknown) {
       return rejectFile(errorText(err) || "Could not read the file");
     }
+
+    // The server reads no HEIC photo, which is what an iPhone takes, so each
+    // one becomes a JPEG here. One that will not is counted in the summary.
+    await convertHeifPhotos(newContacts, (done, total) =>
+      setProgress({
+        phase: "importing",
+        processed: done,
+        total,
+        message: `Converting ${plural(total, "photo", "photos")}…`,
+      }),
+    );
 
     const id = crypto.randomUUID();
     pendingRef.current = { id, contacts: newContacts };

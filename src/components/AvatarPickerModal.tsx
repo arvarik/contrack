@@ -6,7 +6,7 @@
  * goes back to the pencil when it closes, by Apply, Cancel, Escape or the
  * close button (`returnFocusRef`).
  */
-import { useState, useCallback, type RefObject } from "react";
+import { useState, useCallback, useRef, type RefObject } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
 import { Upload, Check, RefreshCw } from "lucide-react";
@@ -14,6 +14,7 @@ import { Modal } from "./ui/Modal";
 import { useUploadAvatar, useSetDicebearAvatar } from "../api";
 import { toast } from "sonner";
 import { cn, errorText } from "../lib/utils";
+import { readablePhotoFile } from "../lib/heifPhoto";
 import {
   BTN_QUIET,
   DIALOG_ACTIONS,
@@ -117,22 +118,40 @@ export const AvatarPickerModal = ({
     url: string;
   } | null>(null);
 
+  /** Set while a HEIC photo becomes a JPEG. */
+  const [reading, setReading] = useState(false);
+  /** Bumped on close, so a photo read after the dialog closed is dropped. */
+  const opened = useRef(0);
+
   const uploadAvatar = useUploadAvatar();
   const setDicebear = useSetDicebearAvatar();
 
   const isPending = uploadAvatar.isPending || setDicebear.isPending;
 
   // ── Dropzone ──────────────────────────────────────────────────────────
-  const onDrop = useCallback((accepted: File[]) => {
+  const onDrop = useCallback(async (accepted: File[]) => {
     if (!accepted[0]) return;
-    const file = accepted[0];
-    const previewUrl = URL.createObjectURL(file);
-    setUploadPreview({ file, url: previewUrl });
+    const session = opened.current;
+    setReading(true);
+    try {
+      // A HEIC photo, which an iPhone takes, becomes a JPEG that the server
+      // and every browser can read.
+      const file = await readablePhotoFile(accepted[0]);
+      if (session !== opened.current) return;
+      setUploadPreview({ file, url: URL.createObjectURL(file) });
+    } catch (err) {
+      if (session === opened.current)
+        toast.error(`Could not read the photo: ${errorText(err)}`);
+    } finally {
+      if (session === opened.current) setReading(false);
+    }
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "image/*": [] },
+    // A HEIC file can come with no type on a system that does not know it.
+    accept: { "image/*": [".heic", ".heif"] },
+    disabled: reading,
     maxFiles: 1,
     maxSize: 10 * 1024 * 1024,
     // react-dropzone turns paste-to-upload on by default. Off until it is a
@@ -141,6 +160,8 @@ export const AvatarPickerModal = ({
   });
 
   const handleClose = () => {
+    opened.current += 1;
+    setReading(false);
     setSelectedUrl(null);
     setUploadPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
@@ -335,13 +356,18 @@ export const AvatarPickerModal = ({
                     <Upload className="w-7 h-7" />
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-semibold text-on-surface">
-                      {isDragActive
-                        ? "Drop it here"
-                        : "Choose a photo, or drop one here"}
+                    <p
+                      className="text-sm font-semibold text-on-surface"
+                      aria-live="polite"
+                    >
+                      {reading
+                        ? "Reading the photo…"
+                        : isDragActive
+                          ? "Drop it here"
+                          : "Choose a photo, or drop one here"}
                     </p>
                     <p className="text-xs text-on-surface-variant mt-1">
-                      JPEG, PNG, WebP, GIF, AVIF · up to 10 MB
+                      JPEG, PNG, WebP, GIF, AVIF, HEIC · up to 10 MB
                     </p>
                   </div>
                 </div>

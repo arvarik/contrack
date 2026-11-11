@@ -990,13 +990,13 @@ describe("the headline and the summary", () => {
 });
 
 describe("the avatar picker's upload tab", () => {
-  it("lists every format the server accepts, AVIF included", async () => {
+  it("lists every format it takes, AVIF and HEIC included", async () => {
     const { AvatarPickerModal } =
       await import("../../../../src/components/AvatarPickerModal");
     render(<AvatarPickerModal isOpen onClose={vi.fn()} contactId="c-1" />);
     fireEvent.click(screen.getByRole("button", { name: /Upload a photo/ }));
     expect(
-      await screen.findByText("JPEG, PNG, WebP, GIF, AVIF · up to 10 MB"),
+      await screen.findByText("JPEG, PNG, WebP, GIF, AVIF, HEIC · up to 10 MB"),
     ).toBeTruthy();
   });
 });
