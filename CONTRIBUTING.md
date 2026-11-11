@@ -63,7 +63,6 @@ npm run dev            # http://localhost:3210, with hot reload
 | `npm run lint`                  | Oxlint, `tsc --noEmit` and the tenant lint                       |
 | `npm run knip`                  | Find files, exports and types that nothing uses                  |
 | `npm run api:openapi`           | Write `docs/openapi.json` from the route contracts               |
-| `npm run notices`               | Write `public/third-party-notices.txt` from the build            |
 | `npm run format`                | Format with Prettier. CI runs `format:check`                     |
 | `npm run db:new <name>`         | Start the next schema migration from the template                |
 | `npm run db:enrich -- --apply`  | Make a test network of 5,000 people. Stop the server first       |
@@ -174,14 +173,6 @@ with its own floor for `server/`. `.agent/TESTING.md` has the rest.
   broken link or anchor, when `configuration.md`, `api-reference.md` or
   `keyboard-shortcuts.md` misses a variable, a route or a shortcut, and when
   `openapi.json` is not what `npm run api:openapi` writes.
-- **Third-party notices.** `public/third-party-notices.txt` lists every
-  package the build bundles and every production package the Docker image
-  installs, with its licence files, and the search models, fonts and data.
-  Every instance serves it at `/third-party-notices.txt`. A test fails when a
-  dependency changes and the file does not, so run `npm run notices` on Linux
-  x64, as CI is, and commit the file. A new dependency needs a licence that
-  the GNU AGPL v3 can ship: no GPL-2.0-only, non-commercial or unlicensed
-  code.
   - Take a screenshot from a production build on a scratch `DATA_DIR` that
     `npm run db:enrich -- --apply --count 400` filled with fictional people.
     Never use real contacts. Docs images are 8-bit palette PNGs.
@@ -292,6 +283,4 @@ Everyone who takes part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 ## License
 
 Contrack is licensed under the [GNU AGPL v3](LICENSE), and so is every
-contribution. The software and data it ships from others, and their
-licences, are in
-[`public/third-party-notices.txt`](public/third-party-notices.txt).
+contribution.

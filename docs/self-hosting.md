@@ -35,9 +35,6 @@ Open `http://localhost:3210`.
 - Each image carries a list of its packages (an SBOM) and a signed record of
   the build. [Verify the Docker image](../SECURITY.md#verify-the-docker-image)
   says how to check it.
-- The licences of the software and data the image ships from others are in
-  `/app/dist/third-party-notices.txt`, and every instance serves the file at
-  `/third-party-notices.txt`.
 - Add settings with `-e`, such as `-e GEMINI_API_KEY=your-key`, or set them in
   the app.
 

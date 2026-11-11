@@ -722,8 +722,6 @@ describe("the link preview and the kit's images", () => {
       "site.webmanifest",
       "theme-boot.js",
       "fonts",
-      // Written by npm run notices, and held to it by thirdPartyNotices.test.ts.
-      "third-party-notices.txt",
     ]);
     for (const entry of fs.readdirSync(file("public"))) {
       if (entry.startsWith(".")) continue;

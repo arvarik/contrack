@@ -87,8 +87,7 @@ the change. Say why in the pull request.
   (`tests/unit/frontend/style/`), and in `tests/unit/repo/` the environment
   docs (`envDocs.test.ts`), docs links and API docs coverage
   (`docs*.test.ts`), native TypeScript imports, the Node version, the Docker
-  runtime, the third-party notices (`thirdPartyNotices.test.ts`, which builds
-  the app), the settings page name and test database isolation.
+  runtime, the settings page name and test database isolation.
 - **Logging** (`logging.test.ts`): at `LOG_LEVEL=debug`, a new contact, a
   note, a palette search and an Ask question leave no name, title or question
   in the log, and no query string.
