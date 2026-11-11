@@ -153,6 +153,61 @@ test("the contact photo picker turns a HEIC photo into a JPEG", async ({
   }
 });
 
+test("the contact photo picker takes a JPEG as it is, and says why it refuses a file", async ({
+  page,
+  instance,
+}) => {
+  const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+    name: "Jo Jpeg",
+  });
+  // The same two colors as the HEIC, so the check below is the same.
+  const jpeg = await sharp({
+    create: { width: 96, height: 64, channels: 3, background: "#ff0000" },
+  })
+    .composite([
+      {
+        input: {
+          create: { width: 48, height: 64, channels: 3, background: "#0000ff" },
+        },
+        left: 48,
+        top: 0,
+      },
+    ])
+    .jpeg()
+    .toBuffer();
+  try {
+    await page.goto(`/contact/${id}`);
+    await page.getByRole("button", { name: "Change avatar" }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit avatar" });
+    await dialog.getByRole("button", { name: "Upload a photo" }).click();
+    const input = dialog.locator('input[type="file"]');
+
+    await input.setInputFiles({
+      name: "notes.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("not a photo"),
+    });
+    await expect(
+      page.getByText("Could not use the file: choose a photo"),
+    ).toBeVisible();
+
+    await input.setInputFiles({
+      name: "portrait.jpg",
+      mimeType: "image/jpeg",
+      buffer: jpeg,
+    });
+    await expect(dialog.getByText("portrait.jpg")).toBeVisible();
+    await dialog.getByRole("button", { name: "Apply" }).click();
+    await expect(page.getByText("Avatar updated")).toBeVisible();
+
+    const contact = await instance.api<SlimContact>("GET", `/contacts/${id}`);
+    expect(contact.avatarUrl).toMatch(/\/avatars\/avatar-.+\.jpg$/);
+    expectRedThenBlue(await sides(page, contact.avatarUrl!));
+  } finally {
+    await remove(instance, [id]);
+  }
+});
+
 gatedTest(
   "the account photo picker turns a HEIC photo into a JPEG",
   async ({ page }) => {

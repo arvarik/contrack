@@ -7,7 +7,7 @@
  * close button (`returnFocusRef`).
  */
 import { useState, useCallback, useRef, type RefObject } from "react";
-import { useDropzone } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
 import { Upload, Check, RefreshCw } from "lucide-react";
 import { Modal } from "./ui/Modal";
@@ -100,6 +100,18 @@ interface Props {
   returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
+/** Why the dropzone refused a file, as a toast says it. */
+function rejectionText(rejection: FileRejection): string {
+  switch (rejection.errors[0]?.code) {
+    case "file-too-large":
+      return "Could not use the photo: it must be under 10 MB";
+    case "file-invalid-type":
+      return "Could not use the file: choose a photo";
+    default:
+      return `Could not use the file: ${rejection.errors[0]?.message ?? "it was refused"}`;
+  }
+}
+
 export const AvatarPickerModal = ({
   isOpen,
   onClose,
@@ -129,28 +141,41 @@ export const AvatarPickerModal = ({
   const isPending = uploadAvatar.isPending || setDicebear.isPending;
 
   // ── Dropzone ──────────────────────────────────────────────────────────
-  const onDrop = useCallback(async (accepted: File[]) => {
-    if (!accepted[0]) return;
-    const session = opened.current;
-    setReading(true);
-    try {
-      // A HEIC photo, which an iPhone takes, becomes a JPEG that the server
-      // and every browser can read.
-      const file = await readablePhotoFile(accepted[0]);
-      if (session !== opened.current) return;
-      setUploadPreview({ file, url: URL.createObjectURL(file) });
-    } catch (err) {
-      if (session === opened.current)
-        toast.error(`Could not read the photo: ${errorText(err)}`);
-    } finally {
-      if (session === opened.current) setReading(false);
-    }
-  }, []);
+  const onDrop = useCallback(
+    async (accepted: File[], rejected: FileRejection[]) => {
+      if (rejected.length > 0) {
+        toast.error(rejectionText(rejected[0]));
+        return;
+      }
+      if (!accepted[0]) return;
+      const session = opened.current;
+      setReading(true);
+      try {
+        // A HEIC photo, which an iPhone takes, becomes a JPEG that the server
+        // and every browser can read.
+        const file = await readablePhotoFile(accepted[0]);
+        if (session !== opened.current) return;
+        setUploadPreview({ file, url: URL.createObjectURL(file) });
+      } catch (err) {
+        if (session === opened.current)
+          toast.error(`Could not read the photo: ${errorText(err)}`);
+      } finally {
+        if (session === opened.current) setReading(false);
+      }
+    },
+    [],
+  );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    // A HEIC file can come with no type on a system that does not know it.
-    accept: { "image/*": [".heic", ".heif"] },
+    // Any image, and a HEIC file by its name: it can come with no type on a
+    // system that does not know it. Extensions listed under "image/*" would
+    // narrow it to those extensions alone, so each has its own entry.
+    accept: {
+      "image/*": [],
+      "image/heic": [".heic"],
+      "image/heif": [".heif"],
+    },
     disabled: reading,
     maxFiles: 1,
     maxSize: 10 * 1024 * 1024,
