@@ -301,6 +301,14 @@ describe("the same import id twice", () => {
   });
 });
 
+/** A synthetic HEIC as a data URI: a photo the server cannot read. */
+function heicPhoto(): string {
+  const bytes = readFileSync(
+    path.resolve(import.meta.dirname, "../fixtures/images/photo.heic"),
+  );
+  return `data:image/heic;base64,${bytes.toString("base64")}`;
+}
+
 // A photo the server cannot read
 
 describe("a photo the server cannot read", () => {
@@ -474,6 +482,23 @@ describe("a row that fails", () => {
     ).toEqual([]);
   });
 
+  it("keeps its lost photo counted when it is run again", async () => {
+    // The kept payload has no photo once the server failed to read it, so
+    // the row has to remember that itself.
+    const broken = breakRow("Hal Heic");
+    const id = crypto.randomUUID();
+    await stream(
+      [{ name: "Ada Lovelace" }, { name: "Hal Heic", avatarUrl: heicPhoto() }],
+      id,
+    );
+    broken.mockRestore();
+
+    await request(app).post(`/api/imports/${id}/retry`).expect(200);
+    const rec = await until(id, "complete");
+    expect(rec).toMatchObject({ imported: 2, failed: 0, photosNotRead: 1 });
+    expect(rec.summary).toMatchObject({ photosNotRead: 1 });
+  });
+
   it("refuses a retry when nothing failed", async () => {
     const id = crypto.randomUUID();
     await stream([{ name: "Ada Lovelace" }], id);
@@ -510,7 +535,12 @@ describe("an import that stops part way", () => {
         real(s, importId, index, contactId, name);
       });
     const id = crypto.randomUUID();
-    const rows = Array.from({ length: 260 }, (_, i) => ({ name: `Row ${i}` }));
+    const rows: { name: string; avatarUrl?: string }[] = Array.from(
+      { length: 260 },
+      (_, i) => ({ name: `Row ${i}` }),
+    );
+    // A row the run never reached, whose photo the server could not read.
+    rows[257] = { name: "Row 257", avatarUrl: heicPhoto() };
     const { frames } = await stream(rows, id);
     expect(frames.some((f) => f.done)).toBe(false);
     expect(contactCount()).toBe(250);
@@ -529,6 +559,7 @@ describe("an import that stops part way", () => {
     const retry = await request(app).post(`/api/imports/${id}/retry`);
     expect(retry.body).toMatchObject({ retried: 10, imported: 260, failed: 0 });
     expect(contactCount()).toBe(260);
+    expect(await until(id, "complete")).toMatchObject({ photosNotRead: 1 });
   });
 
   it("settles a run whose process died between batches, and imports nothing twice", async () => {

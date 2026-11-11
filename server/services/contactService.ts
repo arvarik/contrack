@@ -612,7 +612,15 @@ export const contactService = {
             if (!importId) throw err;
             failed++;
             const message = getErrorMessage(err);
-            importService.rowFailed(scope, importId, index, c.name, message, c);
+            importService.rowFailed(
+              scope,
+              importId,
+              index,
+              c.name,
+              message,
+              c,
+              photoNotRead.has(i),
+            );
             log.warn(
               "ContactService",
               `Import ${importId} row ${index} failed: ${message}`,
@@ -645,7 +653,11 @@ export const contactService = {
           importService.recordPending(
             scope,
             importId,
-            validContacts.map((payload, index) => ({ index, payload })),
+            validContacts.map((payload, index) => ({
+              index,
+              payload,
+              photoNotRead: photoNotRead.has(index),
+            })),
           );
         }
         // At least one batch, so an empty import is marked imported too.
