@@ -278,7 +278,6 @@ const CANONICAL: Record<string, string> = {
   "LGPL-3.0": "LGPL-3.0",
   "LGPL-3.0-or-later": "LGPL-3.0",
   "OFL-1.1": "OFL-1.1",
-  "BSD-2-Clause": "BSD-2-Clause",
   "BSD-3-Clause": "BSD-3-Clause",
 };
 
