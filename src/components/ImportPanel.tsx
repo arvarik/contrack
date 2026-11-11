@@ -18,6 +18,7 @@ import {
   RotateCw,
   WifiOff,
   ChevronDown,
+  ImageOff,
 } from "lucide-react";
 import {
   SOURCE_FILES,
@@ -49,7 +50,7 @@ import {
 import { useAuth } from "./auth/AuthGate";
 import { TAB_CONTAINER, TONE_WASH, tabItem } from "../lib/styles";
 import { DURATION, EASE } from "../lib/motion";
-import { cn, errorText } from "../lib/utils";
+import { cn, errorText, plural } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
 interface ImportPanelProps {
@@ -218,6 +219,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                 needsReview: 0,
                 newUnique: record.imported,
                 failed: record.failed,
+                photosNotRead: record.photosNotRead,
               },
               record.error,
             );
@@ -674,6 +676,25 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                       {skipped} {skipped === 1 ? "entry has" : "entries have"}{" "}
                       no name and {skipped === 1 ? "was" : "were"} not imported
                     </p>
+                  </div>
+                )}
+
+                {summary.photosNotRead > 0 && (
+                  <div className="flex items-center gap-3 px-5 py-3.5">
+                    <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
+                      <ImageOff className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-on-surface">
+                        {plural(summary.photosNotRead, "photo", "photos")} could
+                        not be read
+                      </p>
+                      <p className="text-xs text-on-surface-variant">
+                        {summary.photosNotRead === 1
+                          ? "That contact has a drawn avatar. Add a photo on its page"
+                          : "Those contacts have drawn avatars. Add a photo on each page"}
+                      </p>
+                    </div>
                   </div>
                 )}
 

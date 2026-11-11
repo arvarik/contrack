@@ -306,7 +306,9 @@ router.post(
       }
 
       // Phase 1: Import
-      let written: { count: number; createdIds: string[]; failed: number };
+      let written: Awaited<
+        ReturnType<typeof contactService.bulkCreateContacts>
+      >;
       try {
         written = await contactService.bulkCreateContacts(
           scope,
@@ -335,7 +337,7 @@ router.post(
 
       log.info(
         "API",
-        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed (import ${importId})`,
+        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed, ${written.photosNotRead} photos not read (import ${importId})`,
       );
 
       // Phases 2 to 4: fingerprints, the duplicate check, the summary. One
@@ -359,11 +361,14 @@ router.post(
           status: record.status,
           count: record.imported,
           failed: record.failed,
+          photosNotRead: record.photosNotRead,
         });
         return;
       }
 
-      let written: { count: number; createdIds: string[]; failed: number };
+      let written: Awaited<
+        ReturnType<typeof contactService.bulkCreateContacts>
+      >;
       try {
         written = await contactService.bulkCreateContacts(
           scope,
@@ -377,7 +382,7 @@ router.post(
       }
       log.info(
         "API",
-        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed (import ${importId})`,
+        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed, ${written.photosNotRead} photos not read (import ${importId})`,
       );
 
       // The tail outlives the response and waits out the settle delay first.
@@ -421,6 +426,7 @@ router.post(
         success: true,
         count: written.count,
         failed: written.failed,
+        photosNotRead: written.photosNotRead,
         importId,
       });
     }

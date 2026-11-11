@@ -42,6 +42,7 @@ const SUMMARY = {
   needsReview: 0,
   newUnique: 2,
   failed: 0,
+  photosNotRead: 1,
 };
 
 describe("readImportStream", () => {

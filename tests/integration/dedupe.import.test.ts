@@ -418,6 +418,7 @@ describe("POST /api/contacts/bulk with a stream", () => {
       needsReview: 1,
       newUnique: 1,
       failed: 0,
+      photosNotRead: 0,
     });
   });
 

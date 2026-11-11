@@ -87,6 +87,7 @@ const SUMMARY = {
   needsReview: 0,
   newUnique: 2,
   failed: 0,
+  photosNotRead: 0,
 };
 
 function record(partial: Partial<ImportRecord> & { id: string }): ImportRecord {
@@ -98,6 +99,7 @@ function record(partial: Partial<ImportRecord> & { id: string }): ImportRecord {
     processed: 1,
     imported: 0,
     failed: 0,
+    photosNotRead: 0,
     summary: null,
     error: null,
     createdAt: "2026-09-14T00:00:00.000Z",
@@ -294,7 +296,7 @@ describe("a stream that ends without a done frame", () => {
         id: importId,
         status: "complete",
         phase: "done",
-        summary: SUMMARY,
+        summary: { ...SUMMARY, photosNotRead: 2 },
         imported: 2,
       }),
     });
@@ -302,6 +304,7 @@ describe("a stream that ends without a done frame", () => {
       expect(screen.getByText("Import complete")).toBeTruthy(),
     );
     expect(screen.getByText("2 new contacts")).toBeTruthy();
+    expect(screen.getByText("2 photos could not be read")).toBeTruthy();
     // The remembered import is kept until the person dismisses it.
     expect(recallImport("acct-1")?.importId).toBe(importId);
 

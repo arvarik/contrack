@@ -496,6 +496,10 @@ export const contactRoutes = {
         success: z.literal(true),
         count: z.number().int(),
         failed: z.number().int(),
+        photosNotRead: z
+          .number()
+          .int()
+          .describe("Saved contacts whose photo could not be read"),
         importId: z.string(),
       }),
       z.strictObject({
@@ -505,6 +509,7 @@ export const contactRoutes = {
         status: z.enum(IMPORT_STATUSES),
         count: z.number().int(),
         failed: z.number().int(),
+        photosNotRead: z.number().int(),
       }),
     ]),
   }),

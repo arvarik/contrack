@@ -537,20 +537,29 @@ export const contactService = {
     validContacts: NewContactPayload[],
     onProgress?: (processed: number, total: number, phase: string) => void,
     options: { importId?: string; rowIndexes?: number[] } = {},
-  ): Promise<{ count: number; createdIds: string[]; failed: number }> {
+  ): Promise<{
+    count: number;
+    createdIds: string[];
+    failed: number;
+    photosNotRead: number;
+  }> {
     if (!Array.isArray(validContacts)) {
-      return { count: 0, createdIds: [], failed: 0 };
+      return { count: 0, createdIds: [], failed: 0, photosNotRead: 0 };
     }
     const total = validContacts.length;
     const { importId, rowIndexes } = options;
 
     // Phase 1: Process base64 data-URI avatars (from VCF imports) into optimized files
-    // This runs before the SQLite transaction since sharp is async
+    // This runs before the SQLite transaction since sharp is async. A photo
+    // that cannot be read leaves the drawn avatar, and its row says so, so the
+    // summary can count it.
+    const photoNotRead = new Set<number>();
     for (let i = 0; i < total; i++) {
       const c = validContacts[i];
       if (isBase64DataUri(c.avatarUrl)) {
         const fileUrl = await processBase64Avatar(scope, c.avatarUrl);
         c.avatarUrl = fileUrl; // null if processing failed; smart avatar fallback below
+        if (!fileUrl) photoNotRead.add(i);
       }
       onProgress?.(i + 1, total, "Processing images");
     }
@@ -561,6 +570,7 @@ export const contactService = {
     // other requests run.
     let count = 0;
     let failed = 0;
+    let photosNotRead = 0;
     const createdIds: string[] = [];
     try {
       /** One row. A savepoint when nested in the batch below. */
@@ -611,8 +621,16 @@ export const contactService = {
           }
           createdIds.push(id);
           count++;
+          if (photoNotRead.has(i)) photosNotRead++;
           if (importId)
-            importService.rowDone(scope, importId, index, id, c.name);
+            importService.rowDone(
+              scope,
+              importId,
+              index,
+              id,
+              c.name,
+              photoNotRead.has(i),
+            );
         }
         // Inside the transaction on purpose. The status and the last
         // contacts commit together or not at all.
@@ -646,7 +664,7 @@ export const contactService = {
       dispatchAsBatch();
     }
     onProgress?.(total, total, "Complete");
-    return { count, createdIds, failed };
+    return { count, createdIds, failed, photosNotRead };
   },
 
   /**

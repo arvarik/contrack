@@ -58,6 +58,8 @@ export interface ImportSummary {
   needsReview: number;
   newUnique: number;
   failed: number;
+  /** Saved contacts whose vCard photo could not be read. */
+  photosNotRead: number;
 }
 
 export interface ImportRecord {
@@ -69,6 +71,7 @@ export interface ImportRecord {
   processed: number;
   imported: number;
   failed: number;
+  photosNotRead: number;
   summary: ImportSummary | null;
   error: string | null;
   createdAt: string;
@@ -95,6 +98,7 @@ interface ImportTableRow {
   processed: number;
   imported: number;
   failed: number;
+  photosNotRead: number;
   autoMerged: number | null;
   needsReview: number | null;
   newUnique: number | null;
@@ -146,7 +150,7 @@ const _stmts = {
   restart: sqlite.prepare(`
     UPDATE imports
        SET status = 'running', phase = 'importing', message = ?, total = ?,
-           processed = 0, imported = 0, failed = 0,
+           processed = 0, imported = 0, failed = 0, photosNotRead = 0,
            autoMerged = NULL, needsReview = NULL, newUnique = NULL,
            error = NULL, completedAt = NULL, updatedAt = CURRENT_TIMESTAMP
      WHERE id = ? AND ownerId = ?
@@ -159,12 +163,12 @@ const _stmts = {
   ),
 
   rowDone: sqlite.prepare(`
-    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload)
-    SELECT ?, ?, 'done', ?, ?, NULL, NULL
+    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload, photoNotRead)
+    SELECT ?, ?, 'done', ?, ?, NULL, NULL, ?
      WHERE EXISTS (SELECT 1 FROM imports WHERE id = ? AND ownerId = ?)
     ON CONFLICT(importId, rowIndex) DO UPDATE SET
       status = 'done', contactId = excluded.contactId, name = excluded.name,
-      error = NULL, payload = NULL
+      error = NULL, payload = NULL, photoNotRead = excluded.photoNotRead
   `),
 
   /**
@@ -206,6 +210,7 @@ const _stmts = {
            processed = total,
            imported = (SELECT COUNT(*) FROM import_rows WHERE importId = imports.id AND status = 'done'),
            failed = (SELECT COUNT(*) FROM import_rows WHERE importId = imports.id AND status = 'failed'),
+           photosNotRead = (SELECT COUNT(*) FROM import_rows WHERE importId = imports.id AND status = 'done' AND photoNotRead = 1),
            updatedAt = CURRENT_TIMESTAMP
      WHERE id = ? AND ownerId = ?
   `),
@@ -353,6 +358,7 @@ function toRecord(row: ImportTableRow): ImportRecord {
           needsReview: row.needsReview ?? 0,
           newUnique: row.newUnique ?? 0,
           failed: row.failed,
+          photosNotRead: row.photosNotRead,
         }
       : null;
   return {
@@ -364,6 +370,7 @@ function toRecord(row: ImportTableRow): ImportRecord {
     processed: row.processed,
     imported: row.imported,
     failed: row.failed,
+    photosNotRead: row.photosNotRead,
     summary,
     error: row.error,
     createdAt: row.createdAt,
@@ -508,14 +515,24 @@ export const importService = {
   // `contactService.bulkCreateContacts`, so each row commits with its contact
   // or not at all, and `markImported` commits with the last batch.
 
+  /** A saved row. `photoNotRead` when its contact lost the photo it held. */
   rowDone(
     scope: Scope,
     id: string,
     index: number,
     contactId: string,
     name: string,
+    photoNotRead = false,
   ): void {
-    _stmts.rowDone.run(id, index, contactId, name, id, scope.ownerId);
+    _stmts.rowDone.run(
+      id,
+      index,
+      contactId,
+      name,
+      photoNotRead ? 1 : 0,
+      id,
+      scope.ownerId,
+    );
   },
 
   rowFailed(

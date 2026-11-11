@@ -22,6 +22,8 @@ export interface ImportSummary {
   newUnique: number;
   /** Rows the server could not write. Each is kept and can be retried. */
   failed: number;
+  /** Saved contacts whose photo could not be read. */
+  photosNotRead: number;
 }
 
 /** One import as `GET /api/imports/:id` describes it. */
@@ -34,6 +36,7 @@ export interface ImportRecord {
   processed: number;
   imported: number;
   failed: number;
+  photosNotRead: number;
   /** Set once the status is `complete`, null before. */
   summary: ImportSummary | null;
   error: string | null;

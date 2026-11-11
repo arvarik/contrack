@@ -49,6 +49,7 @@ function summaryOf(value: unknown): ImportSummary | null {
     needsReview: n("needsReview"),
     newUnique: n("newUnique"),
     failed: n("failed"),
+    photosNotRead: n("photosNotRead"),
   };
 }
 

@@ -11,6 +11,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import sharp from "sharp";
 
 process.env.IMPORT_SETTLE_MS = "20";
 
@@ -40,6 +43,7 @@ interface Frame {
     needsReview: number;
     newUnique: number;
     failed: number;
+    photosNotRead: number;
   } | null;
 }
 
@@ -52,6 +56,7 @@ interface Record {
   processed: number;
   imported: number;
   failed: number;
+  photosNotRead: number;
   summary: Frame["summary"];
   error: string | null;
   completedAt: string | null;
@@ -187,6 +192,7 @@ describe("every import leaves a record", () => {
       needsReview: 0,
       newUnique: 1,
       failed: 0,
+      photosNotRead: 0,
     });
   });
 
@@ -295,6 +301,71 @@ describe("the same import id twice", () => {
   });
 });
 
+// A photo the server cannot read
+
+describe("a photo the server cannot read", () => {
+  // A synthetic 96 by 64 HEIC, the format an iPhone takes, which the server
+  // does not read. The browser converts one before it sends it.
+  const heic = readFileSync(
+    path.resolve(import.meta.dirname, "../fixtures/images/photo.heic"),
+  ).toString("base64");
+  const svg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>',
+  ).toString("base64");
+
+  async function rows() {
+    const jpeg = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "#006a91" },
+    })
+      .jpeg()
+      .toBuffer();
+    return [
+      {
+        name: "Pia Photo",
+        avatarUrl: `data:image/jpeg;base64,${jpeg.toString("base64")}`,
+      },
+      { name: "Hal Heic", avatarUrl: `data:image/heic;base64,${heic}` },
+      { name: "Sam Svg", avatarUrl: `data:image/png;base64,${svg}` },
+      { name: "Nell No Photo" },
+    ];
+  }
+
+  function avatarOf(name: string): string {
+    return (
+      sqlite
+        .prepare(
+          "SELECT avatarUrl FROM contacts WHERE ownerId = ? AND name = ?",
+        )
+        .get(owner, name) as { avatarUrl: string }
+    ).avatarUrl;
+  }
+
+  it("is counted on the summary, and its contact keeps a drawn avatar", async () => {
+    const id = crypto.randomUUID();
+    const { frames } = await stream(await rows(), id);
+    expect(frames.at(-1)).toMatchObject({
+      done: true,
+      summary: { imported: 4, failed: 0, photosNotRead: 2 },
+    });
+    expect(await record(id)).toMatchObject({ imported: 4, photosNotRead: 2 });
+
+    expect(avatarOf("Pia Photo")).toMatch(/^\/uploads\/u\/.+\/avatars\//);
+    for (const name of ["Hal Heic", "Sam Svg", "Nell No Photo"]) {
+      expect(avatarOf(name)).toMatch(/^\/api\/avatar\//);
+    }
+  });
+
+  it("is counted on the JSON path, and again from the record for the same id", async () => {
+    const id = crypto.randomUUID();
+    const first = await json(await rows(), id);
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({ count: 4, photosNotRead: 2 });
+
+    const again = await json(await rows(), id);
+    expect(again.body).toMatchObject({ repeated: true, photosNotRead: 2 });
+  });
+});
+
 // A row that fails
 
 describe("a row that fails", () => {
@@ -396,6 +467,7 @@ describe("a row that fails", () => {
       needsReview: 0,
       newUnique: 2,
       failed: 0,
+      photosNotRead: 0,
     });
     expect(
       (await request(app).get(`/api/imports/${id}/rows`)).body.rows,
@@ -530,6 +602,7 @@ describe("an import whose duplicate check was interrupted", () => {
       needsReview: 0,
       newUnique: 1,
       failed: 0,
+      photosNotRead: 0,
     });
     // The pair the check found is merged, once.
     const merged = sqlite

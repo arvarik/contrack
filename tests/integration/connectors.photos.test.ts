@@ -17,6 +17,7 @@ vi.mock("../../server/utils/urlSafety.ts", async (importOriginal) => ({
 
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 import sharp from "sharp";
 import { sqlite } from "../../server/db.ts";
 import { ingestStream } from "../../server/connectors/ingest.ts";
@@ -157,16 +158,20 @@ describe("Google contact photos", () => {
     expect(avatarOf("people/c2")).toBe(first);
   });
 
+  // A photo that will not read on another try either is counted for the run
+  // history. A network failure is not.
   it.each([
     [
       "the download fails",
       () => safeFetchMock.mockImplementation(async () => served("gone", 404)),
+      1,
     ],
     [
       "the network is down",
       () => safeFetchMock.mockRejectedValue(new TypeError("fetch failed")),
+      undefined,
     ],
-  ])("stores no remote URL when %s", async (_failure, fail) => {
+  ])("stores no remote URL when %s", async (_failure, fail, notRead) => {
     fail();
 
     const result = await sync([
@@ -176,10 +181,33 @@ describe("Google contact photos", () => {
     // The contact and its link exist. Without them `avatarOf` is undefined,
     // and the checks below would pass with nothing stored at all.
     expect(result.stats.contacts).toBe(1);
+    expect(result.stats.photosNotRead).toBe(notRead);
     const avatar = avatarOf("people/c3");
     expect(avatar).not.toBeUndefined();
     expect(avatar ?? "").not.toMatch(/^https?:/);
     expect(avatar ?? "").not.toContain("googleusercontent");
+  });
+
+  it("counts a card's inline HEIC photo as not read, and keeps the drawn avatar", async () => {
+    // A synthetic HEIC, as a CardDAV card from an iPhone can carry. The
+    // server does not read HEIF.
+    const heic = fs
+      .readFileSync(
+        path.resolve(import.meta.dirname, "../fixtures/images/photo.heic"),
+      )
+      .toString("base64");
+
+    const result = await sync([
+      contactEvent(
+        "people/c7",
+        "Hal Builder",
+        `data:image/heic;base64,${heic}`,
+      ),
+    ]);
+
+    expect(result.stats).toMatchObject({ contacts: 1, photosNotRead: 1 });
+    expect(avatarOf("people/c7")).toMatch(/^\/api\/avatar\//);
+    expect(safeFetchMock).not.toHaveBeenCalled();
   });
 
   it("replaces a remote URL an older sync stored, on the next sync", async () => {

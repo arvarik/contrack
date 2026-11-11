@@ -248,15 +248,20 @@ export async function saveContactPhoto(
 /**
  * `saveContactPhoto` for a sync: the local URL, or undefined when there is no
  * usable copy, and the contact keeps the avatar it has. The one exception is
- * the sync's own abort, which is rethrown so the run stops.
+ * the sync's own abort, which is rethrown so the run stops. `onNotRead` hears
+ * of a photo that will not read on another try either, such as a HEIC photo,
+ * so the run can count it. A network failure is not counted.
  */
 async function localContactPhoto(
   scope: Scope,
   remoteUrl: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  onNotRead: () => void,
 ): Promise<string | undefined> {
   if (isBase64DataUri(remoteUrl)) {
-    return (await processBase64Avatar(scope, remoteUrl)) ?? undefined;
+    const saved = await processBase64Avatar(scope, remoteUrl);
+    if (!saved) onNotRead();
+    return saved ?? undefined;
   }
   try {
     return await saveContactPhoto(scope, remoteUrl, signal);
@@ -264,8 +269,12 @@ async function localContactPhoto(
     signal?.throwIfAborted();
     // The host only: a photo URL carries an access token in its path.
     const detail = `Contact photo from ${imageHost(remoteUrl)} was not saved: ${getErrorMessage(err)}`;
-    if (isTransientImageError(err)) log.warn("Connectors", detail);
-    else log.debug("Connectors", detail);
+    if (isTransientImageError(err)) {
+      log.warn("Connectors", detail);
+    } else {
+      log.debug("Connectors", detail);
+      onNotRead();
+    }
     return undefined;
   }
 }
@@ -1379,7 +1388,9 @@ export async function ingestStream(
       const remoteUrl = event.photoUrl;
       const ready = photoSlot(async (): Promise<SyncEvent> => ({
         ...event,
-        photoUrl: await localContactPhoto(scope, remoteUrl, signal),
+        photoUrl: await localContactPhoto(scope, remoteUrl, signal, () => {
+          stats.photosNotRead = (stats.photosNotRead ?? 0) + 1;
+        }),
       }));
       // Only an abort rejects, and the Promise.all in flush reports it. This handler
       // keeps a rejection that lands before the batch is awaited from being

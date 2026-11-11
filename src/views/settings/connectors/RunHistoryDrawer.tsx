@@ -13,7 +13,7 @@ import { useConnectorRuns } from "../../../api/connectors";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { DIALOG_ACTIONS, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, plural } from "../../../lib/utils";
 import { RailTooltip } from "../../../components/ui/RailTooltip";
 import type {
   ConnectorRun,
@@ -71,6 +71,8 @@ function formatStats(stats: Record<string, number> | null): string {
     );
   if (stats.errors)
     parts.push(`${stats.errors} error${stats.errors === 1 ? "" : "s"}`);
+  if (stats.photosNotRead)
+    parts.push(`${plural(stats.photosNotRead, "photo", "photos")} not read`);
   if (stats.skipped) parts.push(`${stats.skipped} skipped`);
   if (parts.length === 0) {
     return `${stats.fetched ?? 0} fetched`;
