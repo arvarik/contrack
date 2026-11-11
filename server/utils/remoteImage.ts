@@ -5,7 +5,8 @@
 // checks it is a raster image, re-encodes it and keeps it on disk; the browser
 // sees only the local copy. Re-encoding is the point: the bytes on disk are
 // pixels sharp decoded and wrote again, so nothing the remote server put in the
-// file (metadata, a polyglot payload, an SVG script) survives.
+// file (metadata, a polyglot payload, an SVG script) survives. The formats it
+// accepts are imageFormats.ts's, the same for every image the server reads.
 //
 // Two kinds of failure, which the logo cache treats differently:
 //   permanent  The server answered no: a 4xx, a body that is not a raster
@@ -16,8 +17,9 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import sharp, { type Metadata, type Sharp } from "sharp";
+import sharp, { type Sharp } from "sharp";
 import { AppError, UpstreamTimeoutError, ValidationError } from "./AppError.ts";
+import { assertReadableImage } from "./imageFormats.ts";
 import { ensureDir } from "./paths.ts";
 import { RequestCoalescer } from "./requestCoalescer.ts";
 import {
@@ -26,25 +28,8 @@ import {
   safeFetch,
 } from "./urlSafety.ts";
 
-sharp.cache(false);
-sharp.concurrency(2);
-// No HEIF or AVIF decoding: the libheif 1.23.5 in sharp 0.35.5 has
-// high-severity decoder flaws (GHSA-48p4-gj45-w9v6, GHSA-rcqc-842v-m26h,
-// GHSA-hpg4-g2gc-pq42). Remove this line when a sharp release bundles libheif
-// 1.23.7 or later. The block is for the whole process, and avatarProcessor.ts
-// sets it too, so it holds whichever module loads first.
-sharp.block({ operation: ["VipsForeignLoadHeif"] });
-
 export const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_IMAGE_TIMEOUT_MS = 8_000;
-
-/**
- * The formats sharp reports that we accept, the raster set of
- * RASTER_MIME_ALLOWLIST in avatarProcessor.ts. SVG is refused, as there: it can
- * carry scripts. The check reads the bytes, never the Content-Type header,
- * which the remote server controls.
- */
-const RASTER_FORMATS = new Set(["jpeg", "png", "gif", "webp"]);
 
 /** An image fetch or re-encode that failed, and whether to try it again. */
 export class RemoteImageError extends AppError {
@@ -190,28 +175,18 @@ function classifyFetchError(err: unknown, signal?: AbortSignal): unknown {
 }
 
 /**
- * Refuse anything that is not a JPEG, PNG, GIF, WebP or AVIF image. sharp reads
- * only the header here; the decode happens in the writer, under sharp's default
- * `limitInputPixels`, which refuses a decompression bomb.
+ * Refuse anything that is not an image the server reads (imageFormats.ts), as
+ * a permanent failure. The check reads the bytes, never the Content-Type
+ * header, which the remote server controls. sharp reads only the header here;
+ * the decode happens in the writer, under sharp's default `limitInputPixels`,
+ * which refuses a decompression bomb.
  */
 export async function assertRasterImage(body: Buffer): Promise<void> {
-  let meta: Metadata;
   try {
-    meta = await sharp(body).metadata();
+    await assertReadableImage(body);
   } catch (err) {
-    throw new RemoteImageError("Response is not an image", false, err);
-  }
-  // sharp reports AVIF as "heif" with AV1 compression. HEIF with any other
-  // codec (the HEVC in a phone's .heic) is not on the list. While the HEIF
-  // block at the top stands, sharp refuses AVIF before this check.
-  const allowed =
-    RASTER_FORMATS.has(meta.format ?? "") ||
-    (meta.format === "heif" && meta.compression === "av1");
-  if (!allowed) {
-    throw new RemoteImageError(
-      `Refusing image format "${meta.format ?? "unknown"}"`,
-      false,
-    );
+    if (!(err instanceof ValidationError)) throw err;
+    throw new RemoteImageError(err.message, false, err);
   }
 }
 

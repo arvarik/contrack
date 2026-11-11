@@ -46,7 +46,7 @@ const IMAGE_URL = "https://images.example.com/photo.png?token=secret";
 
 /** A small real image in the given format. */
 function makeImage(
-  format: "png" | "jpeg" | "webp" | "avif" | "gif",
+  format: "png" | "jpeg" | "webp" | "avif" | "gif" | "tiff",
   size = 32,
 ): Promise<Buffer> {
   return sharp({
@@ -99,7 +99,7 @@ afterEach(() => {
 });
 
 describe("fetchRemoteImage", () => {
-  it.each(["png", "jpeg", "webp", "gif"] as const)(
+  it.each(["png", "jpeg", "webp", "gif", "tiff"] as const)(
     "accepts a %s image and returns its bytes",
     async (format) => {
       const image = await makeImage(format);
@@ -115,7 +115,7 @@ describe("fetchRemoteImage", () => {
     await expect(
       assertRasterImage(await makeImage("avif")),
     ).rejects.toMatchObject({
-      message: "Response is not an image",
+      message: "Not an image",
       transient: false,
     });
   });
@@ -136,7 +136,8 @@ describe("fetchRemoteImage", () => {
     const err = await failure();
     expect(err).toBeInstanceOf(RemoteImageError);
     expect((err as RemoteImageError).transient).toBe(false);
-    expect((err as Error).message).toContain("svg");
+    // The SVG loader is blocked, so librsvg never reads the file.
+    expect((err as Error).message).toBe("Not an image");
   });
 
   it("refuses an HTML page as a permanent failure", async () => {
@@ -146,7 +147,7 @@ describe("fetchRemoteImage", () => {
     const err = await failure();
     expect(err).toBeInstanceOf(RemoteImageError);
     expect((err as RemoteImageError).transient).toBe(false);
-    expect((err as Error).message).toContain("not an image");
+    expect((err as Error).message).toBe("Not an image");
   });
 
   it("refuses a declared length over the cap without reading the body", async () => {

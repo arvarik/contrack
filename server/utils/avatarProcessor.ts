@@ -2,7 +2,8 @@
  * Decode a base64 data-URI avatar from a VCF import, resize it to 256 px (2x
  * retina), convert to JPEG and save it under the caller's
  * uploads/u/<ownerId>/avatars/, returning the URL. A 150 KB+ photo becomes a 5
- * to 10 KB file instead of a huge base64 string in the database.
+ * to 10 KB file instead of a huge base64 string in the database. Either kind of
+ * photo is read only in a format imageFormats.ts accepts.
  */
 import crypto from "crypto";
 import fs from "fs";
@@ -12,14 +13,8 @@ import { log } from "./logger.ts";
 import { getErrorMessage } from "./helpers.ts";
 import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
 import { ValidationError } from "./AppError.ts";
+import { assertReadableImage } from "./imageFormats.ts";
 import type { Scope } from "../tenancy/scope.ts";
-
-sharp.cache(false);
-sharp.concurrency(2);
-// No HEIF or AVIF decoding until a sharp release bundles libheif 1.23.7 or
-// later (GHSA-48p4-gj45-w9v6, GHSA-rcqc-842v-m26h, GHSA-hpg4-g2gc-pq42). See
-// remoteImage.ts.
-sharp.block({ operation: ["VipsForeignLoadHeif"] });
 
 // Raster image types only. SVG is left out on purpose: it can carry scripts and
 // is served from the app origin. The extension comes from the MIME type, never
@@ -53,6 +48,8 @@ export async function processBase64Avatar(
 
     const base64Data = match[2];
     const inputBuffer = Buffer.from(base64Data, "base64");
+    // By its bytes: the type the data URI names is the file's claim.
+    await assertReadableImage(inputBuffer);
 
     // The owner comes from the caller's scope, so the file lands in the same
     // directory the stored URL will point at.
@@ -124,6 +121,8 @@ export async function processProfilePhoto(
   const outputPath = path.join(profileDir, filename);
 
   try {
+    // By its bytes: the part's Content-Type is the client's claim.
+    await assertReadableImage(buffer);
     await sharp(buffer)
       .rotate()
       .resize(PROFILE_PHOTO_SIZE, PROFILE_PHOTO_SIZE, {

@@ -6,7 +6,8 @@
 // 3. Contact avatars in avatars/ stay owner-only (404 to a second account).
 // 4. Replacing an avatar deletes the previous file and updates the URL.
 // 5. Deleting an avatar deletes the file, sets avatarUrl to null, and is idempotent.
-// 6. SVG uploads and non-image bytes fail with 400 VALIDATION_ERROR.
+// 6. SVG uploads, an SVG sent as a PNG, and non-image bytes fail with 400
+//    VALIDATION_ERROR.
 // 7. Files over 10 MB fail with 413 PAYLOAD_TOO_LARGE.
 // 8. GET /api/auth/status and GET /api/auth/me carry avatarUrl.
 
@@ -69,6 +70,21 @@ describe("POST /api/auth/me/avatar", () => {
       request(app).post("/api/auth/me/avatar").attach("avatar", svg, {
         filename: "avatar.svg",
         contentType: "image/svg+xml",
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("fails with 400 VALIDATION_ERROR for an SVG sent as a PNG", async () => {
+    // The server reads the bytes, not the part's type, and never draws an SVG.
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><circle cx="5" cy="5" r="5"/></svg>',
+    );
+    const res = await asUser(userA)(
+      request(app).post("/api/auth/me/avatar").attach("avatar", svg, {
+        filename: "avatar.png",
+        contentType: "image/png",
       }),
     );
     expect(res.status).toBe(400);
