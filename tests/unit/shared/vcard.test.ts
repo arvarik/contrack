@@ -301,6 +301,20 @@ describe("reading", () => {
     });
   });
 
+  it("reads a card with a long run of CRs in linear time", () => {
+    // A CardDAV server sends this to the server, which has one thread. A
+    // regex that tried the run again from each CR took seconds here. No LF
+    // follows the run, which is what made it slow.
+    const text = card(
+      "VERSION:3.0",
+      `FN:Ada${"\r".repeat(200_000)}EMAIL:ada@analytical.example`,
+    );
+    const started = performance.now();
+    const contacts = read(text);
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(contacts).toEqual([expect.objectContaining({ name: "Ada" })]);
+  });
+
   it("reads a quoted parameter list", () => {
     const [parsed] = parseVCards(card('TEL;TYPE="WORK,VOICE":+1 555 0000'));
     expect(valuesOf(parsed!, "TEL")[0]!.params.TYPE).toEqual(["WORK", "VOICE"]);
