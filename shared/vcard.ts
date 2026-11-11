@@ -126,10 +126,16 @@ export function foldLine(line: string): string {
   return parts.join("\r\n ");
 }
 
-/** Undo folding: a line beginning with a space or a tab continues the one above. */
+/**
+ * Undo folding: a line beginning with a space or a tab continues the one above.
+ * A line ends with LF, CRLF or a lone CR, and every CR before an LF belongs to
+ * that one line end. Apple Contacts can export each line with CR CR LF: read
+ * as a line end and an empty line, the second CR took the continuation, and
+ * every folded value, a photo above all, was cut after its first line.
+ */
 function unfold(text: string): string[] {
   const lines: string[] = [];
-  for (const raw of text.split(/\r\n|\r|\n/)) {
+  for (const raw of text.split(/\r*\n|\r/)) {
     if ((raw.startsWith(" ") || raw.startsWith("\t")) && lines.length > 0) {
       lines[lines.length - 1] += raw.slice(1);
     } else {
