@@ -629,13 +629,13 @@ Both answer the whole contact. An empty body answers `400`.
 An email or a phone that a row cannot use is left out, and the row saves.
 Every import has an id and a record.
 
-| Endpoint                      | What it does                                                                                                                                                                                                                                                        | Access    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `POST /api/contacts/bulk`     | Import up to 5,000 contacts. Send `X-Import-Id: <uuid>` to make a retry safe. A header that is not a UUID answers `400`. JSON mode answers `201 { success, count, failed, importId }`. Stream mode sends SSE progress.                                              | your data |
-| `GET /api/imports`            | Your newest 50 imports: `{ imports }`.                                                                                                                                                                                                                              | your data |
-| `GET /api/imports/:id`        | One import record: `status`, `phase`, counts, `summary` and `error`.                                                                                                                                                                                                | your data |
-| `GET /api/imports/:id/rows`   | Rows in one `status`: `failed` (default) or `done`. `limit` 1 to 500, default 200. Answers `{ rows }`, in file order. Each row is `{ index, status, name, error, contactId }`.                                                                                      | your data |
-| `POST /api/imports/:id/retry` | Run the failed rows again from the payload the server kept. Answers `{ importId, status, retried, imported, failed }`. The duplicate check runs after the answer. `400 NOTHING_TO_RETRY` when no row can run again, `409 IMPORT_IN_PROGRESS` while the import runs. | your data |
+| Endpoint                      | What it does                                                                                                                                                                                                                                                                                                         | Access    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `POST /api/contacts/bulk`     | Import up to 5,000 contacts. Send `X-Import-Id: <uuid>` to make a retry safe. A header that is not a UUID answers `400`. JSON mode answers `201 { success, count, failed, photosNotRead, importId }`, where `photosNotRead` counts the saved contacts whose photo could not be read. Stream mode sends SSE progress. | your data |
+| `GET /api/imports`            | Your newest 50 imports: `{ imports }`.                                                                                                                                                                                                                                                                               | your data |
+| `GET /api/imports/:id`        | One import record: `status`, `phase`, counts, `summary` and `error`.                                                                                                                                                                                                                                                 | your data |
+| `GET /api/imports/:id/rows`   | Rows in one `status`: `failed` (default) or `done`. `limit` 1 to 500, default 200. Answers `{ rows }`, in file order. Each row is `{ index, status, name, error, contactId }`.                                                                                                                                       | your data |
+| `POST /api/imports/:id/retry` | Run the failed rows again from the payload the server kept. Answers `{ importId, status, retried, imported, failed }`. The duplicate check runs after the answer. `400 NOTHING_TO_RETRY` when no row can run again, `409 IMPORT_IN_PROGRESS` while the import runs.                                                  | your data |
 
 How an import behaves:
 
@@ -661,12 +661,12 @@ How an import behaves:
   connection, or failed before it saved a contact. Read
   `GET /api/imports/:id` to see what happened.
 
-| `status`   | Meaning                                                                                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `running`  | The contacts are being written.                                                                                                                                   |
-| `imported` | The contacts are saved, and the duplicate check runs.                                                                                                             |
-| `complete` | Everything finished. `summary` holds `imported`, `autoMerged`, `needsReview`, `newUnique` and `failed`. A duplicate check that failed puts its reason in `error`. |
-| `failed`   | Nothing was saved. Send the same request again with the same id.                                                                                                  |
+| `status`   | Meaning                                                                                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `running`  | The contacts are being written.                                                                                                                                                    |
+| `imported` | The contacts are saved, and the duplicate check runs.                                                                                                                              |
+| `complete` | Everything finished. `summary` holds `imported`, `autoMerged`, `needsReview`, `newUnique`, `failed` and `photosNotRead`. A duplicate check that failed puts its reason in `error`. |
+| `failed`   | Nothing was saved. Send the same request again with the same id.                                                                                                                   |
 
 ## Timeline and notes
 

@@ -18,6 +18,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   type is refused as an account photo, and a contact gets a drawn avatar for
   one in a vCard.
 
+### Added
+
+- HEIC photos, the format an iPhone takes, and AVIF photos work in an
+  import, as a contact's photo and as your account photo. Your browser turns
+  each into a JPEG before it sends it, so the server still reads no HEIF
+  image.
+- An import's summary says how many photos it could not read, and a
+  connector's run history counts the contact photos it could not read. Before,
+  those contacts got a drawn avatar without a word.
+
 ### Changed
 
 - A new contact gets a random id, so its URL no longer holds the name. A

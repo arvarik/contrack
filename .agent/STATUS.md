@@ -52,6 +52,13 @@
 
 ## Open
 
+- **HEIF on the server.** `server/utils/imageFormats.ts` blocks sharp's HEIF
+  loader while sharp 0.35.5 bundles libheif 1.23.5 (GHSA-48p4-gj45-w9v6,
+  GHSA-rcqc-842v-m26h, GHSA-hpg4-g2gc-pq42, fixed in 1.23.7). When a sharp
+  release bundles 1.23.7, update sharp, take `VipsForeignLoadHeif` off the
+  block list, and the server reads AVIF again. `imageFormats.test.ts` fails
+  on that update until the block goes. HEIC stays a browser conversion
+  (`src/lib/heifPhoto.ts`): sharp's prebuilt libheif has no HEVC decoder.
 - **A-05.** `recencyScore` is discontinuous at zero: a contact stamped at or
   ahead of now scores 100 on a signal weighted at 40 percent. The reachable
   path is closed (future interaction dates are refused, and
