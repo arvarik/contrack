@@ -10,13 +10,8 @@ import {
   type Request,
   type Response,
 } from "express";
-import fs from "fs";
 import multer from "multer";
-import {
-  ensureDir,
-  ownerUploadDir,
-  resolveOwnUploadPath,
-} from "../utils/paths.ts";
+import { resolveOwnUploadPath } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
@@ -57,32 +52,17 @@ import { contactRepo } from "../repositories/contactRepository.ts";
 import {
   AVATAR_MIME_EXTENSIONS,
   avatarTypeOf,
-  readFileHead,
+  saveUploadedAvatar,
 } from "../utils/avatarProcessor.ts";
-
-// Avatars go to uploads/u/<ownerId>/avatars/, so the destination callback
-// creates the caller's folder.
 
 const AVATAR_TYPES_ALLOWED =
   "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed";
 
-const avatarStorage = multer.diskStorage({
-  // The owner comes from req.principal, which multer hands this callback, so no
-  // stream boundary can lose it the way it can lose the async context.
-  destination: (req, _file, cb) => {
-    const owner = req.principal?.user.id;
-    if (!owner) return cb(new Error("No principal for an avatar upload"), "");
-    const dir = ownerUploadDir(owner, "avatars");
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = AVATAR_MIME_EXTENSIONS[file.mimetype] ?? ".jpg";
-    cb(null, `avatar-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
-  },
-});
+// A contact photo is held in memory and checked by its bytes before anything
+// is written, then saved to uploads/u/<ownerId>/avatars/ under a name the
+// server makes (saveUploadedAvatar).
 const uploadAvatar = multer({
-  storage: avatarStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for avatars
   fileFilter: (_req, file, cb) => {
     if (file.mimetype in AVATAR_MIME_EXTENSIONS) return cb(null, true);
@@ -617,17 +597,21 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     if (!req.file) throw new AppError("No image file provided", 400);
-    // By its bytes: the part's type is the client's claim, and the file is
-    // kept and served as it came.
-    if (!avatarTypeOf(await readFileHead(req.file.path))) {
-      await fs.promises.rm(req.file.path, { force: true });
-      throw new ValidationError(AVATAR_TYPES_ALLOWED);
-    }
+    // By its bytes: the part's type is the client's claim, and the app keeps
+    // and serves the file as it came.
+    const type = avatarTypeOf(req.file.buffer);
+    if (!type) throw new ValidationError(AVATAR_TYPES_ALLOWED);
+    const scope = scopeOf(req);
+    const filename = await saveUploadedAvatar(
+      scope.ownerId,
+      req.file.buffer,
+      type,
+    );
 
     const updated = contactService.updateAvatar(
-      scopeOf(req),
+      scope,
       String(req.params.id),
-      req.file.filename,
+      filename,
     );
     if (!updated) throw new NotFoundError("Contact");
 

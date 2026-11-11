@@ -1077,8 +1077,8 @@ export const contactService = {
   },
 
   updateAvatar(scope: Scope, id: string, fileFilename: string) {
-    // The same owner multer used for the destination directory, so the URL
-    // and the file on disk cannot disagree.
+    // The same owner the route saved the file for, so the URL and the file on
+    // disk cannot disagree.
     const avatarUrl = ownerUploadUrl(scope.ownerId, "avatars", fileFilename);
 
     const existing = contactRepo.requireOwned(scope, id);

@@ -60,16 +60,25 @@ export function avatarTypeOf(head: Buffer): string | null {
   return null;
 }
 
-/** The first bytes of a file, enough for `avatarTypeOf`. */
-export async function readFileHead(file: string, bytes = 64): Promise<Buffer> {
-  const handle = await fs.promises.open(file, "r");
-  try {
-    const head = Buffer.alloc(bytes);
-    const { bytesRead } = await handle.read(head, 0, bytes, 0);
-    return head.subarray(0, bytesRead);
-  } finally {
-    await handle.close();
-  }
+/**
+ * Save an uploaded contact photo, which `avatarTypeOf` has read, to the
+ * owner's avatars folder, and return its file name. The server makes the name
+ * and takes the extension from the type the bytes showed, never from the
+ * upload.
+ */
+export async function saveUploadedAvatar(
+  ownerId: string,
+  bytes: Buffer,
+  type: string,
+): Promise<string> {
+  const ext = AVATAR_MIME_EXTENSIONS[type];
+  if (!ext) throw new ValidationError(`Not a contact photo type: ${type}`);
+  const filename = `avatar-${Date.now()}-${crypto.randomBytes(4).toString("hex")}${ext}`;
+  await writeFileAtomically(
+    path.join(ownerUploadDir(ownerId, "avatars"), filename),
+    bytes,
+  );
+  return filename;
 }
 
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
