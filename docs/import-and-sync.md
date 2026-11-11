@@ -39,10 +39,10 @@ works on the **Apple** tab. The **Google** tab reads the current Google CSV
 - A photo inside a vCard is saved on your server. A photo that the vCard
   gives as a web address stays a link to that site, see
   [Privacy](privacy.md#what-leaves-the-server).
-- Contrack reads a JPEG, PNG, GIF, WebP or TIFF photo. Your browser turns a
-  HEIC photo, the format an iPhone takes, or an AVIF photo into a JPEG before
-  it sends the file. A photo that still cannot be read leaves its contact with
-  a drawn avatar, and the summary counts it.
+- Contrack reads a JPEG, PNG, GIF, WebP or TIFF photo. Your browser turns an
+  AVIF photo, and in Safari a HEIC photo, the format an iPhone takes, into a
+  JPEG before it sends the file. A photo that still cannot be read leaves its
+  contact with a drawn avatar, and the summary counts it.
 
 ### Export from your address book
 
@@ -68,10 +68,10 @@ app.
 
 Your browser reads the file and sends the contacts to your Contrack server.
 When the file holds HEIC or AVIF photos, the browser first says how many it
-is converting, and turns each into a JPEG. Safari reads HEIC itself. Another
-browser fetches a HEIC reader from your server the first time it needs one,
-under 1 MB compressed, and no photo leaves your browser for it. The import
-then runs in up to three steps:
+is converting, and turns each into a JPEG. Only Safari reads HEIC: in another
+browser the summary counts each HEIC photo as one it could not read, so
+import a file of iPhone photos in Safari. The import then runs in up to three
+steps:
 
 1. **Importing contacts.** Contrack saves each photo in the file on your
    server, then saves the contacts.

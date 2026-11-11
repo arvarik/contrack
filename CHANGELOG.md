@@ -23,10 +23,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- HEIC photos, the format an iPhone takes, and AVIF photos work in an
+- AVIF photos, and HEIC photos, the format an iPhone takes, work in an
   import, as a contact's photo and as your account photo. Your browser turns
   each into a JPEG before it sends it, so the server still reads no HEIF
-  image.
+  image. Only Safari reads HEIC: another browser says it cannot, and an
+  import counts such a photo as one it could not read.
 - An import's summary says how many photos it could not read, and a
   connector's run history counts the contact photos it could not read. Before,
   those contacts got a drawn avatar without a word.

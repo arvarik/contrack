@@ -4,18 +4,11 @@
  * a HEIF photo becomes a JPEG here before anything is sent: a photo inside an
  * imported vCard, a contact's photo and an account photo.
  *
- * The browser's own decoder goes first: Safari reads HEIC, and every current
- * browser reads AVIF. When it cannot, heic-to loads on demand. It is libheif
- * 1.23.7 and libde265 compiled to JavaScript, and it decodes in a worker, so a
- * flaw in the decoder stays inside that worker's memory. Its CSP build runs no
- * eval and no WebAssembly, so the page's `script-src 'self'` still holds.
- *
- * heic-to runs in a worker this module owns (`heifDecoder.worker.ts`), which
- * is stopped when it is idle, after an error and after a stall, so its memory
- * goes and a decoder that stopped answering is replaced.
+ * The browser's own decoder does it. Safari reads HEIC, and every current
+ * browser reads AVIF. Other browsers ship no HEIC decoder, as HEVC is
+ * patented, so there a HEIC photo is refused with a word on what to do, and
+ * one inside an import is counted on its summary as a photo not read.
  */
-
-import type { DecodeAnswer } from "./heifDecoder.worker";
 
 /** The longer side of a converted photo. Every place shows it far smaller. */
 const MAX_SIDE = 1024;
@@ -48,75 +41,28 @@ export function isHeif(head: Uint8Array): boolean {
   return word(4) === "ftyp" && HEIF_BRANDS.has(word(8));
 }
 
-/**
- * How long one photo may take in heic-to before its worker is stopped. A 48
- * MP photo takes about 5 seconds on a laptop.
- */
-const DECODE_TIMEOUT_MS = 60_000;
-/** How long the worker stays after its last photo. Its memory goes with it. */
-const IDLE_MS = 30_000;
+type HeifKind = "AVIF" | "HEIC";
 
-let decoder: Worker | null = null;
-let idleTimer: ReturnType<typeof setTimeout> | undefined;
-/** One photo at a time: the worker answers in order, with no ids. */
-let queue: Promise<unknown> = Promise.resolve();
-
-function stopDecoder(): void {
-  clearTimeout(idleTimer);
-  decoder?.terminate();
-  decoder = null;
+/** Which HEIF a file is, by its brand: AVIF, or HEIC and the rest. */
+function heifKind(head: Uint8Array): HeifKind {
+  const brand = String.fromCharCode(...head.subarray(8, 12));
+  return brand.startsWith("avi") ? "AVIF" : "HEIC";
 }
 
-/** One photo through heic-to, in the worker this module owns. */
-function decodeOnce(blob: Blob): Promise<ImageBitmap> {
-  clearTimeout(idleTimer);
-  if (typeof Worker === "undefined") {
-    return Promise.reject(new Error("this browser cannot read HEIC photos"));
-  }
-  const worker = (decoder ??= new Worker(
-    new URL("./heifDecoder.worker.ts", import.meta.url),
-    { type: "module" },
-  ));
-  return new Promise((resolve, reject) => {
-    const finish = (answer: DecodeAnswer) => {
-      clearTimeout(timer);
-      worker.onmessage = null;
-      worker.onerror = null;
-      if ("bitmap" in answer) {
-        idleTimer = setTimeout(stopDecoder, IDLE_MS);
-        resolve(answer.bitmap);
-      } else {
-        // A fresh worker for the next photo: this one may be stuck or spent.
-        stopDecoder();
-        reject(new Error(answer.error));
-      }
-    };
-    const timer = setTimeout(
-      () => finish({ error: "it took too long to read" }),
-      DECODE_TIMEOUT_MS,
-    );
-    worker.onmessage = (event: MessageEvent<DecodeAnswer>) =>
-      finish(event.data);
-    worker.onerror = (event) => {
-      event.preventDefault();
-      finish({ error: "the photo reader stopped" });
-    };
-    worker.postMessage(blob);
-  });
-}
-
-/** The browser's own decoder, then heic-to's. Throws when neither reads it. */
-async function decode(blob: Blob): Promise<ImageBitmap> {
+/** The browser's own decoder. Throws, saying what to do, when it cannot. */
+async function decode(blob: Blob, kind: HeifKind): Promise<ImageBitmap> {
   if (typeof createImageBitmap === "function") {
     try {
       return await createImageBitmap(blob);
     } catch {
-      // This browser has no HEIC decoder. heic-to has one.
+      // No decoder for this photo here: said below.
     }
   }
-  const run = queue.then(() => decodeOnce(blob));
-  queue = run.catch(() => undefined);
-  return run;
+  throw new Error(
+    kind === "HEIC"
+      ? "this browser could not read it. Choose a JPEG, or use Safari, which reads HEIC"
+      : "this browser could not read it. Choose a JPEG",
+  );
 }
 
 /** A JPEG of `bitmap`, at most MAX_SIDE on its longer side, on white. */
@@ -138,9 +84,9 @@ async function encodeJpeg(bitmap: ImageBitmap): Promise<Blob> {
   return jpeg;
 }
 
-/** A JPEG of a HEIF image. Throws when no decoder can read it. */
-async function heifToJpeg(blob: Blob): Promise<Blob> {
-  const bitmap = await decode(blob);
+/** A JPEG of a HEIF image. Throws when the browser cannot read it. */
+async function heifToJpeg(blob: Blob, kind: HeifKind): Promise<Blob> {
+  const bitmap = await decode(blob, kind);
   try {
     return await encodeJpeg(bitmap);
   } finally {
@@ -155,7 +101,7 @@ async function heifToJpeg(blob: Blob): Promise<Blob> {
 export async function readablePhotoFile(file: File): Promise<File> {
   const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   if (!isHeif(head)) return file;
-  const jpeg = await heifToJpeg(file);
+  const jpeg = await heifToJpeg(file, heifKind(head));
   const stem = file.name.replace(/\.[^.]*$/, "") || "photo";
   return new File([jpeg], `${stem}.jpg`, { type: "image/jpeg" });
 }
@@ -183,12 +129,6 @@ function isHeifDataUri(uri: string | null | undefined): uri is string {
   if (!uri) return false;
   const head = dataUriBytes(uri, 16);
   return !!head && isHeif(head);
-}
-
-/** The media type of HEIF bytes, for a decoder that goes by the type. */
-function heifType(bytes: Uint8Array): string {
-  const brand = String.fromCharCode(...bytes.subarray(8, 12));
-  return brand.startsWith("avi") ? "image/avif" : "image/heic";
 }
 
 /** A data URI of a blob. A data URI is not fetched: the CSP's connect-src has no `data:`. */
@@ -224,8 +164,11 @@ export async function convertHeifPhotos(
     const bytes = dataUriBytes(contact.avatarUrl!);
     if (bytes) {
       try {
-        const blob = new Blob([bytes as BlobPart], { type: heifType(bytes) });
-        const jpeg = await heifToJpeg(blob);
+        const kind = heifKind(bytes);
+        const blob = new Blob([bytes as BlobPart], {
+          type: `image/${kind.toLowerCase()}`,
+        });
+        const jpeg = await heifToJpeg(blob, kind);
         contact.avatarUrl = await dataUriOf(jpeg);
       } catch {
         // Left as it was. The server refuses it, and the summary counts it.

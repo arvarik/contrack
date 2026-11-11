@@ -12,8 +12,9 @@
 //         Unblock it when a sharp release bundles libheif 1.23.7 or later, and
 //         AVIF reads again; imageFormats.test.ts fails until it is. A phone's
 //         HEIC stays unreadable here even then, because sharp's prebuilt
-//         libheif has no HEVC decoder. The browser turns a HEIC photo into a
-//         JPEG before it sends it (src/lib/heifPhoto.ts).
+//         libheif has no HEVC decoder. A browser that reads HEIC, such as
+//         Safari, turns one into a JPEG before it sends it
+//         (src/lib/heifPhoto.ts).
 //   SVG   No image the server keeps is drawn from an SVG, and librsvg is a
 //         large parser (GHSA-wq5f-xc86-pv6w). Blocked, an SVG is refused
 //         before librsvg reads it.

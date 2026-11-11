@@ -334,8 +334,9 @@ its dashed name under a note.
 Press the pencil on the picture to open **Edit avatar**. **Choose an avatar**
 shows faces in the styles **Cartoon**, **Illustrated** and **Bot**. **Upload
 a photo** takes a JPEG, PNG, GIF, WebP, AVIF or HEIC photo of up to 10 MB.
-Your browser turns a HEIC or AVIF photo into a JPEG before it sends it. Then
-press **Apply**.
+Your browser turns an AVIF or HEIC photo into a JPEG before it sends it. Only
+Safari reads HEIC, so in another browser save a HEIC photo as a JPEG first.
+Then press **Apply**.
 
 A contact with no picture gets a cartoon face that your own server draws, so
 no name leaves your server. The pronouns, a title or the first name choose the

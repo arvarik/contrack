@@ -1,40 +1,15 @@
 // @vitest-environment jsdom
 // Unit: which photos the browser turns from HEIF into JPEG before it sends
-// them, and the worker heic-to decodes in. The server reads no HEIF image, so
-// a HEIF photo inside an import that the browser cannot read either stays as
-// it was, and the server counts it in the summary. The decode itself runs in a
-// real browser in tests/e2e/heic-photos.spec.ts: jsdom has no image decoder,
-// no canvas and no Worker, so a stand-in answers for the worker here.
+// them. The server reads no HEIF image, and the browser's own decoder does the
+// turning, so a HEIF photo the browser cannot read is refused with a word on
+// what to do, and one inside an import stays as it was, for the server to
+// count on the summary. The decode itself runs in a real browser in
+// tests/e2e/heif-photos.spec.ts: jsdom has no image decoder and no canvas, so
+// a stand-in for createImageBitmap answers here.
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DecodeAnswer } from "../../../../src/lib/heifDecoder.worker";
-
-/** A stand-in for the decoder worker, which answers each photo as told. */
-class FakeWorker {
-  static made: FakeWorker[] = [];
-  /** What the next worker answers: a bitmap, an error, or nothing at all. */
-  static answer: () => DecodeAnswer | null = () => ({
-    error: "HEIF processing error",
-  });
-  onmessage: ((event: { data: DecodeAnswer }) => void) | null = null;
-  onerror: ((event: { preventDefault(): void }) => void) | null = null;
-  photos = 0;
-  terminated = false;
-  constructor() {
-    FakeWorker.made.push(this);
-  }
-  postMessage() {
-    this.photos += 1;
-    const answer = FakeWorker.answer();
-    if (answer) queueMicrotask(() => this.onmessage?.({ data: answer }));
-  }
-  terminate() {
-    this.terminated = true;
-  }
-}
-
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   convertHeifPhotos,
   isHeif,
@@ -45,19 +20,23 @@ import {
 const HEIC = readFileSync(
   path.resolve(import.meta.dirname, "../../../fixtures/images/photo.heic"),
 );
+const HEIC_URI = `data:image/heic;base64,${HEIC.toString("base64")}`;
 
 /** The first 12 bytes of a file with this `ftyp` brand. */
 const head = (brand: string, box = "ftyp") =>
   new Uint8Array([0, 0, 0, 24, ...Buffer.from(box + brand)]);
 
-beforeEach(() => {
-  FakeWorker.made = [];
-  vi.stubGlobal("Worker", FakeWorker);
-});
+/** A browser whose decoder cannot read the photo, as Chrome with a HEIC. */
+function noDecoder() {
+  const decode = vi
+    .fn()
+    .mockRejectedValue(new DOMException("", "InvalidStateError"));
+  vi.stubGlobal("createImageBitmap", decode);
+  return decode;
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 describe("isHeif", () => {
@@ -86,26 +65,32 @@ describe("isHeif", () => {
 });
 
 describe("readablePhotoFile", () => {
-  it("sends any other photo as it came, without loading the decoder", async () => {
+  it("sends any other photo as it came, without decoding it", async () => {
+    const decode = noDecoder();
     const png = new File(
       [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13])],
       "me.png",
-      {
-        type: "image/png",
-      },
+      { type: "image/png" },
     );
     expect(await readablePhotoFile(png)).toBe(png);
-    expect(FakeWorker.made).toEqual([]);
+    expect(decode).not.toHaveBeenCalled();
+  });
+
+  it("refuses a HEIC photo the browser cannot read, and says what to do", async () => {
+    noDecoder();
+    const heic = new File([HEIC], "IMG_0001.HEIC", { type: "image/heic" });
+    await expect(readablePhotoFile(heic)).rejects.toThrow(
+      "Choose a JPEG, or use Safari, which reads HEIC",
+    );
   });
 });
 
 describe("convertHeifPhotos", () => {
-  it("leaves a HEIF photo no decoder reads, and every other photo, as it was", async () => {
-    FakeWorker.answer = () => ({ error: "HEIF processing error" });
-    const heic = `data:image/heic;base64,${HEIC.toString("base64")}`;
+  it("leaves a HEIF photo the browser cannot read, and every other photo, as it was", async () => {
+    const decode = noDecoder();
     const jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==";
     const contacts = [
-      { avatarUrl: heic },
+      { avatarUrl: HEIC_URI },
       { avatarUrl: jpeg },
       { avatarUrl: "https://photos.example.com/a.jpg" },
       { avatarUrl: null },
@@ -122,12 +107,9 @@ describe("convertHeifPhotos", () => {
       [0, 1],
       [1, 1],
     ]);
-    // jsdom has no createImageBitmap, so the worker was asked, and it failed.
-    // A worker that failed is stopped, so the next photo gets a fresh one.
-    expect(FakeWorker.made).toHaveLength(1);
-    expect(FakeWorker.made[0]).toMatchObject({ photos: 1, terminated: true });
+    expect(decode).toHaveBeenCalledTimes(1);
     expect(contacts.map((c) => c.avatarUrl)).toEqual([
-      heic,
+      HEIC_URI,
       jpeg,
       "https://photos.example.com/a.jpg",
       null,
@@ -135,7 +117,25 @@ describe("convertHeifPhotos", () => {
     ]);
   });
 
+  it("leaves the photos after the one it was cancelled at as they were", async () => {
+    const decode = noDecoder();
+    let asked = 0;
+
+    await convertHeifPhotos(
+      [
+        { avatarUrl: HEIC_URI },
+        { avatarUrl: HEIC_URI },
+        { avatarUrl: HEIC_URI },
+      ],
+      undefined,
+      () => ++asked > 1,
+    );
+
+    expect(decode).toHaveBeenCalledTimes(1);
+  });
+
   it("does nothing for an import with no HEIF photo", async () => {
+    const decode = noDecoder();
     const onProgress = vi.fn();
     expect(
       await convertHeifPhotos(
@@ -144,52 +144,6 @@ describe("convertHeifPhotos", () => {
       ),
     ).toBe(0);
     expect(onProgress).not.toHaveBeenCalled();
-    expect(FakeWorker.made).toEqual([]);
-  });
-
-  it("leaves the photos after the one it was cancelled at as they were", async () => {
-    FakeWorker.answer = () => ({ error: "HEIF processing error" });
-    const heic = `data:image/heic;base64,${HEIC.toString("base64")}`;
-    let asked = 0;
-
-    await convertHeifPhotos(
-      [{ avatarUrl: heic }, { avatarUrl: heic }, { avatarUrl: heic }],
-      undefined,
-      () => ++asked > 1,
-    );
-
-    expect(FakeWorker.made.map((w) => w.photos)).toEqual([1]);
-  });
-
-  it("stops a worker that never answers, and gives the next photo a fresh one", async () => {
-    vi.useFakeTimers();
-    FakeWorker.answer = () => null;
-    const heic = `data:image/heic;base64,${HEIC.toString("base64")}`;
-    const contacts = [{ avatarUrl: heic }, { avatarUrl: heic }];
-
-    const converting = convertHeifPhotos(contacts);
-    await vi.advanceTimersByTimeAsync(60_000);
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    expect(await converting).toBe(2);
-    expect(contacts.map((c) => c.avatarUrl)).toEqual([heic, heic]);
-    expect(FakeWorker.made).toHaveLength(2);
-    expect(FakeWorker.made.map((w) => w.terminated)).toEqual([true, true]);
-  });
-
-  it("stops the worker once it has been idle, which frees its memory", async () => {
-    vi.useFakeTimers();
-    const bitmap = { width: 8, height: 8, close: vi.fn() };
-    FakeWorker.answer = () => ({ bitmap: bitmap as unknown as ImageBitmap });
-    const heic = `data:image/heic;base64,${HEIC.toString("base64")}`;
-
-    // jsdom has no canvas, so the JPEG is never written, but the worker
-    // answered and stays for the next photo.
-    await convertHeifPhotos([{ avatarUrl: heic }]);
-    expect(bitmap.close).toHaveBeenCalled();
-    expect(FakeWorker.made[0]!.terminated).toBe(false);
-
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(FakeWorker.made[0]!.terminated).toBe(true);
+    expect(decode).not.toHaveBeenCalled();
   });
 });

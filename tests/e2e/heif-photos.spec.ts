@@ -1,12 +1,13 @@
 /**
- * HEIC photos, the format an iPhone takes, become a JPEG in the browser
- * before they reach the server, which reads no HEIF image. Chromium has no
- * HEIC decoder of its own, so each test here loads heic-to, the decoder the
- * app fetches on demand, under the production CSP. An import also says how
- * many photos it could not read.
+ * HEIF photos become a JPEG in the browser before they reach the server,
+ * which reads no HEIF image. The browser's own decoder does it: every current
+ * browser reads AVIF, and Safari reads HEIC. Chromium has no HEIC decoder, so
+ * here a HEIC photo is refused with a word on what to do, and one inside an
+ * import is counted on its summary.
  *
- * The photo is a synthetic 96 by 64 HEIC, red on its left half and blue on
- * its right, so a saved copy shows it is the same picture.
+ * Each photo is a 96 by 64 picture, red on its left half and blue on its
+ * right, so a saved copy shows it is the same picture. The HEIC is a
+ * synthetic one of the same colors.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -17,21 +18,38 @@ import { expect, gatedTest, test } from "./fixtures/test";
 import { ADMIN, accountMenu, completeSetup } from "./fixtures/accounts";
 import type { ContrackInstance } from "./fixtures/instance";
 
-const HEIC = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "fixtures",
-  "images",
-  "photo.heic",
+const HEIC = readFileSync(
+  path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "fixtures",
+    "images",
+    "photo.heic",
+  ),
 );
-
-/** The converter has a 3 MB decoder to fetch and start on a slow runner. */
-const CONVERTED = { timeout: 30_000 };
 
 interface SlimContact {
   id: string;
   name: string;
   avatarUrl: string | null;
+}
+
+/** A 96 by 64 picture, red on the left and blue on the right. */
+function redThenBlue(format: "avif" | "jpeg"): Promise<Buffer> {
+  return sharp({
+    create: { width: 96, height: 64, channels: 3, background: "#ff0000" },
+  })
+    .composite([
+      {
+        input: {
+          create: { width: 48, height: 64, channels: 3, background: "#0000ff" },
+        },
+        left: 48,
+        top: 0,
+      },
+    ])
+    .toFormat(format)
+    .toBuffer();
 }
 
 /** The colors at the left and right of a saved photo, as [r, g, b]. */
@@ -72,11 +90,11 @@ async function remove(instance: ContrackInstance, ids: string[]) {
   for (const id of ids) await instance.api("DELETE", `/contacts/${id}`);
 }
 
-test("an import turns a HEIC photo into a JPEG, and counts a photo it cannot read", async ({
+test("an import turns an AVIF photo into a JPEG, and counts the photos it cannot read", async ({
   page,
   instance,
 }) => {
-  const heic = readFileSync(HEIC).toString("base64");
+  const avif = (await redThenBlue("avif")).toString("base64");
   const svg = Buffer.from(
     '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>',
   ).toString("base64");
@@ -84,8 +102,13 @@ test("an import turns a HEIC photo into a JPEG, and counts a photo it cannot rea
   const vcf = [
     "BEGIN:VCARD",
     "VERSION:3.0",
+    "FN:Ava Avif",
+    foldLine(`PHOTO;ENCODING=b;TYPE=AVIF:${avif}`),
+    "END:VCARD",
+    "BEGIN:VCARD",
+    "VERSION:3.0",
     "FN:Hana Heic",
-    foldLine(`PHOTO;ENCODING=b;TYPE=HEIC:${heic}`),
+    foldLine(`PHOTO;ENCODING=b;TYPE=HEIC:${HEIC.toString("base64")}`),
     "END:VCARD",
     "BEGIN:VCARD",
     "VERSION:3.0",
@@ -104,44 +127,53 @@ test("an import turns a HEIC photo into a JPEG, and counts a photo it cannot rea
     buffer: Buffer.from(vcf),
   });
 
-  await expect(page.getByText("Import complete")).toBeVisible(CONVERTED);
-  await expect(page.getByText("2 contacts imported")).toBeVisible();
-  await expect(page.getByText("1 photo could not be read")).toBeVisible();
+  await expect(page.getByText("Import complete")).toBeVisible();
+  await expect(page.getByText("3 contacts imported")).toBeVisible();
+  // Chromium cannot read the HEIC, and the server refuses the SVG.
+  await expect(page.getByText("2 photos could not be read")).toBeVisible();
 
   const contacts = await instance.api<SlimContact[]>(
     "GET",
     "/contacts?view=slim",
   );
-  const hana = contacts.find((c) => c.name === "Hana Heic")!;
-  const sven = contacts.find((c) => c.name === "Sven Svg")!;
+  const named = (name: string) => contacts.find((c) => c.name === name)!;
+  const ava = named("Ava Avif");
   try {
-    expect(hana.avatarUrl).toMatch(
+    expect(ava.avatarUrl).toMatch(
       /^\/uploads\/u\/.+\/avatars\/import-.+\.jpg$/,
     );
-    expectRedThenBlue(await sides(page, hana.avatarUrl!));
-    // The server refuses an SVG, so the contact keeps its drawn face.
-    expect(sven.avatarUrl).toMatch(/^\/api\/avatar\//);
+    expectRedThenBlue(await sides(page, ava.avatarUrl!));
+    for (const name of ["Hana Heic", "Sven Svg"]) {
+      expect(named(name).avatarUrl).toMatch(/^\/api\/avatar\//);
+    }
   } finally {
-    await remove(instance, [hana.id, sven.id]);
+    await remove(
+      instance,
+      ["Ava Avif", "Hana Heic", "Sven Svg"].map((name) => named(name).id),
+    );
   }
 });
 
-test("the contact photo picker turns a HEIC photo into a JPEG", async ({
+test("the contact photo picker turns an AVIF photo into a JPEG", async ({
   page,
   instance,
 }) => {
   const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
-    name: "Pico Heic",
+    name: "Pico Avif",
   });
   try {
     await page.goto(`/contact/${id}`);
     await page.getByRole("button", { name: "Change avatar" }).click();
     const dialog = page.getByRole("dialog", { name: "Edit avatar" });
     await dialog.getByRole("button", { name: "Upload a photo" }).click();
-    await dialog.locator('input[type="file"]').setInputFiles(HEIC);
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: "photo.avif",
+      mimeType: "image/avif",
+      buffer: await redThenBlue("avif"),
+    });
 
     // The preview shows the converted file, under its new name.
-    await expect(dialog.getByText("photo.jpg")).toBeVisible(CONVERTED);
+    await expect(dialog.getByText("photo.jpg")).toBeVisible();
     await dialog.getByRole("button", { name: "Apply" }).click();
     await expect(page.getByText("Avatar updated")).toBeVisible();
 
@@ -160,21 +192,6 @@ test("the contact photo picker takes a JPEG as it is, and says why it refuses a 
   const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
     name: "Jo Jpeg",
   });
-  // The same two colors as the HEIC, so the check below is the same.
-  const jpeg = await sharp({
-    create: { width: 96, height: 64, channels: 3, background: "#ff0000" },
-  })
-    .composite([
-      {
-        input: {
-          create: { width: 48, height: 64, channels: 3, background: "#0000ff" },
-        },
-        left: 48,
-        top: 0,
-      },
-    ])
-    .jpeg()
-    .toBuffer();
   try {
     await page.goto(`/contact/${id}`);
     await page.getByRole("button", { name: "Change avatar" }).click();
@@ -191,10 +208,22 @@ test("the contact photo picker takes a JPEG as it is, and says why it refuses a 
       page.getByText("Could not use the file: choose a photo"),
     ).toBeVisible();
 
+    // A HEIC with no type, as a system that does not know it gives one.
+    await input.setInputFiles({
+      name: "IMG_0001.HEIC",
+      mimeType: "",
+      buffer: HEIC,
+    });
+    await expect(
+      page.getByText(
+        "Could not read the photo: this browser could not read it. Choose a JPEG, or use Safari, which reads HEIC",
+      ),
+    ).toBeVisible();
+
     await input.setInputFiles({
       name: "portrait.jpg",
       mimeType: "image/jpeg",
-      buffer: jpeg,
+      buffer: await redThenBlue("jpeg"),
     });
     await expect(dialog.getByText("portrait.jpg")).toBeVisible();
     await dialog.getByRole("button", { name: "Apply" }).click();
@@ -209,15 +238,19 @@ test("the contact photo picker takes a JPEG as it is, and says why it refuses a 
 });
 
 gatedTest(
-  "the account photo picker turns a HEIC photo into a JPEG",
+  "the account photo picker turns an AVIF photo into a JPEG",
   async ({ page }) => {
     await completeSetup(page, ADMIN);
     await page.goto("/settings/account");
     await expect(page.getByRole("heading", { name: "Photo" })).toBeVisible();
 
-    await page.locator('input[type="file"]').setInputFiles(HEIC);
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "me.avif",
+      mimeType: "image/avif",
+      buffer: await redThenBlue("avif"),
+    });
     const upload = page.getByRole("button", { name: "Upload" });
-    await expect(upload).toBeEnabled(CONVERTED);
+    await expect(upload).toBeEnabled();
     await upload.click();
     await expect(page.getByText("Photo updated")).toBeVisible();
 

@@ -58,7 +58,8 @@
   release bundles 1.23.7, update sharp, take `VipsForeignLoadHeif` off the
   block list, and the server reads AVIF again. `imageFormats.test.ts` fails
   on that update until the block goes. HEIC stays a browser conversion
-  (`src/lib/heifPhoto.ts`): sharp's prebuilt libheif has no HEVC decoder.
+  (`src/lib/heifPhoto.ts`), which only a browser with a HEIC decoder, such
+  as Safari, can make: sharp's prebuilt libheif has no HEVC decoder.
 - **A-05.** `recencyScore` is discontinuous at zero: a contact stamped at or
   ahead of now scores 100 on a signal weighted at 40 percent. The reachable
   path is closed (future interaction dates are refused, and

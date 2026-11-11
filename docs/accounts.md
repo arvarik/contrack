@@ -203,8 +203,9 @@ with a message that it took too long.
 **Settings → Account** holds these sections:
 
 - **Profile.** **Photo** takes a JPEG, PNG, GIF, WebP, AVIF or HEIC image up
-  to 10 MB, cropped to 512 × 512 pixels. Your browser turns a HEIC or AVIF
-  photo into a JPEG before it sends it. **Upload** saves it, and **Remove photo**
+  to 10 MB, cropped to 512 × 512 pixels. Your browser turns an AVIF or HEIC
+  photo into a JPEG before it sends it. Only Safari reads HEIC, so in another
+  browser save a HEIC photo as a JPEG first. **Upload** saves it, and **Remove photo**
   goes back to your initials. **Display name**, **Username**, and **Email**
   save with **Save changes**. A new **Email** asks for your current password.
   When outgoing mail is set up, the email does not change yet: a link valid for
