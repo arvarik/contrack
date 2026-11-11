@@ -39,6 +39,9 @@ works on the **Apple** tab. The **Google** tab reads the current Google CSV
 - A photo inside a vCard is saved on your server. A photo that the vCard
   gives as a web address stays a link to that site, see
   [Privacy](privacy.md#what-leaves-the-server).
+- Contrack reads a JPEG, PNG, GIF, WebP or TIFF photo. It cannot read a HEIC
+  photo, the format an iPhone takes, or an AVIF photo yet, so that contact
+  gets a drawn avatar. The same holds for a photo from a connector.
 
 ### Export from your address book
 

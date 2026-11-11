@@ -229,15 +229,16 @@ Two other answers look like rate limits:
 | A JSON body                           | 1 MB                                                                                      |
 | The body of `POST /api/contacts/bulk` | 50 MB                                                                                     |
 | A contact photo, field `avatar`       | 10 MB. JPEG, PNG, GIF, WebP or AVIF.                                                      |
-| Your account photo, field `avatar`    | 10 MB. The same types.                                                                    |
+| Your account photo, field `avatar`    | 10 MB. JPEG, PNG, GIF or WebP.                                                            |
 | An attachment, field `attachment`     | 50 MB. `.eml`, `.txt`, `.md`, `.csv`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`. |
 
 A body or file over its limit answers `413 PAYLOAD_TOO_LARGE`. Uploads use
 `multipart/form-data`. The server checks a photo by the `Content-Type` of its
-part, and refuses another type with `400 VALIDATION_ERROR`. It checks an
-attachment by its file name extension, and refuses another type with
-`400 UNSUPPORTED_FILE_TYPE`. A file under another field name gets
-`400 INVALID_UPLOAD`.
+part, and refuses another type with `400 VALIDATION_ERROR`. It reads an
+account photo by its bytes too, and refuses one in another format, an SVG
+included, with the same error. It checks an attachment by its file name
+extension, and refuses another type with `400 UNSUPPORTED_FILE_TYPE`. A file
+under another field name gets `400 INVALID_UPLOAD`.
 
 ### Bulk limits
 

@@ -14,6 +14,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Docker image moves to the newest Node 26 Debian base, and takes the
   newer Debian updates when it builds. This fixes CVE-2026-109518 in `apt`, and
   CVE-2026-76844, CVE-2026-85091 and CVE-2026-27171 in `zlib1g`.
+- The server never draws an SVG it was sent. An SVG named as another image
+  type is refused as an account photo, and a contact gets a drawn avatar for
+  one in a vCard.
 
 ### Changed
 
@@ -22,6 +25,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   without the name.
 - The API returns the `source` of each school and job, as it does for
   emails and phones.
+- A TIFF image at a web address, such as a CardDAV card's photo or a link
+  preview's picture, is saved like a JPEG or PNG one. A TIFF photo inside a
+  vCard already was.
 
 ### Fixed
 
@@ -36,6 +42,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A contact edited later on the day of its last duplicate check is checked
   again.
 - The MCP `updatedSince` filter finds a contact edited later on that day.
+- A vCard whose lines end in an extra carriage return, as an Apple Contacts
+  export can, imports its photos and long notes whole. Before, every photo in
+  such a file was lost and its contact got a drawn avatar.
 
 ## [2.0.6] - 2026-11-04
 
