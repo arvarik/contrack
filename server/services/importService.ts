@@ -58,6 +58,8 @@ export interface ImportSummary {
   needsReview: number;
   newUnique: number;
   failed: number;
+  /** Saved contacts whose vCard photo could not be read. */
+  photosNotRead: number;
 }
 
 export interface ImportRecord {
@@ -69,6 +71,7 @@ export interface ImportRecord {
   processed: number;
   imported: number;
   failed: number;
+  photosNotRead: number;
   summary: ImportSummary | null;
   error: string | null;
   createdAt: string;
@@ -95,6 +98,7 @@ interface ImportTableRow {
   processed: number;
   imported: number;
   failed: number;
+  photosNotRead: number;
   autoMerged: number | null;
   needsReview: number | null;
   newUnique: number | null;
@@ -146,7 +150,7 @@ const _stmts = {
   restart: sqlite.prepare(`
     UPDATE imports
        SET status = 'running', phase = 'importing', message = ?, total = ?,
-           processed = 0, imported = 0, failed = 0,
+           processed = 0, imported = 0, failed = 0, photosNotRead = 0,
            autoMerged = NULL, needsReview = NULL, newUnique = NULL,
            error = NULL, completedAt = NULL, updatedAt = CURRENT_TIMESTAMP
      WHERE id = ? AND ownerId = ?
@@ -159,35 +163,42 @@ const _stmts = {
   ),
 
   rowDone: sqlite.prepare(`
-    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload)
-    SELECT ?, ?, 'done', ?, ?, NULL, NULL
+    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload, photoNotRead)
+    SELECT ?, ?, 'done', ?, ?, NULL, NULL, ?
      WHERE EXISTS (SELECT 1 FROM imports WHERE id = ? AND ownerId = ?)
     ON CONFLICT(importId, rowIndex) DO UPDATE SET
       status = 'done', contactId = excluded.contactId, name = excluded.name,
-      error = NULL, payload = NULL
+      error = NULL, payload = NULL,
+      photoNotRead = MAX(import_rows.photoNotRead, excluded.photoNotRead)
   `),
 
   /**
    * A row the import is about to write, with its payload. A batch turns it
    * `done` or `failed`. A run that stops first leaves it here, and
    * `settle` makes it `failed`, so a retry can still run it.
+   *
+   * `photoNotRead` goes with the row from here on. The payload holds no photo
+   * once the server has failed to read it, so a retry could not tell, and a
+   * later write keeps the larger flag. A fresh run of the file sets it anew.
    */
   rowPending: sqlite.prepare(`
-    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload)
-    SELECT ?, ?, 'pending', NULL, ?, NULL, ?
+    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload, photoNotRead)
+    SELECT ?, ?, 'pending', NULL, ?, NULL, ?, ?
      WHERE EXISTS (SELECT 1 FROM imports WHERE id = ? AND ownerId = ?)
     ON CONFLICT(importId, rowIndex) DO UPDATE SET
       status = 'pending', contactId = NULL, name = excluded.name,
-      error = NULL, payload = excluded.payload
+      error = NULL, payload = excluded.payload,
+      photoNotRead = excluded.photoNotRead
   `),
 
   rowFailed: sqlite.prepare(`
-    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload)
-    SELECT ?, ?, 'failed', NULL, ?, ?, ?
+    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload, photoNotRead)
+    SELECT ?, ?, 'failed', NULL, ?, ?, ?, ?
      WHERE EXISTS (SELECT 1 FROM imports WHERE id = ? AND ownerId = ?)
     ON CONFLICT(importId, rowIndex) DO UPDATE SET
       status = 'failed', contactId = NULL, name = excluded.name,
-      error = excluded.error, payload = excluded.payload
+      error = excluded.error, payload = excluded.payload,
+      photoNotRead = MAX(import_rows.photoNotRead, excluded.photoNotRead)
   `),
 
   progress: sqlite.prepare(`
@@ -206,6 +217,7 @@ const _stmts = {
            processed = total,
            imported = (SELECT COUNT(*) FROM import_rows WHERE importId = imports.id AND status = 'done'),
            failed = (SELECT COUNT(*) FROM import_rows WHERE importId = imports.id AND status = 'failed'),
+           photosNotRead = (SELECT COUNT(*) FROM import_rows WHERE importId = imports.id AND status = 'done' AND photoNotRead = 1),
            updatedAt = CURRENT_TIMESTAMP
      WHERE id = ? AND ownerId = ?
   `),
@@ -353,6 +365,7 @@ function toRecord(row: ImportTableRow): ImportRecord {
           needsReview: row.needsReview ?? 0,
           newUnique: row.newUnique ?? 0,
           failed: row.failed,
+          photosNotRead: row.photosNotRead,
         }
       : null;
   return {
@@ -364,6 +377,7 @@ function toRecord(row: ImportTableRow): ImportRecord {
     processed: row.processed,
     imported: row.imported,
     failed: row.failed,
+    photosNotRead: row.photosNotRead,
     summary,
     error: row.error,
     createdAt: row.createdAt,
@@ -488,15 +502,21 @@ export const importService = {
   recordPending(
     scope: Scope,
     id: string,
-    rows: { index: number; payload: NewContactPayload }[],
+    rows: {
+      index: number;
+      payload: NewContactPayload;
+      /** The server could not read the photo the row held. */
+      photoNotRead?: boolean;
+    }[],
   ): void {
     sqlite.transaction(() => {
-      for (const { index, payload } of rows) {
+      for (const { index, payload, photoNotRead } of rows) {
         _stmts.rowPending.run(
           id,
           index,
           payload.name,
           JSON.stringify(payload),
+          photoNotRead ? 1 : 0,
           id,
           scope.ownerId,
         );
@@ -508,14 +528,24 @@ export const importService = {
   // `contactService.bulkCreateContacts`, so each row commits with its contact
   // or not at all, and `markImported` commits with the last batch.
 
+  /** A saved row. `photoNotRead` when its contact lost the photo it held. */
   rowDone(
     scope: Scope,
     id: string,
     index: number,
     contactId: string,
     name: string,
+    photoNotRead = false,
   ): void {
-    _stmts.rowDone.run(id, index, contactId, name, id, scope.ownerId);
+    _stmts.rowDone.run(
+      id,
+      index,
+      contactId,
+      name,
+      photoNotRead ? 1 : 0,
+      id,
+      scope.ownerId,
+    );
   },
 
   rowFailed(
@@ -525,6 +555,7 @@ export const importService = {
     name: string,
     error: string,
     payload: NewContactPayload,
+    photoNotRead = false,
   ): void {
     _stmts.rowFailed.run(
       id,
@@ -532,6 +563,7 @@ export const importService = {
       name,
       error,
       JSON.stringify(payload),
+      photoNotRead ? 1 : 0,
       id,
       scope.ownerId,
     );

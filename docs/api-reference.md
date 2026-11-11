@@ -229,15 +229,16 @@ Two other answers look like rate limits:
 | A JSON body                           | 1 MB                                                                                      |
 | The body of `POST /api/contacts/bulk` | 50 MB                                                                                     |
 | A contact photo, field `avatar`       | 10 MB. JPEG, PNG, GIF, WebP or AVIF.                                                      |
-| Your account photo, field `avatar`    | 10 MB. The same types.                                                                    |
+| Your account photo, field `avatar`    | 10 MB. JPEG, PNG, GIF or WebP.                                                            |
 | An attachment, field `attachment`     | 50 MB. `.eml`, `.txt`, `.md`, `.csv`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`. |
 
 A body or file over its limit answers `413 PAYLOAD_TOO_LARGE`. Uploads use
 `multipart/form-data`. The server checks a photo by the `Content-Type` of its
-part, and refuses another type with `400 VALIDATION_ERROR`. It checks an
-attachment by its file name extension, and refuses another type with
-`400 UNSUPPORTED_FILE_TYPE`. A file under another field name gets
-`400 INVALID_UPLOAD`.
+part, and refuses another type with `400 VALIDATION_ERROR`. It reads an
+account photo by its bytes too, and refuses one in another format, an SVG
+included, with the same error. It checks an attachment by its file name
+extension, and refuses another type with `400 UNSUPPORTED_FILE_TYPE`. A file
+under another field name gets `400 INVALID_UPLOAD`.
 
 ### Bulk limits
 
@@ -463,7 +464,7 @@ slug with an 8-character random hex suffix, such as `jane-smith-f60e8536`.
 | `DELETE /api/contacts/:id`               | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                                                                                                                           | your data            |
 | `GET /api/contacts/archived`             | Archived contacts, most recently archived first.                                                                                                                                                                                                                            | your data            |
 | `PATCH /api/contacts/:id/location`       | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.                                                                                                              | your data            |
-| `POST /api/contacts/:id/avatar`          | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                                                                                                                          | your data            |
+| `POST /api/contacts/:id/avatar`          | Upload a contact photo in the field `avatar`: a JPEG, PNG, GIF, WebP or AVIF image by its bytes, up to 10 MB. Answers the contact.                                                                                                                                          | your data            |
 | `GET /api/contacts/:id/score`            | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                                                                                                                     | your data            |
 | `GET /api/contacts/:id/relationships`    | Contacts that share notes with this one through mentions, most shared first. A mention is an @mention in the editor or a person AI found in the note. Each row has `sharedInteractions`. `limit` 1 to 200, default 50.                                                      | your data            |
 | `POST /api/contacts/:id/promote`         | Turn a ghost into a full contact. Answers the contact.                                                                                                                                                                                                                      | your data            |
@@ -628,13 +629,13 @@ Both answer the whole contact. An empty body answers `400`.
 An email or a phone that a row cannot use is left out, and the row saves.
 Every import has an id and a record.
 
-| Endpoint                      | What it does                                                                                                                                                                                                                                                        | Access    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `POST /api/contacts/bulk`     | Import up to 5,000 contacts. Send `X-Import-Id: <uuid>` to make a retry safe. A header that is not a UUID answers `400`. JSON mode answers `201 { success, count, failed, importId }`. Stream mode sends SSE progress.                                              | your data |
-| `GET /api/imports`            | Your newest 50 imports: `{ imports }`.                                                                                                                                                                                                                              | your data |
-| `GET /api/imports/:id`        | One import record: `status`, `phase`, counts, `summary` and `error`.                                                                                                                                                                                                | your data |
-| `GET /api/imports/:id/rows`   | Rows in one `status`: `failed` (default) or `done`. `limit` 1 to 500, default 200. Answers `{ rows }`, in file order. Each row is `{ index, status, name, error, contactId }`.                                                                                      | your data |
-| `POST /api/imports/:id/retry` | Run the failed rows again from the payload the server kept. Answers `{ importId, status, retried, imported, failed }`. The duplicate check runs after the answer. `400 NOTHING_TO_RETRY` when no row can run again, `409 IMPORT_IN_PROGRESS` while the import runs. | your data |
+| Endpoint                      | What it does                                                                                                                                                                                                                                                                                                         | Access    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `POST /api/contacts/bulk`     | Import up to 5,000 contacts. Send `X-Import-Id: <uuid>` to make a retry safe. A header that is not a UUID answers `400`. JSON mode answers `201 { success, count, failed, photosNotRead, importId }`, where `photosNotRead` counts the saved contacts whose photo could not be read. Stream mode sends SSE progress. | your data |
+| `GET /api/imports`            | Your newest 50 imports: `{ imports }`.                                                                                                                                                                                                                                                                               | your data |
+| `GET /api/imports/:id`        | One import record: `status`, `phase`, counts, `summary` and `error`.                                                                                                                                                                                                                                                 | your data |
+| `GET /api/imports/:id/rows`   | Rows in one `status`: `failed` (default) or `done`. `limit` 1 to 500, default 200. Answers `{ rows }`, in file order. Each row is `{ index, status, name, error, contactId }`.                                                                                                                                       | your data |
+| `POST /api/imports/:id/retry` | Run the failed rows again from the payload the server kept. Answers `{ importId, status, retried, imported, failed }`. The duplicate check runs after the answer. `400 NOTHING_TO_RETRY` when no row can run again, `409 IMPORT_IN_PROGRESS` while the import runs.                                                  | your data |
 
 How an import behaves:
 
@@ -660,12 +661,12 @@ How an import behaves:
   connection, or failed before it saved a contact. Read
   `GET /api/imports/:id` to see what happened.
 
-| `status`   | Meaning                                                                                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `running`  | The contacts are being written.                                                                                                                                   |
-| `imported` | The contacts are saved, and the duplicate check runs.                                                                                                             |
-| `complete` | Everything finished. `summary` holds `imported`, `autoMerged`, `needsReview`, `newUnique` and `failed`. A duplicate check that failed puts its reason in `error`. |
-| `failed`   | Nothing was saved. Send the same request again with the same id.                                                                                                  |
+| `status`   | Meaning                                                                                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `running`  | The contacts are being written.                                                                                                                                                    |
+| `imported` | The contacts are saved, and the duplicate check runs.                                                                                                                              |
+| `complete` | Everything finished. `summary` holds `imported`, `autoMerged`, `needsReview`, `newUnique`, `failed` and `photosNotRead`. A duplicate check that failed puts its reason in `error`. |
+| `failed`   | Nothing was saved. Send the same request again with the same id.                                                                                                                   |
 
 ## Timeline and notes
 

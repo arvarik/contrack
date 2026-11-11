@@ -11,11 +11,7 @@ import {
   type Response,
 } from "express";
 import multer from "multer";
-import {
-  ensureDir,
-  ownerUploadDir,
-  resolveOwnUploadPath,
-} from "../utils/paths.ts";
+import { resolveOwnUploadPath } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
@@ -53,36 +49,24 @@ import {
 } from "../../shared/researchDepth.ts";
 import { researchDepthSchema } from "../../shared/contracts/common.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
-import { AVATAR_MIME_EXTENSIONS } from "../utils/avatarProcessor.ts";
+import {
+  AVATAR_MIME_EXTENSIONS,
+  avatarTypeOf,
+  saveUploadedAvatar,
+} from "../utils/avatarProcessor.ts";
 
-// Avatars go to uploads/u/<ownerId>/avatars/, so the destination callback
-// creates the caller's folder.
+const AVATAR_TYPES_ALLOWED =
+  "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed";
 
-const avatarStorage = multer.diskStorage({
-  // The owner comes from req.principal, which multer hands this callback, so no
-  // stream boundary can lose it the way it can lose the async context.
-  destination: (req, _file, cb) => {
-    const owner = req.principal?.user.id;
-    if (!owner) return cb(new Error("No principal for an avatar upload"), "");
-    const dir = ownerUploadDir(owner, "avatars");
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = AVATAR_MIME_EXTENSIONS[file.mimetype] ?? ".jpg";
-    cb(null, `avatar-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
-  },
-});
+// A contact photo is held in memory and checked by its bytes before anything
+// is written, then saved to uploads/u/<ownerId>/avatars/ under a name the
+// server makes (saveUploadedAvatar).
 const uploadAvatar = multer({
-  storage: avatarStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for avatars
   fileFilter: (_req, file, cb) => {
     if (file.mimetype in AVATAR_MIME_EXTENSIONS) return cb(null, true);
-    cb(
-      new ValidationError(
-        "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed",
-      ),
-    );
+    cb(new ValidationError(AVATAR_TYPES_ALLOWED));
   },
 });
 
@@ -306,7 +290,9 @@ router.post(
       }
 
       // Phase 1: Import
-      let written: { count: number; createdIds: string[]; failed: number };
+      let written: Awaited<
+        ReturnType<typeof contactService.bulkCreateContacts>
+      >;
       try {
         written = await contactService.bulkCreateContacts(
           scope,
@@ -335,7 +321,7 @@ router.post(
 
       log.info(
         "API",
-        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed (import ${importId})`,
+        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed, ${written.photosNotRead} photos not read (import ${importId})`,
       );
 
       // Phases 2 to 4: fingerprints, the duplicate check, the summary. One
@@ -359,11 +345,14 @@ router.post(
           status: record.status,
           count: record.imported,
           failed: record.failed,
+          photosNotRead: record.photosNotRead,
         });
         return;
       }
 
-      let written: { count: number; createdIds: string[]; failed: number };
+      let written: Awaited<
+        ReturnType<typeof contactService.bulkCreateContacts>
+      >;
       try {
         written = await contactService.bulkCreateContacts(
           scope,
@@ -377,7 +366,7 @@ router.post(
       }
       log.info(
         "API",
-        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed (import ${importId})`,
+        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed, ${written.photosNotRead} photos not read (import ${importId})`,
       );
 
       // The tail outlives the response and waits out the settle delay first.
@@ -421,6 +410,7 @@ router.post(
         success: true,
         count: written.count,
         failed: written.failed,
+        photosNotRead: written.photosNotRead,
         importId,
       });
     }
@@ -607,11 +597,21 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     if (!req.file) throw new AppError("No image file provided", 400);
+    // By its bytes: the part's type is the client's claim, and the app keeps
+    // and serves the file as it came.
+    const type = avatarTypeOf(req.file.buffer);
+    if (!type) throw new ValidationError(AVATAR_TYPES_ALLOWED);
+    const scope = scopeOf(req);
+    const filename = await saveUploadedAvatar(
+      scope.ownerId,
+      req.file.buffer,
+      type,
+    );
 
     const updated = contactService.updateAvatar(
-      scopeOf(req),
+      scope,
       String(req.params.id),
-      req.file.filename,
+      filename,
     );
     if (!updated) throw new NotFoundError("Contact");
 

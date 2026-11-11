@@ -39,6 +39,10 @@ works on the **Apple** tab. The **Google** tab reads the current Google CSV
 - A photo inside a vCard is saved on your server. A photo that the vCard
   gives as a web address stays a link to that site, see
   [Privacy](privacy.md#what-leaves-the-server).
+- Contrack reads a JPEG, PNG, GIF, WebP or TIFF photo. Your browser turns an
+  AVIF photo, and in Safari a HEIC photo, the format an iPhone takes, into a
+  JPEG before it sends the file. A photo that still cannot be read leaves its
+  contact with a drawn avatar, and the summary counts it.
 
 ### Export from your address book
 
@@ -63,7 +67,11 @@ app.
 ![A contacts file dropped on the Import page: the import runs, merges one duplicate by itself, and lists three to review](images/flow-import.gif)
 
 Your browser reads the file and sends the contacts to your Contrack server.
-The import then runs in up to three steps:
+When the file holds HEIC or AVIF photos, the browser first says how many it
+is converting, and turns each into a JPEG. Only Safari reads HEIC: in another
+browser the summary counts each HEIC photo as one it could not read, so
+import a file of iPhone photos in Safari. The import then runs in up to three
+steps:
 
 1. **Importing contacts.** Contrack saves each photo in the file on your
    server, then saves the contacts.
@@ -74,10 +82,11 @@ The import then runs in up to three steps:
    automatically** is on in **Settings → Duplicates**.
 
 The summary counts the contacts imported, the duplicates that merged by
-themselves, the possible duplicates to review, and the new contacts. If the
-duplicate check did not finish, the summary says so, and the contacts stay
-saved. Select **Check now** in **Settings → Duplicates** to look for
-duplicates again.
+themselves, the possible duplicates to review, and the new contacts. It also
+says how many photos could not be read, such as a damaged one. Add a photo to
+such a contact on its page. If the duplicate check did not finish, the
+summary says so, and the contacts stay saved. Select **Check now** in
+**Settings → Duplicates** to look for duplicates again.
 
 Imported contacts start untracked, see
 [Track a contact](pulse.md#track-a-contact). **Enrich new contacts
@@ -400,7 +409,11 @@ Each connector card shows a status:
 
 The card's menu holds **Sync now**, **Pause** or **Resume**, **Edit**, **Run
 history**, and **Remove**. **Run history** lists the last 20 syncs: how and
-when each started, how long it took, what it brought in, and any error.
+when each started, how long it took, what it brought in, and any error. A
+contact photo the server could not read, such as a HEIC photo on a CardDAV
+card, shows as "photos not read", and the contact keeps its avatar. The
+server reads the same formats as an import, and a connector's photos never
+pass through a browser to be converted.
 
 **Remove** stops the connector and keeps what it brought in. To delete that
 too, tick "Also delete the interactions it brought in, and the people it found

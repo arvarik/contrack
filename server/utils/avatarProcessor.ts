@@ -2,7 +2,8 @@
  * Decode a base64 data-URI avatar from a VCF import, resize it to 256 px (2x
  * retina), convert to JPEG and save it under the caller's
  * uploads/u/<ownerId>/avatars/, returning the URL. A 150 KB+ photo becomes a 5
- * to 10 KB file instead of a huge base64 string in the database.
+ * to 10 KB file instead of a huge base64 string in the database. Either kind of
+ * photo is read only in a format imageFormats.ts accepts.
  */
 import crypto from "crypto";
 import fs from "fs";
@@ -12,14 +13,9 @@ import { log } from "./logger.ts";
 import { getErrorMessage } from "./helpers.ts";
 import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
 import { ValidationError } from "./AppError.ts";
+import { assertReadableImage } from "./imageFormats.ts";
+import { writeFileAtomically } from "./remoteImage.ts";
 import type { Scope } from "../tenancy/scope.ts";
-
-sharp.cache(false);
-sharp.concurrency(2);
-// No HEIF or AVIF decoding until a sharp release bundles libheif 1.23.7 or
-// later (GHSA-48p4-gj45-w9v6, GHSA-rcqc-842v-m26h, GHSA-hpg4-g2gc-pq42). See
-// remoteImage.ts.
-sharp.block({ operation: ["VipsForeignLoadHeif"] });
 
 // Raster image types only. SVG is left out on purpose: it can carry scripts and
 // is served from the app origin. The extension comes from the MIME type, never
@@ -32,6 +28,59 @@ export const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
   "image/avif": ".avif",
 };
 
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
+/**
+ * The type of a contact photo by its first bytes, one of
+ * AVATAR_MIME_EXTENSIONS, or null. The upload keeps the file as it came, so
+ * this is what stops an SVG or a page sent as image/png, which the app would
+ * then serve from its own origin. It reads signatures only: AVIF has no
+ * decoder here while sharp's HEIF loader is blocked (imageFormats.ts).
+ */
+export function avatarTypeOf(head: Buffer): string | null {
+  const ascii = (from: number, to: number) => head.toString("latin1", from, to);
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (head.subarray(0, 8).equals(PNG_SIGNATURE)) return "image/png";
+  if (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a") return "image/gif";
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
+  if (head.length >= 12 && ascii(4, 8) === "ftyp") {
+    // AVIF names itself as the major brand, or as a compatible brand after
+    // the minor version at bytes 12 to 16.
+    const end = Math.min(head.readUInt32BE(0), head.length);
+    for (let at = 8; at + 4 <= end; at += 4) {
+      if (at !== 12 && ["avif", "avis"].includes(ascii(at, at + 4))) {
+        return "image/avif";
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Save an uploaded contact photo, which `avatarTypeOf` has read, to the
+ * owner's avatars folder, and return its file name. The server makes the name
+ * and takes the extension from the type the bytes showed, never from the
+ * upload.
+ */
+export async function saveUploadedAvatar(
+  ownerId: string,
+  bytes: Buffer,
+  type: string,
+): Promise<string> {
+  const ext = AVATAR_MIME_EXTENSIONS[type];
+  if (!ext) throw new ValidationError(`Not a contact photo type: ${type}`);
+  const filename = `avatar-${Date.now()}-${crypto.randomBytes(4).toString("hex")}${ext}`;
+  await writeFileAtomically(
+    path.join(ownerUploadDir(ownerId, "avatars"), filename),
+    bytes,
+  );
+  return filename;
+}
+
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
 const JPEG_QUALITY = 80;
 
@@ -39,56 +88,79 @@ const PROFILE_PHOTO_SIZE = 512;
 const PROFILE_PHOTO_QUALITY = 82;
 
 /**
- * Process a base64 data-URI avatar: resize, compress, save. Returns the URL
- * path (`/uploads/u/<ownerId>/avatars/abc123.jpg`), or null on failure.
+ * Save a base64 data-URI photo from a vCard as a 256 px JPEG under the
+ * caller's avatars folder, and return its URL path
+ * (`/uploads/u/<ownerId>/avatars/import-<digest>.jpg`).
+ *
+ * Throws a ValidationError when the photo cannot be read: not a base64 image,
+ * a format the server does not read, or bytes that do not decode. Any other
+ * error, such as a full disk, is the server's own, and a later try can work.
  */
-export async function processBase64Avatar(
+export async function saveBase64Avatar(
   scope: Scope,
   dataUri: string,
-): Promise<string | null> {
+): Promise<string> {
+  const match = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!match) throw new ValidationError("Not a base64 image");
+  const inputBuffer = Buffer.from(match[2], "base64");
+
+  // Content-addressed filename so re-importing or re-syncing the same photo
+  // reuses the file on disk rather than writing a new file every run. Only
+  // bytes that passed the check below are written under this name, and the
+  // write is atomic, so a file there is the finished copy.
+  const hash = crypto
+    .createHash("sha256")
+    .update(inputBuffer)
+    .digest("hex")
+    .slice(0, 16);
+  const filename = `import-${hash}.jpg`;
+  // The owner comes from the caller's scope, so the file lands in the same
+  // directory the stored URL will point at.
+  const outputPath = path.join(
+    ownerUploadDir(scope.ownerId, "avatars"),
+    filename,
+  );
+  if (fs.existsSync(outputPath)) {
+    return ownerUploadUrl(scope.ownerId, "avatars", filename);
+  }
+
+  // By its bytes: the type the data URI names is the file's claim.
+  await assertReadableImage(inputBuffer);
+  let jpeg: Buffer;
   try {
-    // Parse the data URI
-    const match = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!match) return null;
-
-    const base64Data = match[2];
-    const inputBuffer = Buffer.from(base64Data, "base64");
-
-    // The owner comes from the caller's scope, so the file lands in the same
-    // directory the stored URL will point at.
-    const avatarDir = ownerUploadDir(scope.ownerId, "avatars");
-    ensureDir(avatarDir);
-
-    // Content-addressed filename so re-importing or re-syncing the same photo
-    // reuses the file on disk rather than writing a new file every run.
-    const hash = crypto
-      .createHash("sha256")
-      .update(inputBuffer)
-      .digest("hex")
-      .slice(0, 16);
-    const filename = `import-${hash}.jpg`;
-    const outputPath = path.join(avatarDir, filename);
-
-    if (fs.existsSync(outputPath)) {
-      return ownerUploadUrl(scope.ownerId, "avatars", filename);
-    }
-
-    // Resize + convert to JPEG
-    const info = await sharp(inputBuffer)
+    jpeg = await sharp(inputBuffer)
       .rotate()
       .resize(AVATAR_SIZE, AVATAR_SIZE, {
         fit: "cover",
         position: "center",
       })
       .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
-      .toFile(outputPath);
+      .toBuffer();
+  } catch (err) {
+    throw new ValidationError("The image could not be decoded", {
+      cause: err,
+    });
+  }
+  // A write cut short leaves no half photo under the name that is reused.
+  await writeFileAtomically(outputPath, jpeg);
 
-    log.debug(
-      "AvatarProcessor",
-      `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(info.size / 1024)}KB (${filename})`,
-    );
+  log.debug(
+    "AvatarProcessor",
+    `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(jpeg.length / 1024)}KB (${filename})`,
+  );
+  return ownerUploadUrl(scope.ownerId, "avatars", filename);
+}
 
-    return ownerUploadUrl(scope.ownerId, "avatars", filename);
+/**
+ * `saveBase64Avatar` for an import: the URL, or null on any failure, which
+ * leaves the contact its drawn avatar. Either way the photo is not saved.
+ */
+export async function processBase64Avatar(
+  scope: Scope,
+  dataUri: string,
+): Promise<string | null> {
+  try {
+    return await saveBase64Avatar(scope, dataUri);
   } catch (err: unknown) {
     log.warn(
       "AvatarProcessor",
@@ -124,6 +196,8 @@ export async function processProfilePhoto(
   const outputPath = path.join(profileDir, filename);
 
   try {
+    // By its bytes: the part's Content-Type is the client's claim.
+    await assertReadableImage(buffer);
     await sharp(buffer)
       .rotate()
       .resize(PROFILE_PHOTO_SIZE, PROFILE_PHOTO_SIZE, {

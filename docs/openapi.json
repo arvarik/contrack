@@ -2900,9 +2900,19 @@
                         "success": { "type": "boolean", "const": true },
                         "count": { "type": "integer" },
                         "failed": { "type": "integer" },
+                        "photosNotRead": {
+                          "type": "integer",
+                          "description": "Saved contacts whose photo could not be read"
+                        },
                         "importId": { "type": "string" }
                       },
-                      "required": ["success", "count", "failed", "importId"],
+                      "required": [
+                        "success",
+                        "count",
+                        "failed",
+                        "photosNotRead",
+                        "importId"
+                      ],
                       "additionalProperties": false
                     },
                     {
@@ -2916,7 +2926,8 @@
                           "enum": ["running", "imported", "complete", "failed"]
                         },
                         "count": { "type": "integer" },
-                        "failed": { "type": "integer" }
+                        "failed": { "type": "integer" },
+                        "photosNotRead": { "type": "integer" }
                       },
                       "required": [
                         "success",
@@ -2924,7 +2935,8 @@
                         "importId",
                         "status",
                         "count",
-                        "failed"
+                        "failed",
+                        "photosNotRead"
                       ],
                       "additionalProperties": false
                     }
@@ -2945,9 +2957,19 @@
                         "success": { "type": "boolean", "const": true },
                         "count": { "type": "integer" },
                         "failed": { "type": "integer" },
+                        "photosNotRead": {
+                          "type": "integer",
+                          "description": "Saved contacts whose photo could not be read"
+                        },
                         "importId": { "type": "string" }
                       },
-                      "required": ["success", "count", "failed", "importId"],
+                      "required": [
+                        "success",
+                        "count",
+                        "failed",
+                        "photosNotRead",
+                        "importId"
+                      ],
                       "additionalProperties": false
                     },
                     {
@@ -2961,7 +2983,8 @@
                           "enum": ["running", "imported", "complete", "failed"]
                         },
                         "count": { "type": "integer" },
-                        "failed": { "type": "integer" }
+                        "failed": { "type": "integer" },
+                        "photosNotRead": { "type": "integer" }
                       },
                       "required": [
                         "success",
@@ -2969,7 +2992,8 @@
                         "importId",
                         "status",
                         "count",
-                        "failed"
+                        "failed",
+                        "photosNotRead"
                       ],
                       "additionalProperties": false
                     }

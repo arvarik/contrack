@@ -15,6 +15,7 @@ import * as m0003 from "./0003_address_trust.ts";
 import * as m0004 from "./0004_unproven_addresses.ts";
 import * as m0005 from "./0005_address_change_links.ts";
 import * as m0006 from "./0006_source_origin.ts";
+import * as m0007 from "./0007_photos_not_read.ts";
 
 export const MIGRATIONS: readonly Migration[] = [
   { id: "0001_baseline", up: m0001.up },
@@ -23,6 +24,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { id: "0004_unproven_addresses", up: m0004.up },
   { id: "0005_address_change_links", up: m0005.up },
   { id: "0006_source_origin", up: m0006.up },
+  { id: "0007_photos_not_read", up: m0007.up },
 ];
 
 /** The last migration this build holds. A database that is up to date has it. */

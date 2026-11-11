@@ -284,6 +284,8 @@ function formatWhen(iso: string): string {
 const PhotoCard = () => {
   const { user, refresh } = useAuth();
   const [file, setFile] = useState<File | null>(null);
+  /** Set while the chosen photo turns into a JPEG. Upload waits for it. */
+  const [photoReading, setPhotoReading] = useState(false);
   const { preferences, mode } = usePreferences();
   const theme = preferences.theme === "system" ? undefined : mode;
   const fallbackUrl = user ? accountAvatarUrl(user.username, theme) : "";
@@ -294,7 +296,7 @@ const PhotoCard = () => {
   const isBusy = upload.isPending || remove.isPending;
 
   const handleUpload = () => {
-    if (!file || isBusy) return;
+    if (!file || isBusy || photoReading) return;
     upload.mutate(file, {
       onSuccess: async () => {
         setFile(null);
@@ -333,6 +335,7 @@ const PhotoCard = () => {
         currentUrl={user?.avatarUrl ?? null}
         fallbackUrl={fallbackUrl}
         onChange={setFile}
+        onReadingChange={setPhotoReading}
         showRemoveCurrent={false}
       />
       <div className="flex items-center justify-end gap-3 pt-2">
@@ -347,7 +350,10 @@ const PhotoCard = () => {
             Remove photo
           </button>
         )}
-        <SaveButton busy={upload.isPending} disabled={!file || isBusy}>
+        <SaveButton
+          busy={upload.isPending}
+          disabled={!file || isBusy || photoReading}
+        >
           <Upload className="w-4 h-4" />
           Upload
         </SaveButton>

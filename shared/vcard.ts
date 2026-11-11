@@ -126,10 +126,39 @@ export function foldLine(line: string): string {
   return parts.join("\r\n ");
 }
 
+/**
+ * The lines of a text. A line ends with LF, CRLF or a lone CR, and every CR
+ * before an LF belongs to that one line end. Apple Contacts can export each
+ * line with CR CR LF: read as a line end and an empty line, the second CR took
+ * the continuation, and every folded value, a photo above all, was cut after
+ * its first line.
+ *
+ * In linear time, on purpose. A regex such as /\r*\n|\r/ tries the run of CRs
+ * again from each CR in it, so a card from a CardDAV server with a long run of
+ * CRs held the server's one thread for minutes.
+ */
+function splitLines(text: string): string[] {
+  const lines: string[] = [];
+  const segments = text.split("\n");
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    let end = segment.length;
+    // The CRs before an LF end the line with it. The last segment has no LF
+    // after it, so each CR at its end is a line end of its own.
+    if (i < segments.length - 1) {
+      while (end > 0 && segment.charCodeAt(end - 1) === 13) end--;
+    }
+    const line = end === segment.length ? segment : segment.slice(0, end);
+    if (!line.includes("\r")) lines.push(line);
+    else for (const part of line.split("\r")) lines.push(part);
+  }
+  return lines;
+}
+
 /** Undo folding: a line beginning with a space or a tab continues the one above. */
 function unfold(text: string): string[] {
   const lines: string[] = [];
-  for (const raw of text.split(/\r\n|\r|\n/)) {
+  for (const raw of splitLines(text)) {
     if ((raw.startsWith(" ") || raw.startsWith("\t")) && lines.length > 0) {
       lines[lines.length - 1] += raw.slice(1);
     } else {

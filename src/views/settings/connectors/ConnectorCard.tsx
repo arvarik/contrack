@@ -22,7 +22,7 @@ import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { formatRelative } from "../../../lib/datetime";
 import { CARD, TONE_WASH } from "../../../lib/styles";
-import { cn, errorText } from "../../../lib/utils";
+import { cn, errorText, plural } from "../../../lib/utils";
 import {
   useDeleteConnector,
   useSyncConnector,
@@ -112,6 +112,8 @@ function formatStats(
     );
   if (stats.errors)
     parts.push(`${stats.errors} error${stats.errors === 1 ? "" : "s"}`);
+  if (stats.photosNotRead)
+    parts.push(`${plural(stats.photosNotRead, "photo", "photos")} not read`);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 

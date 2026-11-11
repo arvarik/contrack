@@ -267,6 +267,54 @@ describe("reading", () => {
     expect(contact).toMatchObject(expected);
   });
 
+  describe("a folded photo and note, whatever ends the lines", () => {
+    // A real 4 by 4 JPEG: its base64 folds over six lines.
+    const jpeg =
+      "/9j/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAAEAAQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAABAb/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCWAEpn/9k=";
+    const note =
+      "Met at the Lisbon offsite. Follow up in March: the seed round, the board seat and the first hire.";
+    const file = (end: string) =>
+      card(
+        "VERSION:3.0",
+        "FN:Ada",
+        foldLine(`PHOTO;ENCODING=b;TYPE=JPEG:${jpeg}`),
+        foldLine(`NOTE:${escapeValue(note)}`),
+        "EMAIL:ada@analytical.example",
+      ).replaceAll("\r\n", end);
+
+    it.each([
+      ["CR CR LF, as an Apple Contacts export can", "\r\r\n"],
+      ["CR LF", "\r\n"],
+      ["LF", "\n"],
+      ["CR", "\r"],
+    ])("reads every line of each value with %s", (_label, end) => {
+      expect(file(end).split(end).length).toBeGreaterThan(10);
+      expect(read(file(end))).toEqual([
+        expect.objectContaining({
+          avatarUrl: `data:image/jpeg;base64,${jpeg}`,
+          about: note,
+          emails: [
+            expect.objectContaining({ email: "ada@analytical.example" }),
+          ],
+        }),
+      ]);
+    });
+  });
+
+  it("reads a card with a long run of CRs in linear time", () => {
+    // A CardDAV server sends this to the server, which has one thread. A
+    // regex that tried the run again from each CR took seconds here. No LF
+    // follows the run, which is what made it slow.
+    const text = card(
+      "VERSION:3.0",
+      `FN:Ada${"\r".repeat(200_000)}EMAIL:ada@analytical.example`,
+    );
+    const started = performance.now();
+    const contacts = read(text);
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(contacts).toEqual([expect.objectContaining({ name: "Ada" })]);
+  });
+
   it("reads a quoted parameter list", () => {
     const [parsed] = parseVCards(card('TEL;TYPE="WORK,VOICE":+1 555 0000'));
     expect(valuesOf(parsed!, "TEL")[0]!.params.TYPE).toEqual(["WORK", "VOICE"]);

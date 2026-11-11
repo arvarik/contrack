@@ -94,6 +94,9 @@ const ADDED_SINCE_FIXTURE = [
   "auth_links",
   // 0006_source_origin: contact_sources gains a column
   "contact_sources",
+  // 0007_photos_not_read: imports and import_rows gain a column each
+  "imports",
+  "import_rows",
 ];
 
 interface MasterRow {
@@ -233,6 +236,7 @@ describe("a new database", () => {
       "0004_unproven_addresses",
       "0005_address_change_links",
       "0006_source_origin",
+      "0007_photos_not_read",
     ]);
     const addr = dev
       .prepare(

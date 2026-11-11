@@ -11,6 +11,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import sharp from "sharp";
 
 process.env.IMPORT_SETTLE_MS = "20";
 
@@ -40,6 +43,7 @@ interface Frame {
     needsReview: number;
     newUnique: number;
     failed: number;
+    photosNotRead: number;
   } | null;
 }
 
@@ -52,6 +56,7 @@ interface Record {
   processed: number;
   imported: number;
   failed: number;
+  photosNotRead: number;
   summary: Frame["summary"];
   error: string | null;
   completedAt: string | null;
@@ -187,6 +192,7 @@ describe("every import leaves a record", () => {
       needsReview: 0,
       newUnique: 1,
       failed: 0,
+      photosNotRead: 0,
     });
   });
 
@@ -295,6 +301,79 @@ describe("the same import id twice", () => {
   });
 });
 
+/** A synthetic HEIC as a data URI: a photo the server cannot read. */
+function heicPhoto(): string {
+  const bytes = readFileSync(
+    path.resolve(import.meta.dirname, "../fixtures/images/photo.heic"),
+  );
+  return `data:image/heic;base64,${bytes.toString("base64")}`;
+}
+
+// A photo the server cannot read
+
+describe("a photo the server cannot read", () => {
+  // A synthetic 96 by 64 HEIC, the format an iPhone takes, which the server
+  // does not read. The browser converts one before it sends it.
+  const heic = readFileSync(
+    path.resolve(import.meta.dirname, "../fixtures/images/photo.heic"),
+  ).toString("base64");
+  const svg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>',
+  ).toString("base64");
+
+  async function rows() {
+    const jpeg = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "#006a91" },
+    })
+      .jpeg()
+      .toBuffer();
+    return [
+      {
+        name: "Pia Photo",
+        avatarUrl: `data:image/jpeg;base64,${jpeg.toString("base64")}`,
+      },
+      { name: "Hal Heic", avatarUrl: `data:image/heic;base64,${heic}` },
+      { name: "Sam Svg", avatarUrl: `data:image/png;base64,${svg}` },
+      { name: "Nell No Photo" },
+    ];
+  }
+
+  function avatarOf(name: string): string {
+    return (
+      sqlite
+        .prepare(
+          "SELECT avatarUrl FROM contacts WHERE ownerId = ? AND name = ?",
+        )
+        .get(owner, name) as { avatarUrl: string }
+    ).avatarUrl;
+  }
+
+  it("is counted on the summary, and its contact keeps a drawn avatar", async () => {
+    const id = crypto.randomUUID();
+    const { frames } = await stream(await rows(), id);
+    expect(frames.at(-1)).toMatchObject({
+      done: true,
+      summary: { imported: 4, failed: 0, photosNotRead: 2 },
+    });
+    expect(await record(id)).toMatchObject({ imported: 4, photosNotRead: 2 });
+
+    expect(avatarOf("Pia Photo")).toMatch(/^\/uploads\/u\/.+\/avatars\//);
+    for (const name of ["Hal Heic", "Sam Svg", "Nell No Photo"]) {
+      expect(avatarOf(name)).toMatch(/^\/api\/avatar\//);
+    }
+  });
+
+  it("is counted on the JSON path, and again from the record for the same id", async () => {
+    const id = crypto.randomUUID();
+    const first = await json(await rows(), id);
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({ count: 4, photosNotRead: 2 });
+
+    const again = await json(await rows(), id);
+    expect(again.body).toMatchObject({ repeated: true, photosNotRead: 2 });
+  });
+});
+
 // A row that fails
 
 describe("a row that fails", () => {
@@ -396,10 +475,28 @@ describe("a row that fails", () => {
       needsReview: 0,
       newUnique: 2,
       failed: 0,
+      photosNotRead: 0,
     });
     expect(
       (await request(app).get(`/api/imports/${id}/rows`)).body.rows,
     ).toEqual([]);
+  });
+
+  it("keeps its lost photo counted when it is run again", async () => {
+    // The kept payload has no photo once the server failed to read it, so
+    // the row has to remember that itself.
+    const broken = breakRow("Hal Heic");
+    const id = crypto.randomUUID();
+    await stream(
+      [{ name: "Ada Lovelace" }, { name: "Hal Heic", avatarUrl: heicPhoto() }],
+      id,
+    );
+    broken.mockRestore();
+
+    await request(app).post(`/api/imports/${id}/retry`).expect(200);
+    const rec = await until(id, "complete");
+    expect(rec).toMatchObject({ imported: 2, failed: 0, photosNotRead: 1 });
+    expect(rec.summary).toMatchObject({ photosNotRead: 1 });
   });
 
   it("refuses a retry when nothing failed", async () => {
@@ -438,7 +535,12 @@ describe("an import that stops part way", () => {
         real(s, importId, index, contactId, name);
       });
     const id = crypto.randomUUID();
-    const rows = Array.from({ length: 260 }, (_, i) => ({ name: `Row ${i}` }));
+    const rows: { name: string; avatarUrl?: string }[] = Array.from(
+      { length: 260 },
+      (_, i) => ({ name: `Row ${i}` }),
+    );
+    // A row the run never reached, whose photo the server could not read.
+    rows[257] = { name: "Row 257", avatarUrl: heicPhoto() };
     const { frames } = await stream(rows, id);
     expect(frames.some((f) => f.done)).toBe(false);
     expect(contactCount()).toBe(250);
@@ -457,6 +559,7 @@ describe("an import that stops part way", () => {
     const retry = await request(app).post(`/api/imports/${id}/retry`);
     expect(retry.body).toMatchObject({ retried: 10, imported: 260, failed: 0 });
     expect(contactCount()).toBe(260);
+    expect(await until(id, "complete")).toMatchObject({ photosNotRead: 1 });
   });
 
   it("settles a run whose process died between batches, and imports nothing twice", async () => {
@@ -530,6 +633,7 @@ describe("an import whose duplicate check was interrupted", () => {
       needsReview: 0,
       newUnique: 1,
       failed: 0,
+      photosNotRead: 0,
     });
     // The pair the check found is merged, once.
     const merged = sqlite

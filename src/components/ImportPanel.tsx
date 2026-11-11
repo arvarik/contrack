@@ -18,6 +18,7 @@ import {
   RotateCw,
   WifiOff,
   ChevronDown,
+  ImageOff,
 } from "lucide-react";
 import {
   SOURCE_FILES,
@@ -25,6 +26,7 @@ import {
   type ImportSource,
   type ImportedContact,
 } from "../lib/importers";
+import { convertHeifPhotos } from "../lib/heifPhoto";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, NetworkError, apiFetch } from "../api/client";
 import { refreshDuplicates } from "../api/suggestions";
@@ -49,7 +51,7 @@ import {
 import { useAuth } from "./auth/AuthGate";
 import { TAB_CONTAINER, TONE_WASH, tabItem } from "../lib/styles";
 import { DURATION, EASE } from "../lib/motion";
-import { cn, errorText } from "../lib/utils";
+import { cn, errorText, plural } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
 interface ImportPanelProps {
@@ -150,6 +152,10 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     null,
   );
   const pollGeneration = useRef(0);
+  /** False once the panel is gone, so a photo conversion it began is dropped. */
+  const mounted = useRef(true);
+  /** Set while the file's HEIC photos become JPEGs, before anything is sent. */
+  const [converting, setConverting] = useState(false);
   const phaseRef = useRef<ImportPhaseState>("idle");
   phaseRef.current = phase;
 
@@ -218,6 +224,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                 needsReview: 0,
                 newUnique: record.imported,
                 failed: record.failed,
+                photosNotRead: record.photosNotRead,
               },
               record.error,
             );
@@ -388,6 +395,26 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       return rejectFile(errorText(err) || "Could not read the file");
     }
 
+    // The server reads no HEIC photo, which is what an iPhone takes, so each
+    // one becomes a JPEG here. One that will not is counted in the summary.
+    // Nothing is sent or remembered until this ends, so a panel closed
+    // meanwhile drops the import: one opened next could not reconnect to it,
+    // and the same file chosen there would be imported twice.
+    setConverting(true);
+    await convertHeifPhotos(
+      newContacts,
+      (done, total) =>
+        setProgress({
+          phase: "importing",
+          processed: done,
+          total,
+          message: `Converting ${plural(total, "photo", "photos")}…`,
+        }),
+      () => !mounted.current,
+    );
+    if (!mounted.current) return;
+    setConverting(false);
+
     const id = crypto.randomUUID();
     pendingRef.current = { id, contacts: newContacts };
     setImportId(id);
@@ -497,12 +524,13 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     }
   }, [accountId, poll]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       pollGeneration.current += 1;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const formats = SOURCE_FILES[activeTab];
 
@@ -677,6 +705,25 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   </div>
                 )}
 
+                {summary.photosNotRead > 0 && (
+                  <div className="flex items-center gap-3 px-5 py-3.5">
+                    <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
+                      <ImageOff className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-on-surface">
+                        {plural(summary.photosNotRead, "photo", "photos")} could
+                        not be read
+                      </p>
+                      <p className="text-xs text-on-surface-variant">
+                        {summary.photosNotRead === 1
+                          ? "That contact has a drawn avatar. Add a photo on its page"
+                          : "Those contacts have drawn avatars. Add a photo on each page"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {checkError && (
                   <div className="flex items-center gap-3 px-5 py-3.5">
                     <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
@@ -832,14 +879,20 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
               {phase === "importing" && progress?.total ? (
                 <div className="w-full max-w-xs space-y-2 mt-3">
                   <div className="flex justify-between text-xs font-bold">
-                    <span className="text-on-surface-variant">Importing</span>
+                    <span className="text-on-surface-variant">
+                      {converting ? "Converting photos" : "Importing"}
+                    </span>
                     <span className="text-primary tabular-nums">
                       {progress.processed ?? 0}/{progress.total}
                     </span>
                   </div>
                   <div
                     role="progressbar"
-                    aria-label="Import progress"
+                    aria-label={
+                      converting
+                        ? "Photo conversion progress"
+                        : "Import progress"
+                    }
                     aria-valuemin={0}
                     aria-valuemax={progress.total}
                     aria-valuenow={progress.processed ?? 0}

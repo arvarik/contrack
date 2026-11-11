@@ -23,6 +23,8 @@ export interface RunStats {
   correspondents?: number;
   skipped?: number;
   errors?: number;
+  /** Contact photos the run could not read, such as a HEIC photo. */
+  photosNotRead?: number;
   [key: string]: unknown;
 }
 

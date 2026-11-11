@@ -958,6 +958,8 @@ export const imports = sqliteTable(
     processed: integer("processed").notNull().default(0),
     imported: integer("imported").notNull().default(0),
     failed: integer("failed").notNull().default(0),
+    /** Saved contacts whose vCard photo could not be read. */
+    photosNotRead: integer("photosNotRead").notNull().default(0),
     autoMerged: integer("autoMerged"),
     needsReview: integer("needsReview"),
     newUnique: integer("newUnique"),
@@ -991,6 +993,8 @@ export const importRows = sqliteTable(
     name: text("name"),
     error: text("error"),
     payload: text("payload"),
+    /** 1 when the contact was saved without the photo its vCard held. */
+    photoNotRead: integer("photoNotRead").notNull().default(0),
   },
   (table) => [
     primaryKey({ columns: [table.importId, table.rowIndex] }),
