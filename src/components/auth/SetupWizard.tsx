@@ -37,7 +37,8 @@ export const SetupWizard = ({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (busy) return;
+    // The photo is still turning into a JPEG: the button waits for it.
+    if (busy || form.photoReading) return;
     if (!form.isValid) {
       // Reveal every problem at once rather than one submit at a time.
       form.revealAll();
@@ -95,7 +96,7 @@ export const SetupWizard = ({
       </div>
 
       <div className="space-y-2">
-        <AuthSubmit busy={busy}>
+        <AuthSubmit busy={busy} disabled={form.photoReading}>
           {busy ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />

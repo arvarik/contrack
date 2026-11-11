@@ -2,7 +2,7 @@
  * A round photo preview and drop zone, in Account settings and in account
  * creation, where it stages an optional photo before the first sign-in.
  */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import { Camera } from "lucide-react";
 import { cn, errorText } from "../../lib/utils";
@@ -16,6 +16,11 @@ interface AccountPhotoFieldProps {
   onChange: (file: File | null) => void;
   onRemove?: () => void;
   showRemoveCurrent?: boolean;
+  /**
+   * Hears when a chosen photo starts and stops turning into a JPEG, so the
+   * form can wait: until then `value` is still the photo before it.
+   */
+  onReadingChange?: (reading: boolean) => void;
 }
 
 // AVIF and HEIC become a JPEG in the browser before they are sent: the server
@@ -42,12 +47,34 @@ export const AccountPhotoField = ({
   onChange,
   onRemove,
   showRemoveCurrent = true,
+  onReadingChange,
 }: AccountPhotoFieldProps) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
   /** Set while a HEIC photo becomes a JPEG. */
   const [reading, setReading] = useState(false);
+  /**
+   * Counts the picks. A photo that finishes converting after Remove, after
+   * another pick or after the field is gone is dropped, so it cannot put back
+   * what the person took out.
+   */
+  const pick = useRef(0);
+
+  const setReadingFor = useCallback(
+    (next: boolean) => {
+      setReading(next);
+      onReadingChange?.(next);
+    },
+    [onReadingChange],
+  );
+
+  useEffect(
+    () => () => {
+      pick.current += 1;
+    },
+    [],
+  );
 
   // Manage object URL lifecycle so memory does not leak
   useEffect(() => {
@@ -82,17 +109,20 @@ export const AccountPhotoField = ({
         return;
       }
       if (accepted.length === 0) return;
+      const mine = ++pick.current;
       setError(null);
-      setReading(true);
+      setReadingFor(true);
       try {
-        onChange(await readablePhotoFile(accepted[0]));
+        const file = await readablePhotoFile(accepted[0]);
+        if (mine === pick.current) onChange(file);
       } catch (err) {
-        setError(`Could not read the photo: ${errorText(err)}`);
+        if (mine === pick.current)
+          setError(`Could not read the photo: ${errorText(err)}`);
       } finally {
-        setReading(false);
+        if (mine === pick.current) setReadingFor(false);
       }
     },
-    [onChange],
+    [onChange, setReadingFor],
   );
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
@@ -116,6 +146,8 @@ export const AccountPhotoField = ({
       : fallbackUrl;
 
   const handleRemove = () => {
+    pick.current += 1;
+    if (reading) setReadingFor(false);
     setError(null);
     onChange(null);
     onRemove?.();
@@ -178,7 +210,9 @@ export const AccountPhotoField = ({
           >
             Choose photo
           </button>
-          {(value !== null || (showRemoveCurrent && Boolean(currentUrl))) && (
+          {(value !== null ||
+            reading ||
+            (showRemoveCurrent && Boolean(currentUrl))) && (
             <button
               type="button"
               onClick={handleRemove}

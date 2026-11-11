@@ -88,6 +88,9 @@ interface AccountForm {
   values: Values;
   photo: File | null;
   setPhoto: (photo: File | null) => void;
+  /** Set while the chosen photo turns into a JPEG: not ready to send yet. */
+  photoReading: boolean;
+  setPhotoReading: (reading: boolean) => void;
   isValid: boolean;
   isUsernameSuggested: boolean;
   /** The error to show for a field: only after the user has left it. */
@@ -110,6 +113,7 @@ interface AccountForm {
 export function useAccountForm(): AccountForm {
   const [values, setValues] = useState<Values>({ ...EMPTY });
   const [photo, setPhoto] = useState<File | null>(null);
+  const [photoReading, setPhotoReading] = useState(false);
   const [usernameEdited, setUsernameEdited] = useState(false);
   // Only fields the user has left show errors, so the form is not a wall of
   // red before they have typed anything.
@@ -164,6 +168,8 @@ export function useAccountForm(): AccountForm {
     values,
     photo,
     setPhoto,
+    photoReading,
+    setPhotoReading,
     isValid: Object.keys(errors).length === 0,
     isUsernameSuggested,
     errorFor: (field) => (touched[field] ? errors[field] : undefined),
@@ -226,6 +232,7 @@ export const AccountFields = ({
             form.values.username || form.values.displayName,
           )}
           onChange={form.setPhoto}
+          onReadingChange={form.setPhotoReading}
         />
         <p className="text-xs text-on-surface-variant">
           Optional. You can add or change it later in Settings

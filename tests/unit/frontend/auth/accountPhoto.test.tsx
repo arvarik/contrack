@@ -15,12 +15,36 @@ import {
   createAccountThenPhoto,
   useAccountForm,
 } from "../../../../src/components/auth/accountForm";
+import { Register } from "../../../../src/components/auth/Register";
 import { toast } from "sonner";
 import { uploadAccountAvatar } from "../../../../src/api/auth";
 
 vi.mock("../../../../src/api/auth", () => ({
   uploadAccountAvatar: vi.fn(),
+  registerAccount: vi.fn(),
 }));
+
+/**
+ * The HEIC conversion, which a test can hold open. Any other file passes
+ * through as it came, as it does in the app.
+ */
+const heif = vi.hoisted(() => ({
+  read: null as null | ((file: File) => Promise<File>),
+}));
+vi.mock("../../../../src/lib/heifPhoto", () => ({
+  readablePhotoFile: (file: File) => heif.read?.(file) ?? Promise.resolve(file),
+}));
+
+/** A HEIC photo whose conversion ends when the test says. */
+function holdConversion() {
+  let finish!: (file: File) => void;
+  heif.read = () => new Promise((done) => (finish = done));
+  return {
+    heic: new File(["heic"], "IMG_0001.HEIC", { type: "image/heic" }),
+    finish: () =>
+      finish(new File(["jpeg"], "IMG_0001.jpg", { type: "image/jpeg" })),
+  };
+}
 
 describe("AccountAvatar", () => {
   afterEach(() => {
@@ -92,8 +116,37 @@ describe("AccountPhotoField", () => {
   });
 
   afterEach(() => {
+    heif.read = null;
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("tells the form while a photo converts, and keeps Remove when the photo finishes after it", async () => {
+    const { heic, finish } = holdConversion();
+    const onChange = vi.fn();
+    const onReadingChange = vi.fn();
+    const { container } = render(
+      <AccountPhotoField
+        value={null}
+        fallbackUrl="/fallback.png"
+        onChange={onChange}
+        onReadingChange={onReadingChange}
+      />,
+    );
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [heic] },
+    });
+    await waitFor(() => expect(onReadingChange).toHaveBeenLastCalledWith(true));
+    expect(screen.getByRole("status").textContent).toBe("Reading the photo…");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(onReadingChange).toHaveBeenLastCalledWith(false);
+    finish();
+    await new Promise((settle) => setTimeout(settle, 10));
+
+    // The photo that finished late did not come back.
+    expect(onChange.mock.calls).toEqual([[null]]);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("refuses a file over 10 MB in words tied to the field, then takes a valid one", async () => {
@@ -150,6 +203,30 @@ describe("AccountPhotoField", () => {
     await waitFor(() => {
       expect(document.activeElement).toBe(chooseBtn);
     });
+  });
+});
+
+describe("creating an account while its photo converts", () => {
+  afterEach(() => {
+    heif.read = null;
+    cleanup();
+  });
+
+  it("waits to create the account until the photo is a JPEG", async () => {
+    const { heic, finish } = holdConversion();
+    const { container } = render(
+      <Register onRegistered={vi.fn()} onCancel={vi.fn()} />,
+    );
+    const create = screen.getByRole("button", { name: /create account/i });
+    expect(create.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [heic] },
+    });
+    await waitFor(() => expect(create.hasAttribute("disabled")).toBe(true));
+
+    finish();
+    await waitFor(() => expect(create.hasAttribute("disabled")).toBe(false));
   });
 });
 

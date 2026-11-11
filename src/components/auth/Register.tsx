@@ -28,7 +28,8 @@ export const Register = ({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (busy) return;
+    // The photo is still turning into a JPEG: the button waits for it.
+    if (busy || form.photoReading) return;
     if (!form.isValid) {
       form.revealAll();
       return;
@@ -71,7 +72,7 @@ export const Register = ({
         {formError && <AuthError>{formError}</AuthError>}
       </div>
 
-      <AuthSubmit busy={busy}>
+      <AuthSubmit busy={busy} disabled={form.photoReading}>
         {busy ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
