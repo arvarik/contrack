@@ -34,6 +34,27 @@ vi.mock("../../../../src/components/auth/AuthGate", () => ({
 }));
 
 /**
+ * The HEIC conversion, which a test can hold open. It returns at once unless
+ * a test sets `heif.convert`: no other file here holds a photo.
+ */
+const heif = vi.hoisted(() => ({
+  convert: null as
+    | null
+    | ((
+        contacts: unknown[],
+        onProgress?: (done: number, total: number) => void,
+        cancelled?: () => boolean,
+      ) => Promise<number>),
+}));
+vi.mock("../../../../src/lib/heifPhoto", () => ({
+  convertHeifPhotos: (
+    contacts: unknown[],
+    onProgress?: (done: number, total: number) => void,
+    cancelled?: () => boolean,
+  ) => heif.convert?.(contacts, onProgress, cancelled) ?? Promise.resolve(0),
+}));
+
+/**
  * Animations are stubbed out. `AnimatePresence mode="wait"` holds the next
  * card back until the previous one has animated off, which is slow under a
  * full unit run. The states are under test, not the crossfade.
@@ -256,6 +277,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  heif.convert = null;
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -553,6 +575,41 @@ describe("rows the server could not write", () => {
       expect(screen.getByText("3 new contacts")).toBeTruthy(),
     );
     expect(screen.queryByText(/could not be imported/)).toBeNull();
+  });
+});
+
+describe("a file whose HEIC photos are converting", () => {
+  it("shows the conversion, and a closed panel drops the import so a reopened one cannot import it twice", async () => {
+    let finish!: () => void;
+    let cancelled: (() => boolean) | undefined;
+    heif.convert = (_contacts, onProgress, isCancelled) => {
+      cancelled = isCancelled;
+      onProgress?.(1, 3);
+      return new Promise((done) => (finish = () => done(3)));
+    };
+    const server = stubServer({
+      onImport: () => {
+        throw new Error("no import should start");
+      },
+    });
+    const { unmount } = mount();
+    chooseFile();
+
+    await waitFor(() =>
+      expect(screen.getByText("Converting 3 photos…")).toBeTruthy(),
+    );
+    expect(screen.getByText("Converting photos")).toBeTruthy();
+    expect(
+      screen.getByRole("progressbar", { name: "Photo conversion progress" }),
+    ).toBeTruthy();
+
+    unmount();
+    expect(cancelled?.()).toBe(true);
+    finish();
+    await new Promise((settle) => setTimeout(settle, 20));
+
+    expect(server.posts()).toHaveLength(0);
+    expect(recallImport("acct-1")).toBeNull();
   });
 });
 

@@ -206,17 +206,21 @@ function dataUriOf(blob: Blob): Promise<string> {
  * Turn each HEIF photo of an import into a JPEG data URI, in place, one at a
  * time. A photo that will not convert stays as it was: the server cannot read
  * it either, and the import's summary counts it. `onProgress` hears the count
- * before the first photo and after each one. Returns how many photos were HEIF.
+ * before the first photo and after each one. `cancelled` is asked before each
+ * photo, and the rest stay as they were once it says yes. Returns how many
+ * photos were HEIF.
  */
 export async function convertHeifPhotos(
   contacts: { avatarUrl?: string | null }[],
   onProgress?: (done: number, total: number) => void,
+  cancelled?: () => boolean,
 ): Promise<number> {
   const heif = contacts.filter((c) => isHeifDataUri(c.avatarUrl));
   if (heif.length === 0) return 0;
   onProgress?.(0, heif.length);
   let done = 0;
   for (const contact of heif) {
+    if (cancelled?.()) break;
     const bytes = dataUriBytes(contact.avatarUrl!);
     if (bytes) {
       try {

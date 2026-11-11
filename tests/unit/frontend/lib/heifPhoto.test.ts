@@ -147,6 +147,20 @@ describe("convertHeifPhotos", () => {
     expect(FakeWorker.made).toEqual([]);
   });
 
+  it("leaves the photos after the one it was cancelled at as they were", async () => {
+    FakeWorker.answer = () => ({ error: "HEIF processing error" });
+    const heic = `data:image/heic;base64,${HEIC.toString("base64")}`;
+    let asked = 0;
+
+    await convertHeifPhotos(
+      [{ avatarUrl: heic }, { avatarUrl: heic }, { avatarUrl: heic }],
+      undefined,
+      () => ++asked > 1,
+    );
+
+    expect(FakeWorker.made.map((w) => w.photos)).toEqual([1]);
+  });
+
   it("stops a worker that never answers, and gives the next photo a fresh one", async () => {
     vi.useFakeTimers();
     FakeWorker.answer = () => null;

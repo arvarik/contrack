@@ -152,6 +152,10 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     null,
   );
   const pollGeneration = useRef(0);
+  /** False once the panel is gone, so a photo conversion it began is dropped. */
+  const mounted = useRef(true);
+  /** Set while the file's HEIC photos become JPEGs, before anything is sent. */
+  const [converting, setConverting] = useState(false);
   const phaseRef = useRef<ImportPhaseState>("idle");
   phaseRef.current = phase;
 
@@ -393,14 +397,23 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
 
     // The server reads no HEIC photo, which is what an iPhone takes, so each
     // one becomes a JPEG here. One that will not is counted in the summary.
-    await convertHeifPhotos(newContacts, (done, total) =>
-      setProgress({
-        phase: "importing",
-        processed: done,
-        total,
-        message: `Converting ${plural(total, "photo", "photos")}…`,
-      }),
+    // Nothing is sent or remembered until this ends, so a panel closed
+    // meanwhile drops the import: one opened next could not reconnect to it,
+    // and the same file chosen there would be imported twice.
+    setConverting(true);
+    await convertHeifPhotos(
+      newContacts,
+      (done, total) =>
+        setProgress({
+          phase: "importing",
+          processed: done,
+          total,
+          message: `Converting ${plural(total, "photo", "photos")}…`,
+        }),
+      () => !mounted.current,
     );
+    if (!mounted.current) return;
+    setConverting(false);
 
     const id = crypto.randomUUID();
     pendingRef.current = { id, contacts: newContacts };
@@ -511,12 +524,13 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     }
   }, [accountId, poll]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       pollGeneration.current += 1;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const formats = SOURCE_FILES[activeTab];
 
@@ -865,14 +879,20 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
               {phase === "importing" && progress?.total ? (
                 <div className="w-full max-w-xs space-y-2 mt-3">
                   <div className="flex justify-between text-xs font-bold">
-                    <span className="text-on-surface-variant">Importing</span>
+                    <span className="text-on-surface-variant">
+                      {converting ? "Converting photos" : "Importing"}
+                    </span>
                     <span className="text-primary tabular-nums">
                       {progress.processed ?? 0}/{progress.total}
                     </span>
                   </div>
                   <div
                     role="progressbar"
-                    aria-label="Import progress"
+                    aria-label={
+                      converting
+                        ? "Photo conversion progress"
+                        : "Import progress"
+                    }
                     aria-valuemin={0}
                     aria-valuemax={progress.total}
                     aria-valuenow={progress.processed ?? 0}
