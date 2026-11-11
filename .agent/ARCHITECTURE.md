@@ -281,5 +281,5 @@ measured in CI without keys.
 ## 10. Commands
 
 `npm run dev` (port 3210), `npm run build`, `npm test`, `npm run lint`,
-`npm run knip`, `npm run api:openapi`, `npm run test:e2e`, `npm run db:new <name>`,
+`npm run knip`, `npm run api:openapi`, `npm run notices`, `npm run test:e2e`, `npm run db:new <name>`,
 `npm run models:fetch`, `npm run brand:icons`. `CONTRIBUTING.md` explains each.

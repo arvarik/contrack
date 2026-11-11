@@ -27,6 +27,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - An import's summary says how many photos it could not read, and a
   connector's run history counts the contact photos it could not read. Before,
   those contacts got a drawn avatar without a word.
+- Every instance serves `/third-party-notices.txt`: each package, model, font
+  and data file Contrack ships from others, with its licence. The Docker
+  image holds the file too.
 
 ### Changed
 
