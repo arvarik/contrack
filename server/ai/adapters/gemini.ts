@@ -101,6 +101,13 @@ function translateSchema(node: JsonSchemaNode): GeminiSchemaNode {
 
 // Constants
 
+/**
+ * The Gemini Developer API version for both `listModels()` and `@google/genai`.
+ * `@google/genai` 3.0 changed its default from `v1beta` to `v1`, which lacks
+ * `gemini-3.1-pro-preview` and preview models that `v1beta/models` lists.
+ */
+const GEMINI_API_VERSION = "v1beta";
+
 /** How long a model sits out after a 429, 5xx or timeout, when Google names no delay. */
 const CIRCUIT_BREAKER_DURATION_MS = 30_000;
 
@@ -223,6 +230,7 @@ export class GeminiAdapter implements AIProvider {
       const { GoogleGenAI: Client } = await import("@google/genai");
       this.client = new Client({
         apiKey: this.apiKey,
+        apiVersion: GEMINI_API_VERSION,
         httpOptions: { retryOptions: { attempts: 1 } },
       });
     }
@@ -293,7 +301,7 @@ export class GeminiAdapter implements AIProvider {
 
     do {
       const url = new URL(
-        "https://generativelanguage.googleapis.com/v1beta/models",
+        `https://generativelanguage.googleapis.com/${GEMINI_API_VERSION}/models`,
       );
       url.searchParams.set("key", this.apiKey);
       url.searchParams.set("pageSize", "200");
