@@ -68,6 +68,7 @@ describe("Gemini call budget", () => {
       maxOutputTokens: 100,
     });
     expect(sdk.configs[0]).toMatchObject({
+      apiVersion: "v1beta",
       httpOptions: { retryOptions: { attempts: 1 } },
     });
     expect(sdk.generate.mock.calls[0][0].config).toMatchObject({
