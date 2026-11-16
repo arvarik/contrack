@@ -34,20 +34,17 @@ interface ResearchDepthFigures {
 
 /**
  * The Enrichment page's measured time and cost per depth. Twenty contacts
- * imported from LinkedIn, with Gemini 3.8 Flash and 3.5 Flash-Lite: the
- * means over the runs that added details, 17 at Standard and 19 at Deep.
- * The cost is $14 per 1,000 web searches, and $0.75 and $3.75 per million
- * input and output tokens, Gemini 3.8 Flash's prices through 2026. Its token
- * prices double in January 2027, so measure again then (the cost tip names
- * 2026 as the year of its prices). Gemini only: the controls leave them out
- * on another provider (`depthFiguresApply`).
+ * imported from LinkedIn: the means over the runs that added details, 17 at
+ * Standard and 19 at Deep, priced at $14 per 1,000 web searches and Gemini 4
+ * Hydrogen's $1.50 and $7.50 per million input and output tokens. Gemini only:
+ * the controls leave them out on another provider (`depthFiguresApply`).
  */
 export const RESEARCH_DEPTH_FIGURES: Record<
   ResearchDepth,
   ResearchDepthFigures
 > = {
-  standard: { seconds: 20, searches: 5, costUsd: 0.08 },
-  deep: { seconds: 32, searches: 7, costUsd: 0.13 },
+  standard: { seconds: 20, searches: 5, costUsd: 0.09 },
+  deep: { seconds: 32, searches: 7, costUsd: 0.16 },
 };
 
 // What one contact costs on each provider, for the cost tip beside "Research
@@ -76,20 +73,19 @@ interface ResearchPrices {
 }
 
 /**
- * The providers' list prices. Gemini 3.8 Flash's token prices run to
- * December 31, 2026. Google does not bill the first 5,000 searches a month on
- * Gemini 3. Anthropic and OpenAI list no free searches, and bill the tokens
- * of the pages a search returns, so their estimates, on Gemini's token
+ * The providers' list prices. Google does not bill the first 5,000 searches a
+ * month on Gemini. Anthropic and OpenAI list no free searches, and bill the
+ * tokens of the pages a search returns, so their estimates, on Gemini's token
  * volume, can run low or high. A test holds the token prices equal to
  * `server/ai/pricing.ts`.
  */
 export const RESEARCH_PRICES: Record<ResearchProvider, ResearchPrices> = {
   gemini: {
     providerLabel: "Google",
-    modelId: "gemini-3.8-flash",
-    modelLabel: "Gemini 3.8 Flash",
-    inputPerM: 0.75,
-    outputPerM: 3.75,
+    modelId: "gemini-4-hydrogen",
+    modelLabel: "Gemini 4 Hydrogen",
+    inputPerM: 1.5,
+    outputPerM: 7.5,
     searchPer1000: 14,
     freeSearchesPerMonth: 5000,
   },

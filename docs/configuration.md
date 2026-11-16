@@ -141,7 +141,7 @@ The **Reranker** row is read-only. Only `SEARCH_RERANK_MODEL` changes it.
 | Model                                     | Gemini                  | OpenAI       | Anthropic          |
 | ----------------------------------------- | ----------------------- | ------------ | ------------------ |
 | **Fast model**                            | `gemini-3.5-flash-lite` | `gpt-6-luna` | `claude-haiku-4-5` |
-| **Strong model** and **Web search model** | `gemini-3.8-flash`      | `gpt-6-sol`  | `claude-sonnet-5`  |
+| **Strong model** and **Web search model** | `gemini-4-hydrogen`     | `gpt-6-sol`  | `claude-sonnet-5`  |
 
 These are the fallbacks before a model list loads. Once it loads, each provider
 takes the newest model of the same family. Gemini also skips a model that

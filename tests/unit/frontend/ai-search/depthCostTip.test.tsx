@@ -40,7 +40,7 @@ describe("the research cost tip", () => {
   it("gives each provider its token and search prices", () => {
     render(<DepthCostTip />);
     expect(block("gemini").textContent).toContain(
-      "$0.75 in, $3.75 out per 1M tokens",
+      "$1.50 in, $7.50 out per 1M tokens",
     );
     expect(block("gemini").textContent).toContain("$14 per 1,000 searches");
     for (const provider of ["anthropic", "openai"])

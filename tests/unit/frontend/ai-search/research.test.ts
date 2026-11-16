@@ -15,6 +15,7 @@ import type { ResearchRun } from "../../../../shared/researchRecord";
 
 describe("modelName", () => {
   it.each([
+    ["gemini-4-hydrogen", "Gemini 4 Hydrogen"],
     ["gemini-3.8-flash", "Gemini 3.8 Flash"],
     ["gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite"],
     ["claude-haiku-4-5-20251001", "Claude Haiku 4.5"],

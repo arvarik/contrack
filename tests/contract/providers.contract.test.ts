@@ -147,7 +147,7 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
         jsonSchema: CONTACT_SCHEMA,
-        model: modelFor("gemini", "gemini-3.8-flash"),
+        model: modelFor("gemini", "gemini-4-hydrogen"),
         maxOutputTokens: 500,
         timeoutMs: 15_000,
       });

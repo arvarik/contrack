@@ -486,12 +486,12 @@ describe("Gemini stream", () => {
       },
       onDelta,
     );
-    expect(sdk.geminiStream.mock.calls[0][0].model).toBe("gemini-3.8-flash");
-    expect(sdk.geminiGenerate.mock.calls[0][0].model).toBe("gemini-3.7-flash");
-    expect(result.model).toBe("gemini-3.7-flash");
+    expect(sdk.geminiStream.mock.calls[0][0].model).toBe("gemini-4-hydrogen");
+    expect(sdk.geminiGenerate.mock.calls[0][0].model).toBe("gemini-3.8-flash");
+    expect(result.model).toBe("gemini-3.8-flash");
     expect(pieces).toEqual(["Ada is an engineer."]);
     expect(adapter.getQuotaSnapshot().circuitBreakers).toEqual([
-      "gemini-3.8-flash",
+      "gemini-4-hydrogen",
     ]);
   });
 

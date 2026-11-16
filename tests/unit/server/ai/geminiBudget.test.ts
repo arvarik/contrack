@@ -68,7 +68,7 @@ describe("Gemini call budget", () => {
       maxOutputTokens: 100,
     });
     expect(sdk.configs[0]).toMatchObject({
-      apiVersion: "v1beta",
+      apiVersion: "v1",
       httpOptions: { retryOptions: { attempts: 1 } },
     });
     expect(sdk.generate.mock.calls[0][0].config).toMatchObject({
@@ -153,14 +153,14 @@ describe("Gemini 429s", () => {
 
     const first = sdk.generate.mock.calls[0][0].model;
     const second = sdk.generate.mock.calls[1][0].model;
-    expect(first).toBe("gemini-3.8-flash");
-    expect(second).toBe("gemini-3.7-flash");
-    expect(result.model).toBe("gemini-3.7-flash");
+    expect(first).toBe("gemini-4-hydrogen");
+    expect(second).toBe("gemini-3.8-flash");
+    expect(result.model).toBe("gemini-3.8-flash");
     expect(adapter.getQuotaSnapshot().circuitBreakers).toEqual([
-      "gemini-3.8-flash",
+      "gemini-4-hydrogen",
     ]);
     // The refused request is not counted as sent.
-    expect(adapter.getQuotaSnapshot().models["gemini-3.8-flash"].rpd).toBe(0);
+    expect(adapter.getQuotaSnapshot().models["gemini-4-hydrogen"].rpd).toBe(0);
     expect(adapter.getQuotaSnapshot().freeTier).toBe(false);
   });
 

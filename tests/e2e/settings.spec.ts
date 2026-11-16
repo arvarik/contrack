@@ -529,7 +529,7 @@ test.describe("Settings — Tools and Data", () => {
     });
     await expect(bubble).toBeVisible();
     for (const model of [
-      "Gemini 3.8 Flash",
+      "Gemini 4 Hydrogen",
       "Claude Sonnet 5.5",
       "GPT-6.1 Sol",
     ])
@@ -553,7 +553,7 @@ test.describe("Settings — Tools and Data", () => {
               resolved: {
                 providerId: "gemini",
                 providerLabel: "Google Gemini",
-                model: "gemini-3.8-flash",
+                model: "gemini-4-hydrogen",
               },
             },
           },

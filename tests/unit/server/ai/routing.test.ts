@@ -48,8 +48,8 @@ describe("Registry", () => {
 
   it("names what Auto runs for each class", () => {
     expect(previewModelForClass("lite")).toBe("gemini-3.5-flash-lite");
-    expect(previewModelForClass("flash")).toBe("gemini-3.8-flash");
-    expect(previewModelForClass("pro")).toBe("gemini-3.1-pro-preview");
+    expect(previewModelForClass("flash")).toBe("gemini-4-hydrogen");
+    expect(previewModelForClass("pro")).toBe("gemini-4-argon");
   });
 
   it("names a model that can search when research asks", () => {
@@ -58,8 +58,8 @@ describe("Registry", () => {
       gemini: {
         models: [
           {
-            id: "gemini-3.9-flash",
-            label: "gemini-3.9-flash",
+            id: "gemini-4.1-hydrogen",
+            label: "gemini-4.1-hydrogen",
             capabilities: ["chat"],
             capabilityConfidence: "declared",
           },
@@ -68,9 +68,9 @@ describe("Registry", () => {
     });
     try {
       // Plain work runs it, as the newest flash model…
-      expect(previewModelForClass("flash")).toBe("gemini-3.9-flash");
+      expect(previewModelForClass("flash")).toBe("gemini-4.1-hydrogen");
       // …but research needs a model that can search.
-      expect(previewModelForClass("flash", true)).toBe("gemini-3.8-flash");
+      expect(previewModelForClass("flash", true)).toBe("gemini-4-hydrogen");
     } finally {
       settingsStore.clear();
     }
@@ -273,21 +273,24 @@ describe("SmartRouter", () => {
     ).toBe("gemini-3.5-flash-lite");
     expect(
       router.getNextAvailableRoute({ prefer: "flash" }, noPauses).modelId,
-    ).toBe("gemini-3.8-flash");
+    ).toBe("gemini-4-hydrogen");
+    expect(
+      router.getNextAvailableRoute({ prefer: "pro" }, noPauses).modelId,
+    ).toBe("gemini-4-argon");
   });
 
   it("routes to the newest generation with no preference", () => {
     expect(router.getNextAvailableRoute({}, noPauses).modelId).toBe(
-      "gemini-3.8-flash",
+      "gemini-4-hydrogen",
     );
   });
 
   it("steps past a paused model to the next in its class", () => {
     const route = router.getNextAvailableRoute(
       { prefer: "flash" },
-      new Set(["gemini-3.8-flash"]),
+      new Set(["gemini-4-hydrogen"]),
     );
-    expect(route.modelId).toBe("gemini-3.7-flash");
+    expect(route.modelId).toBe("gemini-3.8-flash");
   });
 
   it("keeps grounded requests on models that can search", () => {

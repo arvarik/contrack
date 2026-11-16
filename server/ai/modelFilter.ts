@@ -140,8 +140,12 @@ export function inferModelFamily(
   if (provider === "gemini") {
     if (id.startsWith("gemma")) return "Gemma";
     if (!id.startsWith("gemini")) return null;
+    // Gemini 4 names its tiers by element: Carbon (deep reasoning, pin-only
+    // like Claude Fable), Argon (the Pro tier) and Hydrogen (the Flash tier).
+    if (id.includes("-carbon")) return "Carbon";
+    if (id.includes("-argon")) return "Pro";
     if (id.includes("flash-lite")) return "Flash-Lite";
-    if (id.includes("flash")) return "Flash";
+    if (id.includes("-hydrogen") || id.includes("flash")) return "Flash";
     if (id.includes("pro")) return "Pro";
     return null;
   }
@@ -176,7 +180,7 @@ export function inferModelFamily(
 
 /** Display/sort order of families per provider (unknown families sort last). */
 const FAMILY_ORDER: Record<string, string[]> = {
-  gemini: ["Pro", "Flash", "Flash-Lite", "Gemma"],
+  gemini: ["Carbon", "Pro", "Flash", "Flash-Lite", "Gemma"],
   claude: ["Fable", "Opus", "Sonnet", "Haiku"],
   anthropic: ["Fable", "Opus", "Sonnet", "Haiku"],
   openai: [
