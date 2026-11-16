@@ -185,8 +185,8 @@ archived contacts or ghosts.
 
 | Depth        | What it does                                     | Time and cost per contact |
 | ------------ | ------------------------------------------------ | ------------------------- |
-| **Standard** | One search for roles, schools, city and profiles | About 20 s and $0.08      |
-| **Deep**     | Adds a second search that reads further          | About 30 s and $0.13      |
+| **Standard** | One search for roles, schools, city and profiles | About 20 s and $0.09      |
+| **Deep**     | Adds a second search that reads further          | About 30 s and $0.16      |
 
 The depth tiles show time and cost only while Gemini's own search runs
 research. The question mark beside **Depth** compares the cost per contact on

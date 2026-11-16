@@ -102,11 +102,10 @@ function translateSchema(node: JsonSchemaNode): GeminiSchemaNode {
 // Constants
 
 /**
- * The Gemini Developer API version for both `listModels()` and `@google/genai`.
- * `@google/genai` 3.0 changed its default from `v1beta` to `v1`, which lacks
- * `gemini-3.1-pro-preview` and preview models that `v1beta/models` lists.
+ * The Gemini Developer API version for both `listModels()` and `@google/genai`,
+ * so discovery and generation always address the same GA catalog.
  */
-const GEMINI_API_VERSION = "v1beta";
+const GEMINI_API_VERSION = "v1";
 
 /** How long a model sits out after a 429, 5xx or timeout, when Google names no delay. */
 const CIRCUIT_BREAKER_DURATION_MS = 30_000;

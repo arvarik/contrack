@@ -42,6 +42,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A TIFF image at a web address, such as a CardDAV card's photo or a link
   preview's picture, is saved like a JPEG or PNG one. A TIFF photo inside a
   vCard already was.
+- With Google Gemini on **Automatic**, the **Strong model** and the **Web
+  search model** now use `gemini-4-hydrogen`, `gemini-4-argon` and
+  `gemini-4-carbon` replace `gemini-3.1-pro-preview`, and Gemini calls run on
+  the `v1` API.
 
 ### Fixed
 

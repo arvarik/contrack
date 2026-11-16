@@ -151,6 +151,9 @@ describe("applyCatalogGuardrails (all passes combined)", () => {
 
 describe("family inference, generation extraction, and class mapping", () => {
   it("classifies Gemini, Claude, and OpenAI model families and maps them to model classes", () => {
+    expect(inferModelFamily("gemini", "gemini-4-carbon")).toBe("Carbon");
+    expect(inferModelFamily("gemini", "gemini-4-argon")).toBe("Pro");
+    expect(inferModelFamily("gemini", "gemini-4-hydrogen")).toBe("Flash");
     expect(inferModelFamily("gemini", "gemini-3.8-flash")).toBe("Flash");
     expect(inferModelFamily("gemini", "gemini-3.5-flash")).toBe("Flash");
     expect(inferModelFamily("gemini", "gemini-3.1-pro")).toBe("Pro");
@@ -171,6 +174,7 @@ describe("family inference, generation extraction, and class mapping", () => {
     expect(familyToModelClass("gemini", "Flash-Lite")).toBe("lite");
     expect(familyToModelClass("gemini", "Flash")).toBe("flash");
     expect(familyToModelClass("gemini", "Pro")).toBe("pro");
+    expect(familyToModelClass("gemini", "Carbon")).toBe(null);
     expect(familyToModelClass("anthropic", "Haiku")).toBe("lite");
     expect(familyToModelClass("anthropic", "Sonnet")).toBe("flash");
     expect(familyToModelClass("anthropic", "Opus")).toBe("pro");
@@ -210,36 +214,41 @@ describe("latest-per-family reduction (keepLatestPerFamily)", () => {
       { id: "gemini-3.5-flash" },
       { id: "gemini-3.6-flash" },
       { id: "gemini-3.8-flash" },
+      { id: "gemini-4-hydrogen" },
       { id: "gemini-flash-latest" },
       { id: "gemini-2.5-pro" },
       { id: "gemini-3.1-pro" },
+      { id: "gemini-4-argon" },
+      { id: "gemini-4-carbon" },
       { id: "gemini-pro-latest" },
       { id: "gemini-2.5-flash-lite" },
       { id: "gemini-3.5-flash-lite" },
       { id: "gemini-flash-lite-latest" },
     ];
     expect(keepLatestPerFamily("gemini", raw).map((m) => m.id)).toEqual([
-      "gemini-3.1-pro",
-      "gemini-3.8-flash",
+      "gemini-4-carbon",
+      "gemini-4-argon",
+      "gemini-4-hydrogen",
       "gemini-3.5-flash-lite",
     ]);
 
     const classPool = [
       { id: "gemini-2.5-flash" },
-      { id: "gemini-3.6-flash" },
       { id: "gemini-3.8-flash" },
+      { id: "gemini-4-hydrogen" },
       { id: "gemini-2.5-flash-lite" },
       { id: "gemini-3.5-flash-lite" },
-      { id: "gemini-3.1-pro-preview" },
+      { id: "gemini-4-argon" },
+      { id: "gemini-4-carbon" },
     ];
     expect(getLatestModelForClass("gemini", "flash", classPool)).toBe(
-      "gemini-3.8-flash",
+      "gemini-4-hydrogen",
     );
     expect(getLatestModelForClass("gemini", "lite", classPool)).toBe(
       "gemini-3.5-flash-lite",
     );
     expect(getLatestModelForClass("gemini", "pro", classPool)).toBe(
-      "gemini-3.1-pro-preview",
+      "gemini-4-argon",
     );
   });
 });

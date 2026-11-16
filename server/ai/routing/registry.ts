@@ -63,6 +63,14 @@ export interface ModelConfig {
 
 export const GEMINI_REGISTRY: ModelConfig[] = [
   {
+    id: "gemini-4-hydrogen",
+    modelClass: "flash",
+    generation: 4,
+    stability: "stable",
+    costPerM: 7.5,
+    supportsGrounding: true,
+  },
+  {
     id: "gemini-3.8-flash",
     modelClass: "flash",
     generation: 3.8,
@@ -111,11 +119,11 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     supportsGrounding: true,
   },
   {
-    id: "gemini-3.1-pro-preview",
+    id: "gemini-4-argon",
     modelClass: "pro",
-    generation: 3.1,
-    stability: "preview",
-    costPerM: 12.0,
+    generation: 4,
+    stability: "stable",
+    costPerM: 10.0,
     supportsGrounding: true,
   },
 ];
@@ -123,8 +131,8 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
 /** A class's price when discovery finds a model this list does not know. */
 const DISCOVERED_COST: Record<ModelClass, number> = {
   lite: 2.5,
-  flash: 3.75,
-  pro: 12.0,
+  flash: 7.5,
+  pro: 10.0,
 };
 
 // Registry helpers

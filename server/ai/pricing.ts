@@ -16,8 +16,12 @@ interface Price {
 }
 
 const PRICES: Record<string, Price> = {
-  // Gemini. The 3.6 to 3.8 Flash price is Google's launch price, which runs
-  // to December 31, 2026.
+  // Gemini. Carbon and Argon carry introductory prices through November 30,
+  // 2026 ($4 / $20 after), and 3.6 to 3.8 Flash run at their launch price
+  // through December 31, 2026.
+  "gemini-4-carbon": { input: 2.0, output: 10.0 },
+  "gemini-4-argon": { input: 2.0, output: 10.0 },
+  "gemini-4-hydrogen": { input: 1.5, output: 7.5 },
   "gemini-3.8-flash": { input: 0.75, output: 3.75 },
   "gemini-3.7-flash": { input: 0.75, output: 3.75 },
   "gemini-3.6-flash": { input: 0.75, output: 3.75 },
