@@ -152,7 +152,7 @@
     "date-fns": "^4.4.0",
     "domhandler": "^6.0.1",
     "dompurify": "^3.4.16",
-    "fontkit": "^2.0.4",
+    "fontkit": "^3.0.0",
     "husky": "^9.1.7",
     "jose": "^6.2.16",
     "jsdom": "^31.0.0",
